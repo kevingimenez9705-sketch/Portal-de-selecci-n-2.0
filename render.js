@@ -3,7 +3,8 @@
 // ══════════════════════════════════════════════
 function renderTable() {
     const body = document.getElementById('table-body');
-    const list = filteredIds ? busquedas.filter(b => filteredIds.includes(b.id)) : busquedas;
+    const base = (filteredIds ? busquedas.filter(b => filteredIds.includes(b.id)) : busquedas);
+    const list = base.filter(b => (b.categoria || 'general') === pipelineCat);
     const locked = (b) => (b.status === 'Cerrada' || b.status === 'Finalizada') && !isAdmin();
 
     body.innerHTML = list.map(b => {
@@ -318,11 +319,12 @@ function toggleComentarios(id, btn) {
 }
 
 function renderKPIs() {
-    const total       = busquedas.length;
-    const proceso     = busquedas.filter(b => b.status === 'Proceso').length;
-    const cerradas    = busquedas.filter(b => b.status === 'Cerrada').length;
-    const finalizadas = busquedas.filter(b => b.status === 'Finalizada').length;
-    const vencidas    = busquedas.filter(b => { const d = daysDiff(b.inicio); return d > (DEMORA_LIMITE[b.nivel] || 15) && b.status === 'Proceso'; }).length;
+    const data        = busquedas.filter(b => (b.categoria || 'general') === pipelineCat);
+    const total       = data.length;
+    const proceso     = data.filter(b => b.status === 'Proceso').length;
+    const cerradas    = data.filter(b => b.status === 'Cerrada').length;
+    const finalizadas = data.filter(b => b.status === 'Finalizada').length;
+    const vencidas    = data.filter(b => { const d = daysDiff(b.inicio); return d > (DEMORA_LIMITE[b.nivel] || 15) && b.status === 'Proceso'; }).length;
     document.getElementById('kpi-row').innerHTML = `
         <div class="kpi"><div class="kpi-num">${total}</div><div class="kpi-lbl">Total búsquedas</div></div>
         <div class="kpi"><div class="kpi-num" style="color:var(--blue)">${proceso}</div><div class="kpi-lbl">En proceso</div></div>
@@ -394,6 +396,22 @@ function openVerifModal(id) {
 // ══════════════════════════════════════════════
 //  NAVEGACIÓN DE VISTAS
 // ══════════════════════════════════════════════
+function showPipeline(cat, btn) {
+    pipelineCat = cat;
+    ['pipeline', 'stats', 'charts'].forEach(id => document.getElementById('view-' + id).classList.toggle('hidden', id !== 'pipeline'));
+    document.querySelectorAll('.inline-nav-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (cat === 'chofer') {
+        document.getElementById('main-title').textContent = 'Pipeline Choferes y Ayudantes';
+        document.getElementById('main-sub').textContent   = 'Mismo procedimiento + verificaciones obligatorias (Nosis, Antec. Penales, Ambiental, Preocupacional, Curso de Manipulación)';
+    } else {
+        document.getElementById('main-title').textContent = 'Pipeline de Selección';
+        document.getElementById('main-sub').textContent   = 'Control de búsquedas, seguimiento y feedback';
+    }
+    renderTable();
+}
+
 function showView(v, btn) {
     if ((v === 'stats' || v === 'charts') && !isAdmin()) { toast('Acceso restringido a administradores', true); return; }
     ['pipeline', 'stats', 'charts'].forEach(id => document.getElementById('view-' + id).classList.toggle('hidden', id !== v));
