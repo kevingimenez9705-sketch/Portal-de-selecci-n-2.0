@@ -71,5 +71,11 @@ function fmtMoney(n) {
 }
 
 // ── MODALES ──
-function openModal(id = 'modal-nueva') { document.getElementById(id).classList.remove('hidden'); }
+function openModal(id = 'modal-nueva') {
+    if (id === 'modal-nueva') {
+        const catSel = document.getElementById('n-categoria');
+        if (catSel) catSel.value = (typeof pipelineCat !== 'undefined') ? pipelineCat : 'general';
+    }
+    document.getElementById(id).classList.remove('hidden');
+}
 function closeModal(id = 'modal-nueva') { document.getElementById(id).classList.add('hidden'); }
