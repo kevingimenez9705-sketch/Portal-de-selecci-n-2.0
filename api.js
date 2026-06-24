@@ -264,6 +264,7 @@ async function addNew() {
         jornada:   document.getElementById('n-jornada').value,
         ubicacion: document.getElementById('n-ubicacion').value,
         inicio:    document.getElementById('n-inicio').value || today(),
+        categoria: document.getElementById('n-categoria').value || 'general',
         status: 'Proceso', ingreso: null, ingreso_nombre: ''
     };
     const { data, error } = await sb.from('busquedas').insert(row).select().single();
@@ -280,6 +281,7 @@ async function reabrir(id) {
         numero: nextNro(), puesto: orig.puesto, selector: orig.selector,
         depto: orig.depto, tipo: orig.tipo, motivo: orig.motivo, nivel: orig.nivel,
         sueldo: orig.sueldo, jornada: orig.jornada, ubicacion: orig.ubicacion,
+        categoria: orig.categoria || 'general',
         inicio: today(), status: 'Proceso', ingreso: null, ingreso_nombre: ''
     };
     const { data: nueva, error: errInsert } = await sb.from('busquedas').insert(nuevaRow).select().single();
