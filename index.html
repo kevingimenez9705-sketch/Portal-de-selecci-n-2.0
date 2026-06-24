@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Selección</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div id="login-screen">
+    <div class="login-box">
+        <div class="login-logo">Panel de<br>Selección</div>
+        <div class="login-sub">Sistema de Reclutamiento</div>
+        <label class="login-label">Email</label>
+        <input class="login-input" id="login-email" type="email" placeholder="usuario@empresa.com" onkeydown="if(event.key==='Enter')login()">
+        <label class="login-label">Contraseña</label>
+        <input class="login-input" id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')login()">
+        <button class="login-btn" onclick="login()">Ingresar</button>
+        <div class="login-error" id="login-error"></div>
+    </div>
+</div>
+
+<!-- ══ LOADING ══ -->
+<div id="loading-screen" class="hidden">
+    <div class="spinner"></div>
+    <div class="loading-txt">Cargando datos...</div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app" class="shell hidden">
+
+    <nav class="topnav">
+        <div class="topnav-logo">Panel de Selección</div>
+        <div class="topnav-right">
+            <span class="topnav-user"><strong id="topnav-nombre">—</strong> · <span id="topnav-rol">—</span></span>
+            <div class="topnav-sep"></div>
+            <button class="topnav-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Salir</button>
+        </div>
+    </nav>
+
+    <main class="main">
+        <div class="top-bar">
+            <div>
+                <div class="page-title" id="main-title">Pipeline de Selección</div>
+                <div class="page-subtitle" id="main-sub">Control de búsquedas, seguimiento y feedback</div>
+            </div>
+            <button class="btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> Nueva Búsqueda</button>
+        </div>
+
+        <div class="inline-nav">
+            <button class="inline-nav-btn active" id="nav-pipeline" onclick="showView('pipeline',this)"><i class="fas fa-table"></i> Pipeline</button>
+            <button class="inline-nav-btn" id="nav-stats" onclick="showView('stats',this)"><i class="fas fa-chart-bar"></i> Estadísticas</button>
+            <button class="inline-nav-btn" id="nav-charts" onclick="showView('charts',this)"><i class="fas fa-chart-pie"></i> Gráficos</button>
+            <div class="inline-nav-sep"></div>
+            <button class="inline-nav-btn" onclick="openModal()"><i class="fas fa-plus"></i> Nueva Búsqueda</button>
+        </div>
+
+        <!-- PIPELINE -->
+        <div id="view-pipeline">
+            <div class="kpi-row" id="kpi-row"></div>
+            <div class="filters">
+                <span class="filter-label">Filtrar:</span>
+                <select class="filter-select" id="f-selector" onchange="applyFilters()">
+                    <option value="">Todos los selectores</option>
+                    <option>Silvina</option><option>Romina</option><option>Claudia</option><option>Luca</option><option>Soledad</option><option>Angel</option><option>Noelia</option>
+                </select>
+                <select class="filter-select" id="f-tipo" onchange="applyFilters()">
+                    <option value="">Fábrica y Staff</option>
+                    <option value="Fábrica">Fábrica</option><option value="Staff">Staff</option>
+                </select>
+                <select class="filter-select" id="f-depto" onchange="applyFilters()"><option value="">Todos los dptos.</option></select>
+                <select class="filter-select" id="f-status" onchange="applyFilters()">
+                    <option value="">Todos los estados</option>
+                    <option>Proceso</option><option>Cerrada</option><option>Pausada</option><option>Finalizada</option>
+                </select>
+                <input class="filter-input" id="f-search" placeholder="Buscar puesto..." oninput="applyFilters()">
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th style="width:130px">N° / Motivo</th>
+                        <th style="width:180px">Puesto · Dpto · Selector</th>
+                        <th style="width:130px">Sueldo · Jornada</th>
+                        <th style="width:240px">Estado · Psicotécnicos</th>
+                        <th style="width:200px">Candidatos</th>
+                        <th style="width:150px">Archivos PDF</th>
+                        <th style="width:160px">Ingreso</th>
+                        <th style="width:80px"></th>
+                    </tr></thead>
+                    <tbody id="table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- STATS -->
+        <div id="view-stats" class="hidden">
+            <div class="page-tabs">
+                <button class="page-tab active" onclick="switchStatsTab('general',this)">General</button>
+                <button class="page-tab" onclick="switchStatsTab('staff',this)">Staff</button>
+                <button class="page-tab" onclick="switchStatsTab('fabrica',this)">Fábrica</button>
+            </div>
+            <div id="stats-content"></div>
+        </div>
+
+        <!-- GRÁFICOS -->
+        <div id="view-charts" class="hidden">
+            <div class="page-tabs">
+                <button class="page-tab active" onclick="switchChartsTab('general',this)">General</button>
+                <button class="page-tab" onclick="switchChartsTab('tiempo',this)">Tiempos</button>
+                <button class="page-tab" onclick="switchChartsTab('selectores',this)">Selectores</button>
+            </div>
+            <div id="charts-content"></div>
+        </div>
+    </main>
+</div>
+
+<!-- ══ MODALES ══ -->
+<div id="modal-nueva" class="modal-bg hidden">
+    <div class="modal-box">
+        <div class="modal-title"><i class="fas fa-plus-circle" style="font-size:13px;opacity:.5;margin-right:6px"></i> Alta de Nueva Búsqueda</div>
+        <div class="form-row">
+            <div class="form-group form-full"><label>Puesto / Cargo</label><input class="form-input" id="n-puesto" placeholder="Ej: Analista Contable"></div>
+            <div class="form-group"><label>Selector a cargo</label>
+                <select class="form-input" id="n-selector">
+                    <option>Silvina</option><option>Romina</option><option>Claudia</option><option>Luca</option><option>Soledad</option><option>Angel</option><option>Noelia</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Departamento</label><input class="form-input" id="n-depto" placeholder="Ej: Administración"></div>
+            <div class="form-group"><label>Tipo</label>
+                <select class="form-input" id="n-tipo"><option value="Staff">Staff</option><option value="Fábrica">Fábrica</option></select>
+            </div>
+            <div class="form-group"><label>Motivo</label>
+                <select class="form-input" id="n-motivo"><option>Expansión</option><option>Rotación</option><option>Reemplazo</option></select>
+            </div>
+            <div class="form-group"><label>Nivel</label>
+                <input class="form-input" id="n-nivel" placeholder="Ej: Otros, Jefe/Encargado, Gerente..." list="nivel-datalist">
+                <datalist id="nivel-datalist">
+                    <option>Otros</option>
+                    <option>Jefe/Encargado</option>
+                    <option>Gerente/Director</option>
+                </datalist>
+            </div>
+            <div class="form-group"><label>Sueldo bruto (ARS)</label><input class="form-input" id="n-sueldo" type="number" placeholder="Ej: 800000"></div>
+            <div class="form-group"><label>Jornada</label><input class="form-input" id="n-jornada" placeholder="Ej: Full Time, Por turnos…"></div>
+            <div class="form-group"><label>Ubicación</label>
+                <select class="form-input" id="n-ubicacion">
+                    <option>San Martin Empanadas</option><option>Jamon y Queso</option><option>Medialunas</option>
+                    <option>Extremas</option><option>Papelera</option><option>Procesadora</option>
+                    <option>Pastas</option><option>Tapas 1</option><option>Tapas 2</option>
+                    <option>Congelados</option><option>Panificados</option><option>San Miguel Empanadas</option>
+                    <option>San Miguel Pizzas</option><option>Taller Mantenimiento</option><option>Oficina San Lorenzo</option>
+                    <option>Paralelo 50</option><option>Caamaño</option><option>Office Park</option>
+                    <option>Centro de Logistica - Malvinas</option><option>Sabores - OP</option>
+                    <option>Extremas - OP</option><option>Tesoreria Nuñez</option><option>Fabricas</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Fecha de apertura</label><input class="form-input" id="n-inicio" type="date"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeModal('modal-nueva')">Cancelar</button>
+            <button class="btn-primary" onclick="addNew()"><i class="fas fa-check"></i> Crear Búsqueda</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-cand" class="modal-bg hidden">
+    <div class="modal-box" style="max-width:400px">
+        <div class="modal-title">Agregar Candidato</div>
+        <input type="hidden" id="cand-bid">
+        <div class="form-row" style="grid-template-columns:1fr;">
+            <div class="form-group"><label>Nombre del candidato</label><input class="form-input" id="cand-nombre" placeholder="Nombre Apellido"></div>
+            <div class="form-group"><label>Estado</label>
+                <select class="form-input" id="cand-estado" onchange="toggleCandModalFechas()">
+                    <option value="Enviado">Enviado al área</option>
+                    <option value="Entrevista">En entrevista</option>
+                    <option value="Rechazado">Rechazado</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Fecha de envío</label><input class="form-input" id="cand-fecha-envio" type="date"></div>
+            <div class="form-group hidden" id="cand-grp-entrevista"><label>Fecha de entrevista</label><input class="form-input" id="cand-fecha-entrevista" type="date"></div>
+            <div class="form-group hidden" id="cand-grp-rechazo"><label>Fecha de rechazo</label><input class="form-input" id="cand-fecha-rechazo" type="date"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeModal('modal-cand')">Cancelar</button>
+            <button class="btn-primary" onclick="saveCand()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-psico" class="modal-bg hidden">
+    <div class="modal-box" style="max-width:420px">
+        <div class="modal-title">Agregar Psicotécnico</div>
+        <input type="hidden" id="psico-bid">
+        <div class="form-row" style="grid-template-columns:1fr;">
+            <div class="form-group"><label>Nombre del candidato</label><input class="form-input" id="psico-nombre" placeholder="Nombre Apellido"></div>
+            <div class="form-group"><label>Resultado</label>
+                <select class="form-input" id="psico-resultado">
+                    <option value="Apto">Apto</option><option value="Apto con observaciones">Apto con observaciones</option>
+                    <option value="Apto con reservas">Apto con reservas</option><option value="No Apto">No Apto</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Selector que lo realiza</label>
+                <select class="form-input" id="psico-selector">
+                    <option value="">— Sin asignar —</option>
+                    <option>Silvina</option><option>Romina</option><option>Claudia</option><option>Luca</option><option>Soledad</option><option>Angel</option><option>Noelia</option>
+                </select>
+            </div>
+            <div class="form-group"><label>¿Quién lo realizó? (evaluador externo)</label><input class="form-input" id="psico-realizado" placeholder="Nombre del evaluador"></div>
+            <div class="form-group"><label>¿Quién lo autorizó? (si aplica)</label><input class="form-input" id="psico-auth" placeholder="Nombre del autorizante"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeModal('modal-psico')">Cancelar</button>
+            <button class="btn-primary" onclick="savePsico()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-verif" class="modal-bg hidden">
+    <div class="modal-box" style="max-width:420px">
+        <div class="modal-title">Agregar Verificación</div>
+        <input type="hidden" id="verif-bid">
+        <div class="form-row" style="grid-template-columns:1fr;">
+            <div class="form-group"><label>Tipo de verificación</label>
+                <select class="form-input" id="verif-tipo">
+                    <option>Nosis</option><option>Antecedentes Penales</option><option>Ambiental</option><option>Preocupacional</option><option>Curso de Manipulación</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Resultado</label>
+                <select class="form-input" id="verif-resultado">
+                    <option value="Pendiente">Pendiente</option>
+                    <option value="En proceso">En proceso</option>
+                    <option value="OK">OK / Apto</option>
+                    <option value="Observado">Observado</option>
+                    <option value="No Apto">No Apto</option>
+                </select>
+            </div>
+            <div class="form-group"><label>¿Quién lo realiza?</label>
+                <select class="form-input" id="verif-selector">
+                    <option value="">— Sin asignar —</option>
+                    <option>Silvina</option><option>Romina</option><option>Claudia</option><option>Luca</option><option>Soledad</option><option>Angel</option><option>Noelia</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Observaciones (opcional)</label><input class="form-input" id="verif-obs" placeholder="Detalle…"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeModal('modal-verif')">Cancelar</button>
+            <button class="btn-primary" onclick="saveVerif()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- ══ SCRIPTS (orden de dependencia) ══ -->
+<script src="config.js"></script>
+<script src="utils.js"></script>
+<script src="api.js"></script>
+<script src="render.js"></script>
+<script src="stats.js"></script>
+<script src="charts.js"></script>
+<script>initApp();</script>
+
+</body>
+</html>
