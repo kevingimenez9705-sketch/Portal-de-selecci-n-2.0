@@ -55,7 +55,8 @@
         </div>
 
         <div class="inline-nav">
-            <button class="inline-nav-btn active" id="nav-pipeline" onclick="showView('pipeline',this)"><i class="fas fa-table"></i> Pipeline</button>
+            <button class="inline-nav-btn active" id="nav-general" onclick="showPipeline('general',this)"><i class="fas fa-table"></i> Pipeline</button>
+            <button class="inline-nav-btn" id="nav-chofer" onclick="showPipeline('chofer',this)"><i class="fas fa-truck"></i> Choferes / Ayudantes</button>
             <button class="inline-nav-btn" id="nav-stats" onclick="showView('stats',this)"><i class="fas fa-chart-bar"></i> Estadísticas</button>
             <button class="inline-nav-btn" id="nav-charts" onclick="showView('charts',this)"><i class="fas fa-chart-pie"></i> Gráficos</button>
             <div class="inline-nav-sep"></div>
@@ -135,6 +136,9 @@
             <div class="form-group"><label>Departamento</label><input class="form-input" id="n-depto" placeholder="Ej: Administración"></div>
             <div class="form-group"><label>Tipo</label>
                 <select class="form-input" id="n-tipo"><option value="Staff">Staff</option><option value="Fábrica">Fábrica</option></select>
+            </div>
+            <div class="form-group"><label>Categoría (pipeline)</label>
+                <select class="form-input" id="n-categoria"><option value="general">General</option><option value="chofer">Chofer / Ayudante</option></select>
             </div>
             <div class="form-group"><label>Motivo</label>
                 <select class="form-input" id="n-motivo"><option>Expansión</option><option>Rotación</option><option>Reemplazo</option></select>
