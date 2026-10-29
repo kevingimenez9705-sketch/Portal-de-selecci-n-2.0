@@ -383,3 +383,20 @@ button.nomina.activo { box-shadow: 0 0 0 2px currentColor; }
 .nomina-completar i { background: #f59e0b; }
 .nomina-completo  { background: var(--ok); color: var(--ok-text); border-color: #bbf7d0; }
 .nomina-completo i  { background: var(--green); }
+
+/* ── Locales: datos del local en el detalle ── */
+.local-info { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); font-size: 12px; }
+.local-info > i { color: var(--purple); margin-top: 3px; }
+.local-info-falta { color: var(--muted); }
+
+/* ── Sugerir candidato por cercanía ── */
+.cerca { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 800; vertical-align: middle; }
+.cerca-0 { background: var(--purple); color: #fff; }
+.cerca-1 { background: var(--ok); color: var(--ok-text); }
+.cerca-2 { background: #e0f2fe; color: #0369a1; }
+.cerca-3 { background: var(--soft); color: var(--muted); border: 1px solid var(--line); }
+.sugeridos { display: block; margin-top: 3px; padding: 1px 7px; border: 0; border-radius: 999px; background: var(--ok); color: var(--ok-text); font: inherit; font-size: 10px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.sugeridos:hover { background: #bbf7d0; }
+
+/* ── iCheck ── */
+.icheck-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; margin-left: 4px; padding: 0 5px; border-radius: 999px; background: var(--pink); color: #fff; font-size: 10px; font-weight: 800; }

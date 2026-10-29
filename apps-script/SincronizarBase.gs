@@ -1,9 +1,12 @@
 /* =========================================================
-   BASE DE DATOS (TAREAS GRUPALES) → PORTAL DE SELECCIÓN 2.0
+   BASE DE DATOS y PROCESO DE INGRESO (TAREAS GRUPALES) → PORTAL DE SELECCIÓN 2.0
 
    El script de la planilla sigue cargando la pestaña BASE DE DATOS como
    siempre. Este proyecto la lee cada 10 minutos y manda una copia a la
-   Base de postulantes del portal (Supabase). No escribe en la planilla.
+   Base de postulantes del portal (Supabase). También manda las respuestas
+   del formulario de ingreso (pestaña Proceso de Ingreso): en el portal, el
+   botón "Datos de ingreso" las copia a cada vacante por email.
+   No escribe en la planilla.
 
    - Personas nuevas → se agregan al portal.
    - Personas que ya están (mismo DNI o email) → solo se completan datos
@@ -11,7 +14,7 @@
    - Quien figure ACTIVO en la pestaña BLOQUEADOS llega como "Bloqueado".
 
    INSTALAR (una sola vez):
-   1. Supabase: sql/sync_base_drive.sql (ya aplicado en ats-gastronomico).
+   1. Supabase: sql/sync_base_drive.sql y sql/locales_ingreso_icheck.sql (ya aplicados en ats-gastronomico).
    2. script.google.com → Nuevo proyecto → pegar este archivo.
    3. ⚙️ Configuración del proyecto → Propiedades de la secuencia de comandos
       → Agregar: CODIGO_EQUIPO = (el código del equipo del portal).
@@ -25,6 +28,7 @@ const SYNC = {
   PLANILLA_ID: '1BeSkjch_rEdZx7QTRcJK0XV9fGcHcFpXWQX-vlFrT98',       // TAREAS GRUPALES
   HOJA_BASE: 'BASE DE DATOS',
   HOJA_BLOQUEADOS: 'BLOQUEADOS',
+  HOJA_INGRESO: 'Proceso de Ingreso',
   MINUTOS: 10,
   LOTE: 200,
   ZONA_HORARIA: 'America/Argentina/Buenos_Aires'
@@ -55,6 +59,27 @@ const COLUMNAS_BASE = {
   sugerido_para:      'sugerido para'
 };
 
+// Campo del portal → encabezado en Proceso de Ingreso (respuestas del formulario de ingreso)
+const COLUMNAS_INGRESO = {
+  email:            'email',
+  marca_temporal:   'marca temporal',
+  nombre:           'nombre',
+  apellido:         'apellido',
+  tel:              'telefono',
+  tel_emergencia:   'tel emergencia',
+  fecha_nacimiento: 'fecha de nacimiento',
+  nacionalidad:     'nacionalidad',
+  cuil:             'cuil',
+  dni:              'dni',
+  sexo:             'sexo',
+  domicilio:        'domicilio',
+  domicilio_numero: 'numero',
+  codigo_postal:    'codigo postal',
+  localidad:        'localidad',
+  provincia:        'provincia',
+  pais:             'pais'
+};
+
 const ZONAS_PORTAL = ['CABA', 'Norte', 'Oeste', 'Sur', 'Lejanos', 'Interior'];
 
 
@@ -77,8 +102,20 @@ function sincronizarBase() {
     Object.keys(total).forEach(function (k) { total[k] += r[k] || 0; });
   }
 
-  const resumen = 'Base → portal: ' + total.nuevos + ' nuevos, ' + total.completados + ' completados, ' +
+  let resumen = 'Base → portal: ' + total.nuevos + ' nuevos, ' + total.completados + ' completados, ' +
     total.sin_cambios + ' sin cambios, ' + total.omitidas + ' omitidas (sin nombre o sin DNI/email).';
+
+  const hojaIngreso = libro.getSheetByName(SYNC.HOJA_INGRESO);
+  if (hojaIngreso) {
+    const ingresos = filasDeIngreso_(hojaIngreso.getDataRange().getValues());
+    const t = { nuevas: 0, actualizadas: 0, omitidas: 0 };
+    for (let i = 0; i < ingresos.length; i += SYNC.LOTE) {
+      const r = llamarPortal_('seleccion_sync_ingresos', { filas: ingresos.slice(i, i + SYNC.LOTE) }, codigo);
+      Object.keys(t).forEach(function (k) { t[k] += r[k] || 0; });
+    }
+    resumen += '\nIngreso → portal: ' + t.nuevas + ' nuevas, ' + t.actualizadas + ' actualizadas, ' + t.omitidas + ' omitidas (sin email o sin marca temporal).';
+  }
+
   console.log(resumen);
   return resumen;
 }
@@ -109,7 +146,7 @@ function probarConexion() {
 
 function filasDeLaBase_(valores, bloq) {
   if (valores.length < 2) return [];
-  const idx = indicesColumnas_(valores[0]);
+  const idx = indicesColumnas_(valores[0], COLUMNAS_BASE);
   if (idx.nombre === -1) throw new Error('No encontré la columna "Solo Nombre/s" en ' + SYNC.HOJA_BASE + '.');
 
   const salida = [];
@@ -153,11 +190,47 @@ function filasDeLaBase_(valores, bloq) {
   return salida;
 }
 
-function indicesColumnas_(encabezados) {
+// Formulario de ingreso: una fila por respuesta (email + marca temporal)
+function filasDeIngreso_(valores) {
+  if (valores.length < 2) return [];
+  const idx = indicesColumnas_(valores[0], COLUMNAS_INGRESO);
+  if (idx.email === -1 || idx.marca_temporal === -1) throw new Error('En ' + SYNC.HOJA_INGRESO + ' faltan las columnas EMAIL o Marca temporal.');
+
+  const salida = [];
+  for (let i = 1; i < valores.length; i++) {
+    const v = valores[i];
+    const dato = function (campo) { return idx[campo] === -1 ? '' : v[idx[campo]]; };
+    const email = texto_(dato('email')).toLowerCase().replace(/\s+/g, '');
+    const marca = dato('marca_temporal');
+    if (!email || !(marca instanceof Date)) continue;
+    salida.push({
+      email: email,
+      marca_temporal: Utilities.formatDate(marca, SYNC.ZONA_HORARIA, "yyyy-MM-dd'T'HH:mm:ssXXX"),
+      nombre: texto_(dato('nombre')),
+      apellido: texto_(dato('apellido')),
+      tel: telefono_(dato('tel')),
+      tel_emergencia: telefono_(dato('tel_emergencia')),
+      fecha_nacimiento: fecha_(dato('fecha_nacimiento')),
+      nacionalidad: texto_(dato('nacionalidad')),
+      cuil: soloDigitos_(dato('cuil')),
+      dni: soloDigitos_(dato('dni')),
+      sexo: texto_(dato('sexo')),
+      domicilio: texto_(dato('domicilio')),
+      domicilio_numero: soloDigitos_(dato('domicilio_numero')) || texto_(dato('domicilio_numero')),
+      codigo_postal: telefono_(dato('codigo_postal')),
+      localidad: texto_(dato('localidad')),
+      provincia: texto_(dato('provincia')),
+      pais: texto_(dato('pais'))
+    });
+  }
+  return salida;
+}
+
+function indicesColumnas_(encabezados, columnas) {
   const enc = encabezados.map(normalizar_);
   const idx = {};
-  Object.keys(COLUMNAS_BASE).forEach(function (campo) {
-    const buscado = COLUMNAS_BASE[campo];
+  Object.keys(columnas).forEach(function (campo) {
+    const buscado = columnas[campo];
     let i = enc.indexOf(buscado);                       // primero exacto ("estado" ≠ "estado envio")
     if (i === -1) i = enc.findIndex(function (h) { return h.indexOf(buscado) === 0; });
     idx[campo] = i;
@@ -285,7 +358,7 @@ function llamarPortal_(funcion, cuerpo, codigo) {
   const status = r.getResponseCode();
   const texto = r.getContentText();
   if (status >= 200 && status < 300) return texto ? JSON.parse(texto) : null;
-  if (status === 404) throw new Error('Falta correr sql/sync_base_drive.sql en Supabase.');
+  if (status === 404) throw new Error('Falta en Supabase la función ' + funcion + ' (correr los SQL de la carpeta sql/).');
   if (status === 401 || status === 403 || texto.indexOf('42501') !== -1) throw new Error('El portal rechazó el código del equipo (revisá CODIGO_EQUIPO).');
   throw new Error('El portal respondió ' + status + ': ' + texto.substring(0, 200));
 }

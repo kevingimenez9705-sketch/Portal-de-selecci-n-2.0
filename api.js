@@ -60,10 +60,10 @@ async function loadEquipo() {
 const BUSQUEDA_SELECT = '*, comentarios:seleccion_comentarios(*)';
 const PAGINA = 1000; // Supabase devuelve como máximo 1000 filas por pedido
 
-async function fetchTodo(tabla, select = '*') {
+async function fetchTodo(tabla, select = '*', orden = 'id') {
     const out = [];
     for (let from = 0; ; from += PAGINA) {
-        const { data, error } = await sb.from(tabla).select(select).order('id', { ascending: false }).range(from, from + PAGINA - 1);
+        const { data, error } = await sb.from(tabla).select(select).order(orden, { ascending: false }).range(from, from + PAGINA - 1);
         if (error) throw error;
         out.push(...(data || []));
         if (!data || data.length < PAGINA) break;
@@ -79,10 +79,16 @@ let postulantesById = new Map();
 function indexarPostulantes() { postulantesById = new Map(postulantes.map(p => [p.id, p])); }
 
 async function loadData() {
-    const [bs, ps] = await Promise.all([fetchTodo('seleccion_busquedas', BUSQUEDA_SELECT), fetchTodo('seleccion_postulantes')]);
+    // Locales y zonas son de consulta: si todavía no existen las tablas, el portal funciona igual
+    const opcional = p => p.catch(e => { console.warn('Sin locales/zonas:', msgError(e)); return []; });
+    const [bs, ps, ls, zs] = await Promise.all([fetchTodo('seleccion_busquedas', BUSQUEDA_SELECT), fetchTodo('seleccion_postulantes'),
+        opcional(fetchTodo('seleccion_locales')), opcional(fetchTodo('seleccion_zonas', '*', 'localidad'))]);
     busquedas = bs.map(mapBusqueda);
     postulantes = ps;
+    locales = ls.filter(l => l.activo !== false);
+    zonasLocalidad = zs;
     indexarPostulantes();
+    indexarLocales();
 }
 
 // Después de guardar algo de UNA vacante (o sus comentarios) se vuelve a pedir solo esa, no todo.
@@ -176,7 +182,13 @@ async function updateField(id, field, val) {
     if (CAMPOS_OBLIGATORIOS.includes(field) && !val) { toast('Ese dato no puede quedar vacío', true); refreshBusqueda(id); return; }
     if ((field === 'dni' || field === 'cuil') && val) val = val.replace(/\D/g, '');
     if (field === 'estado') return cambiarEstado(b, val || null);
+    val = mayus(field, val);
     const update = { [field]: val === '' ? null : val };
+    // Con el local se completa la zona (lista de locales), si la vacante no tenía
+    if (field === 'local' && val && !b.zona) {
+        const info = infoLocal(val);
+        if (info?.zona) update.zona = info.zona;
+    }
     // Si ya ingresó, el nombre de quien ingresó acompaña los cambios de nombre/apellido
     if ((field === 'nombre' || field === 'apellido') && b.estado === 'COMUNICADO') {
         update.ingreso_nombre = nombreCompleto({ ...b, ...update }) || null;
@@ -248,16 +260,16 @@ async function addNew() {
     // "Cantidad" crea esa misma cantidad de filas de una vez.
     const cantidad = Math.min(20, Math.max(1, parseInt(val('n-cantidad')) || 1));
     const row = {
-        marca: val('n-marca'), local,
+        marca: val('n-marca'), local: local.toUpperCase(),
         puesto: val('n-puesto') || PUESTOS[0],
         jornada: val('n-jornada') || null,
-        local_entrenamiento: val('n-local-ent') || null,
-        zona: val('n-zona') || null,
-        regional: val('n-regional') || null,
-        zonal: val('n-zonal') || null,
+        local_entrenamiento: val('n-local-ent').toUpperCase() || null,
+        zona: val('n-zona') || infoLocal(local)?.zona || null,
+        regional: val('n-regional').toUpperCase() || null,
+        zonal: val('n-zonal').toUpperCase() || null,
         selector: val('n-selector') || null,
         motivo: val('n-motivo') || 'Rotación',
-        notas: val('n-notas') || null,
+        notas: val('n-notas').toUpperCase() || null,
         inicio: val('n-inicio') || today(),
         status: 'Proceso'
     };
@@ -328,6 +340,7 @@ async function colocarEnVacante(postulanteId, busquedaId) {
         cuil: p.cuil || null, nacionalidad: p.nacionalidad || null, tel_emergencia: p.tel_emergencia || null,
         id_postulante: p.id_postulante || null, estado: null, fecha_estado: null, fecha_citacion: null, hora_citacion: null
     };
+    Object.keys(update).forEach(k => { update[k] = mayus(k, update[k]); });
     const row = await guardarBusqueda(busquedaId, update);
     if (!row) return false;
     refreshView();

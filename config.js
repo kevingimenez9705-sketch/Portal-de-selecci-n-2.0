@@ -129,6 +129,8 @@ const COLORES_EQUIPO = ['#6a4c93', '#9b2226', '#ca6702', '#005f73', '#2d6a4f', '
 let busquedas = [];        // vacantes (cada una con .comentarios)
 let postulantes = [];      // base de postulantes
 let equipo = [];           // seleccion_equipo (lista de selectores)
+let locales = [];          // seleccion_locales: zona, localidad, dirección y razón social de cada local
+let zonasLocalidad = [];   // seleccion_zonas: localidad de residencia → zona y cercanas
 let filteredIds = null;
 let selectorFiltroActivo = '';
 let marcaActiva = '';      // pestaña de marca en Vacantes ('' = todas)
