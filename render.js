@@ -42,6 +42,7 @@ function showView(v) {
     document.getElementById('filters-base').classList.toggle('hidden', v !== 'base');
     document.getElementById('selector-chips').classList.toggle('hidden', v !== 'vacantes');
     document.getElementById('btn-nueva-busqueda').classList.toggle('hidden', v !== 'vacantes');
+    ['btn-importar', 'btn-datos-ingreso', 'btn-icheck'].forEach(id => document.getElementById(id).classList.toggle('hidden', v !== 'vacantes'));
     document.getElementById('btn-nuevo-postulante').classList.toggle('hidden', v !== 'base');
     document.getElementById('main-title').textContent = TITULOS[v][0];
     document.getElementById('main-sub').textContent = TITULOS[v][1];
@@ -61,7 +62,7 @@ function refreshView() {
 // Valores ya cargados como sugerencias de los campos de texto (local, regional, zonal…)
 function actualizarDatalists() {
     const set = (id, lista) => { const el = document.getElementById(id); if (el) el.innerHTML = lista.map(v => `<option value="${esc(v)}">`).join(''); };
-    set('dl-local', valoresUsados('local', valoresUsados('local_entrenamiento')));
+    set('dl-local', valoresUsados('local', valoresUsados('local_entrenamiento', locales.map(l => l.local))));
     set('dl-regional', valoresUsados('regional'));
     set('dl-zonal', valoresUsados('zonal'));
     set('dl-nacionalidad', valoresUsados('nacionalidad', SUGERENCIAS.nacionalidad));
@@ -69,7 +70,7 @@ function actualizarDatalists() {
     set('dl-pais', valoresUsados('pais', SUGERENCIAS.pais));
     set('dl-altas', valoresUsados('altas_rrhh', SUGERENCIAS.altas));
     set('dl-sede', [...new Set([...SEDES_ENTREVISTA, ...postulantes.map(p => p.sede_entrevista).filter(Boolean)])]);
-    set('dl-localidad', [...new Set(postulantes.map(p => p.localidad).filter(Boolean))].sort((a, b) => a.localeCompare(b)));
+    set('dl-localidad', [...new Set([...zonasLocalidad.map(z => z.localidad), ...postulantes.map(p => p.localidad).filter(Boolean)])].sort((a, b) => a.localeCompare(b)));
     set('dl-puesto-interes', [...new Set([...PUESTOS, ...postulantes.map(p => p.puesto_interes).filter(Boolean)])]);
 }
 
@@ -252,11 +253,17 @@ function celda(b, c) {
             return `<div class="celda-con-boton">
                 <input class="celda celda-nombre" value="${esc(v)}" placeholder="—" ${on}>
                 <button class="btn-colocar${tienePersona(b) ? '' : ' btn-colocar-vacia'}" onclick="openColocarModal(${b.id})" title="${tienePersona(b) ? 'Reemplazar con alguien de la base' : 'Colocar a alguien de la base de postulantes'}"><i class="fas fa-user-plus"></i>${tienePersona(b) ? '' : ' Colocar'}</button>
-            </div>`;
+            </div>${!tienePersona(b) && vacanteAbierta(b) ? sugeridosHtml(b) : ''}`;
         default:
             return `<input class="celda" value="${esc(v)}" ${c.dl ? `list="${c.dl}"` : ''} ${on}>`;
     }
 }
+
+function sugeridosHtml(b) {
+    const n = sugeridosDe(b);
+    return n ? `<button class="sugeridos" onclick="openColocarModal(${b.id})" title="Candidatos disponibles de la base que viven en ${esc(titulo_(localidadDeVacante(b)))} o eligieron este local">${n} de ${esc(titulo_(localidadDeVacante(b)))}</button>` : '';
+}
+const titulo_ = s => String(s || '').toLowerCase().replace(/(^|[\s\/(-])(\p{L})/gu, (m, a, c) => a + c.toUpperCase());
 
 function renderRow(b) {
     const dias = daysDiff(b.inicio, b.ingreso || null);
@@ -301,6 +308,7 @@ function renderKPIs() {
         kpiHtml(cubiertas, 'Cubiertas', 'verde', `${pct}% cumplimiento`) +
         kpiHtml(data.filter(alertaZonalVencida).length, 'Alertas 72hs zonal', 'rosa');
     renderLeyendaNomina(abiertas);
+    actualizarBotonIcheck();
 }
 
 // Referencia de nómina de los locales (vacantes abiertas); cada una filtra la grilla
@@ -368,6 +376,15 @@ function verEnPipeline(numero) {
 let detalleId = null;
 function openDetalle(id) { detalleId = id; renderDetalle(id); openModal('modal-detalle'); }
 
+function datosLocalHtml(b) {
+    const info = infoLocal(b.local);
+    if (!info) return locales.length ? `<div class="local-info local-info-falta"><i class="fas fa-store"></i> "${esc(b.local)}" no está en la lista de locales</div>` : '';
+    return `<div class="local-info"><i class="fas fa-store"></i> <div>
+        <strong>${esc(info.localidad || '')}${info.zona ? ' · ' + esc(info.zona) : ''}</strong>${info.apertura ? ' <span class="tag tag-proceso">Apertura</span>' : ''}
+        ${info.direccion ? `<div class="cand-meta">${esc(info.direccion)}</div>` : ''}
+        ${info.razon_social ? `<div class="cand-meta">Razón social: ${esc(info.razon_social)}</div>` : ''}</div></div>`;
+}
+
 function renderDetalle(id) {
     const b = busquedas.find(x => x.id === id);
     const box = document.getElementById('detalle-content');
@@ -396,6 +413,7 @@ function renderDetalle(id) {
                     <div class="form-group"><label>Nómina del local <span class="tip">(SOLICITUDES DE PERSONAL)</span></label>${sel('estado_nomina', ESTADOS_NOMINA, '— Sin dato —')}</div>
                     <div class="form-group"><label>Detalle de nómina</label><input class="form-input" value="${esc(b.nomina_detalle || '')}" placeholder="Ej: PART: ideal 6 · real 5" onchange="updateField(${b.id},'nomina_detalle',this.value)"></div>
                 </div>
+                ${datosLocalHtml(b)}
                 ${perm}
                 <div class="section-hdr" style="margin-top:16px">Historial y comentarios</div>
                 <div class="estado-log">${b.comentarios.length ? b.comentarios.map((e, i) => `
@@ -483,12 +501,12 @@ function renderPostulanteRow(p, disp, libres) {
     const dispClass = disp === 'Disponible' ? 'tag-cerrada' : disp === 'En vacante' ? 'tag-proceso' : 'tag-finalizada';
     const vs = vacantesDe(p.id);
 
-    // Vacantes sin persona para colocarlo: primero las de su zona
+    // Vacantes sin persona para colocarlo: primero las más cercanas
     let colocarHtml;
     if (!puedeColocarse(p)) colocarHtml = `<span class="tip">No se puede colocar: está "${esc(p.estado)}"</span>`;
     else if (disp !== 'Disponible') colocarHtml = `<span class="tip">Ya está en una vacante</span>`;
     else {
-        const opciones = [...libres].sort((a, b) => (b.zona === p.zona) - (a.zona === p.zona) || a.id - b.id);
+        const opciones = [...libres].sort((a, b) => cercania(p, a) - cercania(p, b) || a.id - b.id);
         colocarHtml = opciones.length ? `
             <select class="inline-select" id="colocar-sel-${p.id}" style="width:100%">
                 ${opciones.map(b => `<option value="${b.id}">${esc(b.numero)} · ${esc(b.local)} · ${esc(b.puesto)}</option>`).join('')}
@@ -578,24 +596,65 @@ function openColocarModal(bid) {
     setTimeout(() => document.getElementById('colocar-search').focus(), 50);
 }
 
+// Qué tan cerca está el postulante del local de la vacante (como "sugerir candidato de BASE"):
+// 0 eligió ese local en Elegí tu vacante · 1 vive en la localidad · 2 localidad cercana · 3 misma zona · 4 otra
+const CERCANIA_TXT = ['Eligió este local', 'Vive en la localidad', 'Localidad cercana', 'Misma zona', ''];
+
+// Localidad del local de la vacante: la de la lista de locales o, si no está, la del nombre
+// ("EXTREMAS MUNRO" → Munro, "APERTURA SABORES QUILMES 2" → Quilmes)
+function localidadDeVacante(b) {
+    const info = infoLocal(b.local);
+    if (info?.localidad) return info.localidad;
+    return normTxt(b.local).replace(/^(APERTURA|APER)\.?\s+/, '').replace(/^(EXTREMAS|SABORES( EXPRESS)?|EMPANADA MANIA)\s+/, '')
+        .replace(/\(.*?\)/g, '').replace(/\s+\d+(\s*\/\s*\d+)?\s*$/, '').trim();
+}
+// "Munro" = "MUNRO " = "Calzada/Munro": se comparan sin tildes y por partes
+function mismaLocalidad(a, b) {
+    const na = normTxt(a), nb = normTxt(b);
+    if (!na || !nb) return false;
+    if (na === nb) return true;
+    const partes = s => s.split(/\s*[\/,;()-]\s*/).map(x => x.trim()).filter(x => x.length >= 4);
+    return partes(na).includes(nb) || partes(nb).includes(na);
+}
+// Lo de la vacante se calcula una vez y se compara contra toda la base
+function contextoVacante(b) {
+    return { local: normTxt(b.local), localidad: localidadDeVacante(b), zona: normTxt(b.zona || infoLocal(b.local)?.zona) };
+}
+function cercania(p, b, ctx = contextoVacante(b)) {
+    if (p.sugerido_para && normTxt(String(p.sugerido_para).split('·')[0]) === ctx.local) return 0;
+    if (mismaLocalidad(p.localidad, ctx.localidad)) return 1;
+    const zp = zonaDeLocalidad(p.localidad);
+    if (zp?.cercanas?.some(c => mismaLocalidad(c, ctx.localidad))) return 2;
+    if (ctx.zona && normTxt(p.zona || zp?.zona) === ctx.zona) return 3;
+    return 4;
+}
+// Candidatos disponibles que viven en la localidad del local (o lo eligieron): se avisa en la vacante vacía
+function sugeridosDe(b) {
+    const ctx = contextoVacante(b);
+    return postulantes.filter(p => puedeColocarse(p) && cercania(p, b, ctx) <= 1 && disponibilidad(p) === 'Disponible').length;
+}
+
 function renderColocarLista() {
     const b = busquedas.find(x => x.id === colocarBid);
     if (!b) return;
     const search = document.getElementById('colocar-search').value.trim().toLowerCase();
     const soloZona = document.getElementById('colocar-solo-zona').checked && b.zona;
+    const ctx = contextoVacante(b);
     const lista = postulantes
         .filter(p => p.estado !== 'Descartado' && p.id !== b.postulante_id)
-        .filter(p => !soloZona || p.zona === b.zona)
-        .filter(p => !search || [p.nombre, p.apellido, p.dni, p.localidad, p.telefono].join(' ').toLowerCase().includes(search))
-        .map(p => ({ p, disp: disponibilidad(p) }))
+        .map(p => ({ p, disp: disponibilidad(p), cerca: cercania(p, b, ctx) }))
+        .filter(x => !soloZona || x.cerca < 4)
+        .filter(({ p }) => !search || [p.nombre, p.apellido, p.dni, p.localidad, p.telefono].join(' ').toLowerCase().includes(search))
         .sort((x, y) => (x.disp === 'Disponible' ? 0 : 1) - (y.disp === 'Disponible' ? 0 : 1)
+            || (x.cerca - y.cerca)
             || (docCompleta(y.p) - docCompleta(x.p))
             || String(y.p.fecha_entrevista || '').localeCompare(String(x.p.fecha_entrevista || '')));
     const box = document.getElementById('colocar-lista');
-    box.innerHTML = lista.length ? lista.slice(0, 60).map(({ p, disp }) => `
+    box.innerHTML = lista.length ? lista.slice(0, 60).map(({ p, disp, cerca }) => `
         <div class="colocar-item ${p.estado === 'Bloqueado' ? 'colocar-bloq' : ''}">
             <div style="flex:1;min-width:0">
-                <div style="font-weight:700">${esc(nombrePostulante(p))} <span class="tag ${disp === 'Disponible' ? 'tag-cerrada' : disp === 'En vacante' ? 'tag-proceso' : 'tag-finalizada'}">${disp}</span></div>
+                <div style="font-weight:700">${esc(nombrePostulante(p))} <span class="tag ${disp === 'Disponible' ? 'tag-cerrada' : disp === 'En vacante' ? 'tag-proceso' : 'tag-finalizada'}">${disp}</span>
+                    ${CERCANIA_TXT[cerca] ? `<span class="cerca cerca-${cerca}">${CERCANIA_TXT[cerca]}</span>` : ''}</div>
                 <div class="cand-meta">${[esc(p.zona || ''), esc(p.localidad || ''), esc(p.puesto_interes || ''), esc(p.horario || '')].filter(Boolean).join(' · ')}</div>
                 <div style="margin-top:2px">${docBadges(p)}</div>
             </div>
@@ -603,7 +662,7 @@ function renderColocarLista() {
                 ? `<span class="tip">Bloqueado</span>`
                 : `<button class="btn-sm" onclick="colocarDesdeModal(${p.id})"><i class="fas fa-link" style="font-size:9px"></i> Colocar</button>`}
         </div>`).join('') + (lista.length > 60 ? `<div class="tip" style="padding:8px">+ ${lista.length - 60} más: afiná la búsqueda</div>` : '')
-        : `<span class="tip">No hay postulantes ${soloZona ? 'de esa zona ' : ''}para colocar. ${soloZona ? 'Destildá "solo zona" o ' : ''}cargá uno nuevo.</span>`;
+        : `<span class="tip">No hay postulantes ${soloZona ? 'de esa zona ' : ''}para colocar. ${soloZona ? 'Destildá "solo misma zona" o ' : ''}cargá uno nuevo.</span>`;
 }
 
 async function colocarDesdeModal(pid) {

@@ -102,6 +102,44 @@ function colorDe(nombre) {
 function iniciales(nombre) {
     return String(nombre || '?').trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase();
 }
+const normTxt = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ');
+
+// ── LOCALES Y ZONAS ──
+let _localesIdx = null, _zonasIdx = null;
+function indexarLocales() {
+    _localesIdx = new Map(locales.map(l => [normTxt(l.local), l]));
+    _zonasIdx = new Map(zonasLocalidad.map(z => [normTxt(z.localidad), z]));
+}
+// Zona, localidad, dirección y razón social del local de una vacante. Una apertura
+// ("APERTURA EXTREMAS QUILMES") toma zona y localidad del local, pero no dirección ni razón social.
+function infoLocal(local) {
+    if (!_localesIdx) indexarLocales();
+    const n = normTxt(local);
+    const sinAper = n.replace(/^(APERTURA|APER)\.?\s+/, '');
+    const l = _localesIdx.get(n) || _localesIdx.get(sinAper);
+    if (!l) return null;
+    const apertura = sinAper !== n;
+    return { zona: l.zona, localidad: l.localidad, direccion: apertura ? '' : l.direccion, razon_social: apertura ? '' : l.razon_social, apertura };
+}
+function zonaDeLocalidad(localidad) {
+    if (!_zonasIdx) indexarLocales();
+    return _zonasIdx.get(normTxt(localidad)) || null;
+}
+
+// Como Automayus.gs: los textos de la vacante se guardan en mayúsculas, salvo el email
+const CAMPOS_SIN_MAYUS = ['email', 'selector', 'marca', 'zona', 'motivo', 'status', 'puesto', 'jornada', 'hora_citacion', 'estado', 'sexo', 'estado_nomina', 'nomina_detalle'];
+function mayus(field, val) {
+    return typeof val === 'string' && !CAMPOS_SIN_MAYUS.includes(field) ? val.toUpperCase() : val;
+}
+// "M - Masculino" → "M"
+function sexoDe(v) {
+    const t = normTxt(v);
+    if (/^(M\b|MASC)/.test(t)) return 'M';
+    if (/^(F\b|FEM)/.test(t)) return 'F';
+    if (/^X\b|NO BINARI/.test(t)) return 'X';
+    return null;
+}
+
 // Foto del miembro del equipo (link en Equipo); si no hay o no carga, quedan las iniciales
 function fotoDe(nombre) {
     const url = equipo.find(e => e.nombre === nombre)?.foto_url || '';

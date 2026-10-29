@@ -42,8 +42,6 @@ function parseTSV(text) {
     return rows.filter(r => r.some(c => c.trim() !== ''));
 }
 
-const normTxt = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ');
-
 // Si se copió el encabezado se usan sus posiciones; si no, las de la hoja original
 function columnasSolicitud(rows) {
     for (const r of rows) {
@@ -118,7 +116,7 @@ function revisarImportacion() {
             const abiertas = busquedas.filter(b => vacanteAbierta(b) && normTxt(b.local) === nLocal && b.puesto === p.puesto).length;
             importLineas.push({
                 usar: true, local, regional: gr, zonal: gz, notas: obs, puesto: p.puesto, perfil: p.col,
-                marca: marcaDeLocal(local, marcaDefecto), selector: previos.selector, zona: previos.zona,
+                marca: marcaDeLocal(local, marcaDefecto), selector: previos.selector, zona: previos.zona || infoLocal(local)?.zona || '',
                 estado_nomina: nomina || null, nomina_detalle: nomina ? detalleDe(r, p.col) || null : null,
                 pedidas, abiertas, crear: Math.max(0, pedidas - abiertas)
             });
