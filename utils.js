@@ -105,8 +105,8 @@ function iniciales(nombre) {
 function nombrePostulante(p) { return p ? [p.nombre, p.apellido].filter(Boolean).join(' ') : '(postulante borrado)'; }
 
 // ── CLASES DE ESTILO ──
-function demoraClass(dias, nivel) {
-    const lim = DEMORA_LIMITE[nivel] || 15;
+function limiteDe(b) { return DEMORA_LIMITE[b.puesto] || DEMORA_LIMITE_OTROS; }
+function demoraClass(dias, lim) {
     if (dias <= lim * 0.6) return 'demora-ok';
     if (dias <= lim) return 'demora-warn';
     return 'demora-danger';
@@ -124,10 +124,10 @@ function tagClass(s) {
     if (s === 'Finalizada') return 'tag-finalizada';
     return 'tag-pausada';
 }
-function candClass(estado) {
-    if (estado === 'Ingresó') return 'cand-ok';
-    if (CAND_SALIDA.includes(estado)) return 'cand-out';
-    return '';
+// Color del ESTADO de la planilla
+function estadoClass(e) {
+    return { 'ENVIADO A ZONAL': 'est-enviado', 'APROBADO ZONAL': 'est-aprobado', 'RECHAZADO ZONAL': 'est-rechazado',
+        'CITADO': 'est-citado', 'HUELLA': 'est-huella', 'COMUNICADO': 'est-comunicado' }[e] || 'est-vacio';
 }
 function marcaClass(m) {
     if (m === 'Sabores Express') return 'marca-sabores';
@@ -146,8 +146,10 @@ function docClass(v) {
 
 // ── HTML chico reutilizado ──
 function optionsHtml(lista, actual, vacio = null) {
+    // Si el valor guardado no está en la lista (dato viejo), se agrega para no perderlo
+    const ops = actual && !lista.includes(actual) ? [...lista, actual] : lista;
     return (vacio !== null ? `<option value="">${esc(vacio)}</option>` : '')
-        + lista.map(o => `<option value="${esc(o)}" ${o === actual ? 'selected' : ''}>${esc(o)}</option>`).join('');
+        + ops.map(o => `<option value="${esc(o)}" ${o === actual ? 'selected' : ''}>${esc(o)}</option>`).join('');
 }
 // Valores ya usados + sugeridos, para los datalist (local, regional, zonal, puesto…)
 function valoresUsados(campo, extra = []) {
