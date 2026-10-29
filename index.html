@@ -7,10 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://gkotckcvookkbbtbctyp.supabase.co">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -20,9 +19,9 @@
     <div class="landing-main">
         <div class="landing-hero">
             <div class="landing-hero-left">
-                <div class="landing-hero-icon"><i class="fas fa-store"></i></div>
+                <div class="landing-hero-icon">🐢</div>
                 <div>
-                    <div class="landing-hero-eyebrow">Sabores Express · Hamburguesas Extremas</div>
+                    <div class="landing-hero-eyebrow">Tortuguitas · Sabores Express y Hamburguesas Extremas</div>
                     <div class="landing-hero-title">Portal de <span>Selección</span></div>
                     <div class="landing-hero-sub" id="landing-saludo"></div>
                 </div>
@@ -33,7 +32,7 @@
                 <button class="landing-hero-btn secondary" id="landing-btn-stats" onclick="goToApp(null, 'stats')"><i class="fas fa-chart-pie"></i> Estadísticas</button>
             </div>
         </div>
-        <div class="landing-section-hdr">Selectores <span class="tip" style="font-family:'DM Sans',sans-serif;font-weight:500">· tocá una tarjeta para ver solo sus búsquedas</span></div>
+        <div class="landing-section-hdr">Selectores <span class="tip">· tocá una tarjeta para ver solo sus búsquedas</span></div>
         <div class="landing-team-grid" id="landing-team-grid"></div>
         <div style="text-align:center;margin-top:28px"><button class="btn-sm" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Salir</button></div>
     </div>
@@ -42,8 +41,8 @@
 <!-- ══ LOGIN ══ -->
 <div id="login-screen" class="hidden">
     <div class="login-box">
-        <div class="login-logo">Portal de<br>Selección 2.0</div>
-        <div class="login-sub">Sabores Express · Hamburguesas Extremas</div>
+        <div class="login-logo">🐢 Portal de<br><span>Selección</span></div>
+        <div class="login-sub">Tortuguitas · Sabores Express y Hamburguesas Extremas</div>
         <label class="login-label">Código del equipo</label>
         <input class="login-input" id="login-codigo" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')login()">
         <button class="login-btn" onclick="login()">Entrar</button>
@@ -62,7 +61,7 @@
 <div id="app" class="shell hidden">
 
     <nav class="topnav">
-        <div class="topnav-logo">Portal de Selección 2.0</div>
+        <div class="topnav-logo">🐢 Portal de <span>Selección</span></div>
         <div class="topnav-right">
             <button class="topnav-btn" onclick="recargarDatos()" title="Volver a traer los datos"><i class="fas fa-sync-alt"></i> Actualizar</button>
             <button class="topnav-btn" id="btn-equipo" onclick="openEquipoModal()" title="Lista de selectores"><i class="fas fa-users-cog"></i> Equipo</button>
@@ -79,18 +78,16 @@
                 <div class="page-title" id="main-title">Pipeline de Selección</div>
                 <div class="page-subtitle" id="main-sub"></div>
             </div>
-            <button class="btn-primary" onclick="openNuevaBusqueda()"><i class="fas fa-plus"></i> Nueva Búsqueda</button>
+            <!-- Un solo botón de alta, según la pantalla (render.js: showView) -->
+            <button class="btn-primary" id="btn-nueva-busqueda" onclick="openNuevaBusqueda()"><i class="fas fa-plus"></i> Nueva búsqueda</button>
+            <button class="btn-primary hidden" id="btn-nuevo-postulante" onclick="openPostulanteModal()"><i class="fas fa-user-plus"></i> Nuevo postulante</button>
         </div>
 
         <div class="inline-nav">
             <button class="inline-nav-btn active" id="nav-pipeline" onclick="showView('pipeline')"><i class="fas fa-table"></i> Pipeline</button>
             <button class="inline-nav-btn" id="nav-base" onclick="showView('base')"><i class="fas fa-database"></i> Base de postulantes</button>
             <button class="inline-nav-btn" id="nav-stats" onclick="showView('stats')"><i class="fas fa-chart-bar"></i> Estadísticas</button>
-            <button class="inline-nav-btn" id="nav-charts" onclick="showView('charts')"><i class="fas fa-chart-pie"></i> Gráficos</button>
             <button class="inline-nav-btn" id="nav-informe" onclick="showView('informe')"><i class="fas fa-file-export"></i> Informe</button>
-            <div class="inline-nav-sep"></div>
-            <button class="inline-nav-btn" onclick="openNuevaBusqueda()"><i class="fas fa-plus"></i> Nueva Búsqueda</button>
-            <button class="inline-nav-btn" onclick="openPostulanteModal()"><i class="fas fa-user-plus"></i> Nuevo postulante</button>
         </div>
 
         <div class="selector-chips" id="selector-chips"></div>
@@ -184,19 +181,9 @@
             <div id="stats-content"></div>
         </div>
 
-        <!-- GRÁFICOS -->
-        <div id="view-charts" class="hidden">
-            <div class="page-tabs">
-                <button class="page-tab active" onclick="switchChartsTab('general',this)">General</button>
-                <button class="page-tab" onclick="switchChartsTab('tiempo',this)">Tiempos</button>
-                <button class="page-tab" onclick="switchChartsTab('selectores',this)">Selectores</button>
-            </div>
-            <div id="charts-content"></div>
-        </div>
-
         <!-- INFORME -->
         <div id="view-informe" class="hidden">
-            <div class="chart-card" style="display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+            <div class="chart-card informe-descarga">
                 <div>
                     <div class="chart-card-title" style="margin:0;padding:0;border:none"><i class="fas fa-file-csv"></i> Descargar el estado de todas las vacantes</div>
                     <p class="tip" style="font-style:normal;margin-top:6px;max-width:560px">CSV con fechas, tramos de demora, candidatos y alertas de cada vacante, listo para Excel o Google Sheets.</p>
@@ -313,7 +300,6 @@
 <script src="api.js"></script>
 <script src="render.js"></script>
 <script src="stats.js"></script>
-<script src="charts.js"></script>
 <script>initApp();</script>
 
 </body>

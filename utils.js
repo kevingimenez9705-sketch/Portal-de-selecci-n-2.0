@@ -129,6 +129,15 @@ function candClass(estado) {
     if (CAND_SALIDA.includes(estado)) return 'cand-out';
     return '';
 }
+function marcaClass(m) {
+    if (m === 'Sabores Express') return 'marca-sabores';
+    if (m === 'Hamburguesas Extremas') return 'marca-extremas';
+    return '';
+}
+// Tarjeta de número con barra de color (mismo estilo que el Contador de Vacantes)
+function kpiHtml(num, lbl, tono = 'violeta', sub = '') {
+    return `<div class="kpi kpi--${tono}"><div class="kpi-num">${num}</div><div class="kpi-lbl">${lbl}</div>${sub ? `<div class="kpi-sub">${sub}</div>` : ''}</div>`;
+}
 function docClass(v) {
     if (v === 'Sí') return 'doc-ok';
     if (v === 'En trámite') return 'doc-warn';
