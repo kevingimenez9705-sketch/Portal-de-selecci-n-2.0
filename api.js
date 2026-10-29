@@ -1,336 +1,475 @@
 // ══════════════════════════════════════════════
-//  AUTH + CARGA DE DATOS
+//  ACCESO CON CÓDIGO DEL EQUIPO + CARGA DE DATOS
 // ══════════════════════════════════════════════
+// El código queda guardado en el navegador: se pide una sola vez por computadora.
+function codigoGuardado() { try { return localStorage.getItem(CODIGO_KEY) || ''; } catch (e) { return ''; } }
+function guardarCodigo(codigo) { try { codigo ? localStorage.setItem(CODIGO_KEY, codigo) : localStorage.removeItem(CODIGO_KEY); } catch (e) { /* modo incógnito: se pide en cada visita */ } }
+
+// Pregunta a la base si el código es el del equipo. Devuelve true/false, o lanza si falla la conexión.
+async function codigoValido(codigo) {
+    crearCliente(codigo);
+    const { data, error } = await sb.rpc('seleccion_codigo_ok');
+    if (error) throw error;
+    return data === true;
+}
+
 async function login() {
-    const email = document.getElementById('login-email').value.trim();
-    const pass  = document.getElementById('login-pass').value;
-    const errEl = document.getElementById('login-error');
-    errEl.style.display = 'none';
-    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-    if (error) { errEl.textContent = 'Email o contraseña incorrectos'; errEl.style.display = 'block'; return; }
-    await initDashboard();
+    const codigo = document.getElementById('login-codigo').value.trim();
+    showLoginError('');
+    if (!codigo) { showLoginError('Ingresá el código del equipo'); return; }
+    try {
+        if (!(await codigoValido(codigo))) { showLoginError('Código incorrecto'); return; }
+    } catch (e) { showLoginError('No se pudo verificar el código: ' + msgError(e)); return; }
+    guardarCodigo(codigo);
+    await arrancar();
 }
 
-async function logout() { await sb.auth.signOut(); location.reload(); }
+function logout() { guardarCodigo(''); location.reload(); }
 
-async function loadProfile() {
-    const { data: { user } } = await sb.auth.getUser();
-    const { data, error } = await sb.from('profiles').select('*').eq('id', user.id).single();
-    if (error) { console.error('Error cargando perfil:', error); return; }
-    currentProfile = data;
+function showLoginError(msg) {
+    const el = document.getElementById('login-error');
+    el.textContent = msg;
+    el.style.display = msg ? 'block' : 'none';
 }
 
-async function loadData() {
-    const { data, error } = await sb
-        .from('busquedas')
-        .select('*, historial(*), estado_log(*), candidatos(*), psicotecnicos(*), verificaciones(*), archivos(*)')
-        .order('id', { ascending: false });
-    if (error) { toast('Error al cargar datos', true); return; }
-    busquedas = (data || []).map(mapRow);
-    const nums = busquedas.map(b => parseInt((b.numero || '').replace('SEL-', '')) || 0);
-    nroSeq = nums.length ? Math.max(...nums) + 1 : 1;
+// Muestra una sola de las pantallas grandes: login, loading, landing o app.
+function mostrarPantalla(cual) {
+    ['login-screen', 'loading-screen', 'landing-screen', 'app'].forEach(id =>
+        document.getElementById(id).classList.toggle('hidden', id !== cual));
 }
 
-function mapRow(b) {
+// Traduce los errores de Supabase a algo que se entienda en pantalla.
+function msgError(error) {
+    const code = error?.code || '';
+    const m = error?.message || code || 'error desconocido';
+    if (code === '42P01' || code === 'PGRST205' || /does not exist|Could not find the table/i.test(m)) return 'faltan crear las tablas del portal en Supabase (sql/portal_seleccion.sql)';
+    if (code === 'PGRST202' || /seleccion_codigo_ok/.test(m)) return 'falta configurar el código del equipo en Supabase (sql/codigo_equipo.sql)';
+    if (code === '42501' || /row-level security/i.test(m)) return 'el código del equipo no es válido (¿lo cambiaron?). Tocá Salir y volvé a ingresarlo';
+    if (code === '23505') return 'ya existe un registro igual (DNI o postulante repetido)';
+    if (/abort|timeout|57014/i.test(m + code)) return 'la consulta tardó demasiado';
+    return m;
+}
+
+async function loadEquipo() {
+    const { data, error } = await sb.from('seleccion_equipo').select('*').order('orden').order('nombre');
+    if (error) throw error;
+    equipo = data || [];
+}
+
+const BUSQUEDA_SELECT = '*, candidatos:seleccion_candidatos(*), comentarios:seleccion_comentarios(*)';
+const PAGINA = 1000; // Supabase devuelve como máximo 1000 filas por pedido
+
+async function fetchTodo(tabla, select = '*') {
+    const out = [];
+    for (let from = 0; ; from += PAGINA) {
+        const { data, error } = await sb.from(tabla).select(select).order('id', { ascending: false }).range(from, from + PAGINA - 1);
+        if (error) throw error;
+        out.push(...(data || []));
+        if (!data || data.length < PAGINA) break;
+    }
+    return out;
+}
+
+function mapBusqueda(b) {
     return {
         ...b,
-        historial:       (b.historial   || []).sort((a,x) => a.id - x.id),
-        estado_busqueda: (b.estado_log  || []).sort((a,x) => a.id - x.id),
-        candidatos:      (b.candidatos  || []).sort((a,x) => a.id - x.id),
-        psicotecnicos:   (b.psicotecnicos || []).map(p => ({...p, auth: p.auth_por})).sort((a,x) => a.id - x.id),
-        verificaciones:  (b.verificaciones || []).sort((a,x) => a.id - x.id),
-        archivos:        (b.archivos    || []).sort((a,x) => a.id - x.id),
+        candidatos:  (b.candidatos  || []).sort((a, x) => a.id - x.id),
+        comentarios: (b.comentarios || []).sort((a, x) => a.id - x.id),
     };
 }
 
-function nextNro() { return 'SEL-' + String(nroSeq++).padStart(3, '0'); }
+let postulantesById = new Map();
+function indexarPostulantes() { postulantesById = new Map(postulantes.map(p => [p.id, p])); }
 
-async function checkAndFinalizeSearches() {
-    const toFinalize = busquedas.filter(b =>
-        b.status === 'Cerrada' && b.ingreso && daysDiff(b.ingreso) >= 90
-    );
-    if (toFinalize.length === 0) return;
-    for (const b of toFinalize) {
-        const { error } = await sb.from('busquedas').update({ status: 'Finalizada' }).eq('id', b.id);
-        if (!error) b.status = 'Finalizada';
-    }
+async function loadData() {
+    const [bs, ps] = await Promise.all([fetchTodo('seleccion_busquedas', BUSQUEDA_SELECT), fetchTodo('seleccion_postulantes')]);
+    busquedas = bs.map(mapBusqueda);
+    postulantes = ps;
+    indexarPostulantes();
 }
 
-async function initDashboard() {
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('loading-screen').classList.remove('hidden');
-    await loadProfile();
-    await loadData();
-    await checkAndFinalizeSearches();
-    document.getElementById('loading-screen').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
-    const esAdmin = isAdmin();
-    const nombre = esAdmin ? '🔑 ' + (currentProfile?.nombre || 'Administrador') : '👤 ' + (currentProfile?.nombre || 'Selector');
-    document.getElementById('topnav-nombre').textContent = nombre;
-    document.getElementById('topnav-rol').textContent = esAdmin ? 'admin' : 'selector';
-    if (!esAdmin) {
-        document.getElementById('nav-stats').classList.add('hidden');
-        document.getElementById('nav-charts').classList.add('hidden');
+// Después de guardar algo de UNA búsqueda (o de sus candidatos/comentarios) se vuelve
+// a pedir solo esa búsqueda, no todo.
+async function recargarBusqueda(id) {
+    const { data, error } = await sb.from('seleccion_busquedas').select(BUSQUEDA_SELECT).eq('id', id).maybeSingle();
+    if (error) { toast('Error al recargar: ' + msgError(error), true); return; }
+    const i = busquedas.findIndex(b => b.id === id);
+    if (!data) { if (i !== -1) busquedas.splice(i, 1); return; }
+    if (i === -1) busquedas.unshift(mapBusqueda(data)); else busquedas[i] = mapBusqueda(data);
+}
+
+function aplicarCambiosBusqueda(row) {
+    const b = busquedas.find(x => x.id === row.id);
+    if (b) Object.assign(b, row);
+}
+
+// Arranque con el código ya verificado.
+async function arrancar() {
+    mostrarPantalla('loading-screen');
+    document.getElementById('loading-txt').textContent = 'Cargando datos...';
+    try {
+        await loadEquipo();
+        await loadData();
+        await checkAndFinalizeSearches();
+        datosCargados = true;
+        prepararApp();
+        showHome();
+    } catch (e) {
+        console.error('Error al arrancar:', e);
+        document.getElementById('loading-txt').innerHTML = `No se pudieron cargar los datos: <strong>${esc(msgError(e))}</strong><br><br>
+            <button class="btn-sm" onclick="arrancar()">Reintentar</button> <button class="btn-sm" onclick="logout()">Salir</button>`;
     }
-    renderTable();
 }
 
 async function initApp() {
-    const { data: { session } } = await sb.auth.getSession();
-    if (session) await initDashboard();
+    const codigo = codigoGuardado();
+    if (!codigo) { mostrarPantalla('login-screen'); return; }
+    try {
+        if (await codigoValido(codigo)) { await arrancar(); return; }
+        // Cambiaron el código: hay que volver a ingresarlo
+        guardarCodigo('');
+        mostrarPantalla('login-screen');
+        showLoginError('El código del equipo cambió: ingresá el nuevo');
+    } catch (e) {
+        mostrarPantalla('login-screen');
+        showLoginError('No se pudo conectar: ' + msgError(e));
+    }
+}
+
+// Botón "Actualizar": vuelve a traer todo.
+async function recargarDatos() {
+    try {
+        await Promise.all([loadEquipo(), loadData()]);
+        await checkAndFinalizeSearches();
+        renderSelectorChips();
+        refreshView();
+        toast('Datos actualizados ✓');
+    } catch (e) { toast('Error al actualizar: ' + msgError(e), true); }
+}
+
+// Cerrada + 90 días hábiles trabajados (hasta la baja, si la hubo) → Finalizada
+async function checkAndFinalizeSearches() {
+    const toFinalize = busquedas.filter(b => b.status === 'Cerrada' && b.ingreso && daysDiff(b.ingreso, b.fecha_baja || null) >= 90);
+    await Promise.all(toFinalize.map(async b => {
+        const { error } = await sb.from('seleccion_busquedas').update({ status: 'Finalizada' }).eq('id', b.id);
+        if (!error) b.status = 'Finalizada';
+    }));
 }
 
 // ══════════════════════════════════════════════
-//  UPDATE FIELD
+//  BÚSQUEDAS
 // ══════════════════════════════════════════════
+const CAMPOS_OBLIGATORIOS = ['marca', 'local', 'puesto'];
+
 async function updateField(id, field, val) {
-    const update = { [field]: val };
-    if (field === 'ingreso' && val) update.status = 'Cerrada';
-    const { data, error } = await sb.from('busquedas').update(update).eq('id', id).select();
-    if (error) { toast('Error al guardar: ' + (error.message || error.code), true); return; }
-    if (!data || data.length === 0) { toast('No se guardó (revisar policy UPDATE en busquedas)', true); return; }
-    await loadData();
+    if (typeof val === 'string') val = val.trim();
+    if (!fechaValida(val)) { toast('Fecha inválida (año fuera de rango) — no se guardó', true); refreshBusqueda(id); return; }
+    if (CAMPOS_OBLIGATORIOS.includes(field) && !val) { toast('Ese dato no puede quedar vacío', true); refreshBusqueda(id); return; }
+    const update = { [field]: val === '' ? null : val };
+    if (field === 'ingreso' && val) {
+        const msg = 'Vas a cargar la fecha de ingreso: la búsqueda pasa a "Cerrada"'
+            + (isAdmin() ? '.' : ' y, al no ser admin, ya no la vas a poder editar.') + ' ¿Confirmás?';
+        if (!(await confirmar(msg))) { refreshBusqueda(id); return; }
+        update.status = 'Cerrada';
+    }
+    const { data, error } = await sb.from('seleccion_busquedas').update(update).eq('id', id).select();
+    if (error) { toast('Error al guardar: ' + msgError(error), true); return; }
+    if (!data || data.length === 0) { toast('No se guardó (sin permiso para editar)', true); return; }
+    aplicarCambiosBusqueda(data[0]);
     if (field === 'ingreso') await checkAndFinalizeSearches();
-    renderTable();
-    toast('Guardado ✓');
+    refreshBusqueda(id);
+    const cerrandoSinIngreso = field === 'status' && (val === 'Cerrada' || val === 'Finalizada') && !data[0].ingreso;
+    toast(cerrandoSinIngreso ? 'Guardado — ojo: se cerró sin cargar la fecha de ingreso' : 'Guardado ✓');
 }
 
 async function addEstadoEntry(id) {
     const input = document.getElementById('estado-input-' + id);
     const texto = input?.value.trim();
     if (!texto) return;
-    const { error } = await sb.from('estado_log').insert({ busqueda_id: id, texto, fecha: today() });
-    if (error) { toast('Error al guardar', true); return; }
-    input.value = '';
-    await loadData(); renderTable(); toast('Comentario agregado ✓');
+    const { error } = await sb.from('seleccion_comentarios').insert({ busqueda_id: id, texto, fecha: today(), autor: vistaAislada ? selectorFiltroActivo : null });
+    if (error) { toast('Error al guardar: ' + msgError(error), true); return; }
+    await recargarBusqueda(id); refreshBusqueda(id); toast('Comentario agregado ✓');
 }
 
-async function removeEstadoEntry(entryId) {
+async function removeEstadoEntry(busquedaId, entryId) {
     if (!isAdmin()) { toast('Solo un administrador puede eliminar comentarios', true); return; }
-    if (!confirm('¿Eliminar este comentario? Esta acción no se puede deshacer.')) return;
-    await sb.from('estado_log').delete().eq('id', entryId);
-    await loadData(); renderTable(); toast('Eliminado');
+    if (!(await confirmar('¿Eliminar este comentario? Esta acción no se puede deshacer.'))) return;
+    const { error } = await sb.from('seleccion_comentarios').delete().eq('id', entryId);
+    if (error) { toast('Error al eliminar: ' + msgError(error), true); return; }
+    await recargarBusqueda(busquedaId); refreshBusqueda(busquedaId); toast('Eliminado');
 }
 
-// ── CANDIDATOS ──
-async function saveCand() {
-    const id     = +document.getElementById('cand-bid').value;
-    const nombre = document.getElementById('cand-nombre').value.trim();
-    const estado = document.getElementById('cand-estado').value;
-    if (!nombre) return;
-    const fEnvio      = document.getElementById('cand-fecha-envio').value || today();
-    const fEntrevista = document.getElementById('cand-fecha-entrevista').value;
-    const fRechazo    = document.getElementById('cand-fecha-rechazo').value;
-
-    const row = { busqueda_id: id, nombre, estado, fecha_envio: fEnvio };
-    if (estado === 'Entrevista' && fEntrevista) row.fecha_entrevista = fEntrevista;
-    if (estado === 'Rechazado'  && fRechazo)    row.fecha_rechazo   = fRechazo;
-
-    const { error } = await sb.from('candidatos').insert(row);
-    if (error) {
-        console.error('saveCand error:', error, 'ROW:', row);
-        toast('Error: ' + (error.message || error.details || error.hint || error.code || 'desconocido'), true);
-        return;
-    }
-    closeModal('modal-cand'); await loadData(); renderTable(); toast('Candidato agregado ✓');
-}
-
-async function removeCand(candId) {
-    if (!confirm('¿Eliminar este candidato? Esta acción no se puede deshacer.')) return;
-    await sb.from('candidatos').delete().eq('id', candId);
-    await loadData(); renderTable(); toast('Candidato eliminado');
-}
-
-async function updateCandEstado(candId, estado) {
-    const hoy = today();
-    const update = { estado };
-    const c = busquedas.flatMap(b => b.candidatos).find(x => x.id === candId) || {};
-
-    if (estado === 'Entrevista') {
-        update.fecha_entrevista = c.fecha_entrevista || hoy;
-        update.fecha_rechazo = null;
-    }
-    if (estado === 'Rechazado') {
-        update.fecha_rechazo = c.fecha_rechazo || hoy;
-    }
-    if (estado === 'Enviado') {
-        update.fecha_entrevista = null;
-        update.fecha_rechazo = null;
-    }
-    if (estado === 'Oferta') {
-        update.fecha_rechazo = null;
-    }
-
-    const { data, error } = await sb.from('candidatos').update(update).eq('id', candId).select();
-    if (error) {
-        if (error.message && error.message.includes('fecha_rechazo')) {
-            const updateSinRechazo = { estado };
-            if (estado === 'Entrevista') updateSinRechazo.fecha_entrevista = c.fecha_entrevista || hoy;
-            if (estado === 'Enviado')    updateSinRechazo.fecha_entrevista = null;
-            const { data: d2, error: e2 } = await sb.from('candidatos').update(updateSinRechazo).eq('id', candId).select();
-            if (e2) { toast('Error: ' + (e2.message || e2.code), true); return; }
-            if (!d2 || d2.length === 0) { toast('No se actualizó (revisar policy UPDATE en candidatos)', true); return; }
-            await loadData(); renderTable(); toast('Estado actualizado ✓');
-            return;
-        }
-        toast('Error: ' + (error.message || error.code), true);
-        return;
-    }
-    if (!data || data.length === 0) { toast('No se actualizó (revisar policy UPDATE en candidatos)', true); return; }
-    await loadData(); renderTable(); toast('Estado actualizado ✓');
-}
-
-async function updateCandFecha(candId, field, val) {
-    const { data, error } = await sb.from('candidatos').update({ [field]: val || null }).eq('id', candId).select();
-    if (error) { toast('Error al guardar fecha: ' + (error.message || error.code), true); return; }
-    if (!data || data.length === 0) { toast('No se guardó (revisar policy UPDATE en candidatos)', true); return; }
-    await loadData(); renderTable(); toast('Fecha actualizada ✓');
-}
-
-// ── PSICOTÉCNICOS ──
-async function savePsico() {
-    const id           = +document.getElementById('psico-bid').value;
-    const nombre       = document.getElementById('psico-nombre').value.trim();
-    const resultado    = document.getElementById('psico-resultado').value;
-    const selector_psico = document.getElementById('psico-selector').value;
-    const realizado_por  = document.getElementById('psico-realizado').value.trim();
-    const auth_por       = document.getElementById('psico-auth').value.trim();
-    if (!nombre) return;
-    const { error } = await sb.from('psicotecnicos').insert({ busqueda_id: id, nombre, resultado, selector_psico, realizado_por, auth_por });
-    if (error) { toast('Error al guardar', true); return; }
-    closeModal('modal-psico'); await loadData(); renderTable(); toast('Psicotécnico agregado ✓');
-}
-async function removePsico(psicoId) {
-    if (!confirm('¿Eliminar este psicotécnico? Esta acción no se puede deshacer.')) return;
-    await sb.from('psicotecnicos').delete().eq('id', psicoId);
-    await loadData(); renderTable(); toast('Eliminado');
-}
-
-// ── VERIFICACIONES ──
-async function saveVerif() {
-    const id           = +document.getElementById('verif-bid').value;
-    const tipo         = document.getElementById('verif-tipo').value;
-    const resultado    = document.getElementById('verif-resultado').value;
-    const selector_verif = document.getElementById('verif-selector').value;
-    const observaciones  = document.getElementById('verif-obs').value.trim();
-
-    const row = { busqueda_id: id, tipo, resultado, selector_verif, observaciones, fecha_inicio: today() };
-    if (!verifEnCurso(resultado)) row.fecha_fin = today();
-
-    let { error } = await sb.from('verificaciones').insert(row);
-    if (error && error.message && /fecha_(inicio|fin)/.test(error.message)) {
-        ({ error } = await sb.from('verificaciones').insert({ busqueda_id: id, tipo, resultado, selector_verif, observaciones }));
-    }
-    if (error) { toast('Error al guardar: ' + (error.message || error.code), true); return; }
-    closeModal('modal-verif'); await loadData(); renderTable(); toast('Verificación agregada ✓');
-}
-
-async function updateVerifEstado(verifId, resultado) {
-    const v = busquedas.flatMap(b => b.verificaciones).find(x => x.id === verifId) || {};
-    const update = { resultado };
-    if (verifEnCurso(resultado)) {
-        update.fecha_fin = null;
-    } else {
-        update.fecha_fin = v.fecha_fin || today();
-    }
-    let { data, error } = await sb.from('verificaciones').update(update).eq('id', verifId).select();
-    if (error && error.message && error.message.includes('fecha_fin')) {
-        ({ data, error } = await sb.from('verificaciones').update({ resultado }).eq('id', verifId).select());
-    }
-    if (error) { toast('Error: ' + (error.message || error.code), true); return; }
-    if (!data || data.length === 0) { toast('No se actualizó (revisar policy UPDATE en verificaciones)', true); return; }
-    await loadData(); renderTable(); toast('Estado actualizado ✓');
-}
-
-async function removeVerif(verifId) {
-    if (!confirm('¿Eliminar esta verificación? Esta acción no se puede deshacer.')) return;
-    await sb.from('verificaciones').delete().eq('id', verifId);
-    await loadData(); renderTable(); toast('Eliminado');
-}
-
-// ── ALTA / REAPERTURA / BAJA ──
 async function addNew() {
-    const puesto = document.getElementById('n-puesto').value.trim();
+    const val = id => document.getElementById(id).value.trim();
+    const local = val('n-local'), puesto = val('n-puesto');
+    if (!local)  { toast('Ingresá el local', true); return; }
     if (!puesto) { toast('Ingresá el puesto', true); return; }
-    const nivel = document.getElementById('n-nivel').value.trim() || 'Otros';
+    if (!fechaValida(val('n-inicio'))) { toast('Fecha de apertura inválida', true); return; }
+    // En Tareas grupales un local suele pedir varias vacantes iguales (una fila por persona):
+    // "Cantidad" crea esa misma cantidad de búsquedas de una vez.
+    const cantidad = Math.min(20, Math.max(1, parseInt(val('n-cantidad')) || 1));
     const row = {
-        numero: nextNro(), puesto,
-        selector:  document.getElementById('n-selector').value,
-        depto:     document.getElementById('n-depto').value || 'Sin definir',
-        tipo:      document.getElementById('n-tipo').value,
-        motivo:    document.getElementById('n-motivo').value,
-        nivel,
-        sueldo:    parseFloat(document.getElementById('n-sueldo').value) || 0,
-        jornada:   document.getElementById('n-jornada').value,
-        ubicacion: document.getElementById('n-ubicacion').value,
-        inicio:    document.getElementById('n-inicio').value || today(),
-        categoria: document.getElementById('n-categoria').value || 'general',
-        status: 'Proceso', ingreso: null, ingreso_nombre: ''
+        marca: val('n-marca'), local, puesto,
+        local_entrenamiento: val('n-local-ent') || null,
+        zona: val('n-zona') || null,
+        regional: val('n-regional') || null,
+        zonal: val('n-zonal') || null,
+        selector: val('n-selector') || null,
+        jornada: val('n-jornada') || null,
+        nivel: val('n-nivel') || 'Operativo',
+        motivo: val('n-motivo') || 'Rotación',
+        notas: val('n-notas') || null,
+        inicio: val('n-inicio') || today(),
+        status: 'Proceso'
     };
-    const { data, error } = await sb.from('busquedas').insert(row).select().single();
-    if (error) { toast('Error al crear búsqueda', true); return; }
-    await sb.from('historial').insert({ busqueda_id: data.id, texto: 'Apertura de vacante', fecha: new Date().toISOString() });
-    closeModal('modal-nueva'); await loadData(); renderTable(); toast('Búsqueda creada ✓');
+    const { data, error } = await sb.from('seleccion_busquedas').insert(Array.from({ length: cantidad }, () => ({ ...row }))).select(BUSQUEDA_SELECT);
+    if (error) { toast('Error al crear la búsqueda: ' + msgError(error), true); return; }
+    busquedas = [...(data || []).map(mapBusqueda).reverse(), ...busquedas];
+    closeModal('modal-nueva');
+    refreshView();
+    toast(cantidad > 1 ? `${cantidad} búsquedas creadas ✓` : `Búsqueda ${data[0].numero} creada ✓`);
 }
 
 async function reabrir(id) {
     const orig = busquedas.find(x => x.id === id);
     if (!orig) { toast('No se encontró la búsqueda', true); return; }
-    if (!confirm('¿Reabrir búsqueda "' + orig.puesto + '"? Se creará una nueva entrada en Proceso.')) return;
+    if (!(await confirmar(`¿Reabrir "${orig.puesto}" en ${orig.local}? Se crea una búsqueda nueva en Proceso.`))) return;
     const nuevaRow = {
-        numero: nextNro(), puesto: orig.puesto, selector: orig.selector,
-        depto: orig.depto, tipo: orig.tipo, motivo: orig.motivo, nivel: orig.nivel,
-        sueldo: orig.sueldo, jornada: orig.jornada, ubicacion: orig.ubicacion,
-        categoria: orig.categoria || 'general',
-        inicio: today(), status: 'Proceso', ingreso: null, ingreso_nombre: ''
+        marca: orig.marca, local: orig.local, local_entrenamiento: orig.local_entrenamiento, zona: orig.zona,
+        regional: orig.regional, zonal: orig.zonal, selector: orig.selector, puesto: orig.puesto,
+        jornada: orig.jornada, nivel: orig.nivel, motivo: orig.motivo,
+        inicio: today(), status: 'Proceso', reopened_from: orig.numero
     };
-    const { data: nueva, error: errInsert } = await sb.from('busquedas').insert(nuevaRow).select().single();
-    if (errInsert) { toast('Error al reabrir: ' + (errInsert.message || 'verificar permisos'), true); return; }
-    const textoOrigen = `Reapertura de ${orig.numero} — "${orig.puesto}". Anterior ingresado: ${orig.ingreso_nombre || 'N/D'} (${orig.ingreso || 'sin fecha'})`;
-    await sb.from('estado_log').insert({ busqueda_id: nueva.id, texto: textoOrigen, fecha: today() });
-    try {
-        const histEntries = [{ busqueda_id: nueva.id, texto: textoOrigen, fecha: new Date().toISOString() }];
-        if (orig.historial && orig.historial.length > 0) {
-            orig.historial.forEach(h => histEntries.push({ busqueda_id: nueva.id, texto: '[Historial copiado] ' + h.texto, fecha: new Date().toISOString() }));
+    const { data: nueva, error } = await sb.from('seleccion_busquedas').insert(nuevaRow).select().single();
+    if (error) { toast('Error al reabrir: ' + msgError(error), true); return; }
+    const texto = `Reapertura de ${orig.numero} — "${orig.puesto}" en ${orig.local}. Anterior ingresado: ${orig.ingreso_nombre || 'N/D'} (${orig.ingreso ? fmtFecha(orig.ingreso) : 'sin fecha'})`;
+    await sb.from('seleccion_comentarios').insert({ busqueda_id: nueva.id, texto, fecha: today(), autor: null });
+    if (orig.ingreso && !orig.fecha_baja) {
+        const f = await pedirTexto('Fecha de baja del que había ingresado (AAAA-MM-DD). Dejá vacío si no corresponde:', today());
+        if (f && f.trim()) {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(f.trim()) && fechaValida(f.trim())) await sb.from('seleccion_busquedas').update({ fecha_baja: f.trim() }).eq('id', id);
+            else toast('Fecha de baja inválida — se reabrió igual, sin guardar esa fecha', true);
         }
-        await sb.from('historial').insert(histEntries);
-    } catch (e) { console.warn('No se pudo copiar historial:', e); }
-    let fechaBaja = prompt('Fecha de baja del que ingresó (AAAA-MM-DD). Dejá vacío si seguía hasta hoy:', today());
-    const updOrig = { status: 'Cerrada' };
-    if (fechaBaja && /^\d{4}-\d{2}-\d{2}$/.test(fechaBaja.trim())) updOrig.fecha_baja = fechaBaja.trim();
-    await sb.from('busquedas').update(updOrig).eq('id', id);
-    await loadData(); renderTable();
+    }
+    await recargarBusqueda(id); await recargarBusqueda(nueva.id); refreshView();
     toast('Búsqueda reabierta como ' + nueva.numero + ' ✓');
 }
 
 async function eliminar(id) {
     if (!isAdmin()) { toast('Solo un administrador puede eliminar búsquedas', true); return; }
-    if (!confirm('¿Eliminar esta búsqueda? Esta acción no se puede deshacer.')) return;
-    await sb.from('busquedas').delete().eq('id', id);
-    await loadData(); renderTable(); toast('Búsqueda eliminada');
+    const b = busquedas.find(x => x.id === id);
+    const n = b?.candidatos.length || 0;
+    if (!(await confirmar(`¿Eliminar la búsqueda ${b?.numero || ''}?${n ? ` Se quitan también sus ${n} candidato(s) (siguen en la base de postulantes).` : ''} Esta acción no se puede deshacer.`))) return;
+    const { data, error } = await sb.from('seleccion_busquedas').delete().eq('id', id).select('id');
+    if (error) { toast('Error al eliminar: ' + msgError(error), true); return; }
+    if (!data || data.length === 0) { toast('No se eliminó (sin permiso)', true); return; }
+    busquedas = busquedas.filter(x => x.id !== id);
+    refreshView(); toast('Búsqueda eliminada');
 }
 
-// ── PDFs ──
-async function subirPDF(busquedaId, input) {
-    const file = input.files[0];
-    if (!file) return;
-    toast('Subiendo archivo...');
-    const path = `${busquedaId}/${Date.now()}_${file.name}`;
-    const { error: upErr } = await sb.storage.from('Busquedas-pdfs').upload(path, file);
-    if (upErr) { toast('Error al subir: ' + upErr.message, true); return; }
-    const { data: { session } } = await sb.auth.getSession();
-    await sb.from('archivos').insert({ busqueda_id: busquedaId, nombre: file.name, url: path, subido_por: session.user.id });
-    await loadData(); renderTable(); toast('PDF subido ✓');
-    input.value = '';
+// ══════════════════════════════════════════════
+//  CANDIDATOS (postulante colocado en una vacante)
+// ══════════════════════════════════════════════
+function buscarCand(candId) {
+    for (const b of busquedas) {
+        const c = b.candidatos.find(x => x.id === candId);
+        if (c) return { c, b };
+    }
+    return null;
 }
-async function abrirPDF(storagePath) {
-    const { data, error } = await sb.storage.from('Busquedas-pdfs').createSignedUrl(storagePath, 3600);
-    if (error || !data) { toast('No se pudo abrir el archivo', true); return; }
-    window.open(data.signedUrl, '_blank');
+
+async function colocarEnVacante(postulanteId, busquedaId) {
+    const p = postulantesById.get(postulanteId);
+    const b = busquedas.find(x => x.id === busquedaId);
+    if (!p || !b) { toast('Elegí un postulante y una vacante', true); return false; }
+    if (p.estado === 'Bloqueado' || p.estado === 'Descartado') { toast(`${nombrePostulante(p)} está "${p.estado}" en la base: cambiá su estado antes de colocarlo`, true); return false; }
+    const activa = candidaturasDe(postulanteId).find(x => CAND_ACTIVOS.includes(x.c.estado) && vacanteAbierta(x.b));
+    if (activa && !(await confirmar(`${nombrePostulante(p)} ya está en ${activa.b.numero} (${activa.b.local}) como "${activa.c.estado}". ¿Colocarlo igual en ${b.numero}?`))) return false;
+    const { error } = await sb.from('seleccion_candidatos').insert({ busqueda_id: busquedaId, postulante_id: postulanteId, estado: 'Asignado', fecha_asignacion: today() });
+    if (error) { toast(error.code === '23505' ? 'Ese postulante ya está en esta vacante' : 'Error al colocar: ' + msgError(error), true); return false; }
+    await recargarBusqueda(busquedaId);
+    refreshView();
+    toast(`${nombrePostulante(p)} colocado en ${b.numero} ✓`);
+    return true;
 }
-async function eliminarPDF(archivoId, storagePath) {
-    if (!confirm('¿Eliminar este archivo? Esta acción no se puede deshacer.')) return;
-    await sb.storage.from('Busquedas-pdfs').remove([storagePath]);
-    await sb.from('archivos').delete().eq('id', archivoId);
-    await loadData(); renderTable(); toast('Archivo eliminado');
+
+async function updateCandEstado(candId, estado) {
+    const found = buscarCand(candId);
+    if (!found) return;
+    const { c, b } = found;
+    const nombre = nombrePostulante(postulantesById.get(c.postulante_id));
+    const hoy = today();
+    const upd = { estado };
+    switch (estado) {
+        case 'Asignado':       Object.assign(upd, { fecha_envio: null, fecha_decision: null, fecha_ingreso: null, fecha_salida: null }); break;
+        case 'Enviado':        Object.assign(upd, { fecha_envio: c.fecha_envio || hoy, fecha_decision: null, fecha_ingreso: null, fecha_salida: null }); break;
+        case 'Aprobado':       Object.assign(upd, { fecha_envio: c.fecha_envio || hoy, fecha_decision: c.fecha_decision || hoy, fecha_ingreso: null, fecha_salida: null }); break;
+        case 'Rechazado':      Object.assign(upd, { fecha_envio: c.fecha_envio || hoy, fecha_decision: c.fecha_decision || hoy, fecha_ingreso: null }); break;
+        case 'Citado ONB':
+        case 'Confirmó ONB':   Object.assign(upd, { fecha_onb: c.fecha_onb || hoy, fecha_ingreso: null, fecha_salida: null }); break;
+        case 'Ingresó':        Object.assign(upd, { fecha_ingreso: c.fecha_ingreso || c.fecha_onb || hoy, fecha_salida: null }); break;
+        case 'No se presentó':
+        case 'Desistió':       Object.assign(upd, { fecha_salida: c.fecha_salida || hoy, fecha_ingreso: null }); break;
+    }
+
+    // Que ingrese alguien cierra la vacante (como cargar la fecha de ingreso en la búsqueda).
+    let cerrar = false;
+    if (estado === 'Ingresó' && b.status !== 'Cerrada' && b.status !== 'Finalizada') {
+        cerrar = await confirmar(`${nombre} ingresó: la búsqueda ${b.numero} pasa a "Cerrada" con fecha de ingreso ${fmtFecha(upd.fecha_ingreso)}. ¿Confirmás?`);
+        if (!cerrar) { refreshBusqueda(b.id); return; }
+    }
+
+    const { data, error } = await sb.from('seleccion_candidatos').update(upd).eq('id', candId).select();
+    if (error) { toast('Error: ' + msgError(error), true); return; }
+    if (!data || data.length === 0) { toast('No se actualizó (sin permiso)', true); return; }
+
+    // Las fechas de la búsqueda que frenan cada tramo de demora se completan solas
+    // con el primer envío al zonal y la primera aprobación (después se pueden corregir a mano).
+    const updB = {};
+    if (['Enviado', 'Aprobado', 'Rechazado'].includes(estado) && !b.enviado_zonal) updB.enviado_zonal = upd.fecha_envio;
+    if (estado === 'Aprobado' && !b.decision_zonal) updB.decision_zonal = upd.fecha_decision;
+    if (cerrar) Object.assign(updB, { ingreso: upd.fecha_ingreso, ingreso_nombre: nombre, status: 'Cerrada' });
+    if (Object.keys(updB).length) {
+        const { error: eB } = await sb.from('seleccion_busquedas').update(updB).eq('id', b.id);
+        if (eB) toast('El candidato se guardó, pero no se pudo actualizar la búsqueda: ' + msgError(eB), true);
+    }
+    await recargarBusqueda(b.id);
+    if (cerrar) await checkAndFinalizeSearches();
+    refreshView();
+    if (b.ingreso_nombre === nombre && estado !== 'Ingresó') toast('Estado actualizado — revisá "Candidato que ingresó" de la búsqueda', true);
+    else toast('Estado actualizado ✓');
+}
+
+async function updateCandField(candId, field, val) {
+    if (typeof val === 'string') val = val.trim();
+    if (!fechaValida(val)) { toast('Fecha inválida (año fuera de rango) — no se guardó', true); refreshView(); return; }
+    const found = buscarCand(candId);
+    if (!found) return;
+    const { c, b } = found;
+    const { data, error } = await sb.from('seleccion_candidatos').update({ [field]: val || null }).eq('id', candId).select();
+    if (error) { toast('Error al guardar: ' + msgError(error), true); return; }
+    if (!data || data.length === 0) { toast('No se guardó (sin permiso)', true); return; }
+    // Si es quien ingresó, la fecha de ingreso de la búsqueda acompaña.
+    if (field === 'fecha_ingreso' && val && c.estado === 'Ingresó' && b.ingreso_nombre === nombrePostulante(postulantesById.get(c.postulante_id))) {
+        await sb.from('seleccion_busquedas').update({ ingreso: val }).eq('id', b.id);
+    }
+    await recargarBusqueda(b.id); refreshBusqueda(b.id); toast('Guardado ✓');
+}
+
+// Descuenta días hábiles de la espera que no dependen del equipo (feriado del local, zonal de licencia…)
+async function guardarJustificacion(candId) {
+    const dias   = Math.max(0, parseInt(document.getElementById('justif-dias-' + candId).value) || 0);
+    const motivo = document.getElementById('justif-motivo-' + candId).value.trim();
+    const found = buscarCand(candId);
+    if (!found) return;
+    const { error } = await sb.from('seleccion_candidatos').update({ demora_descuento_dias: dias, demora_descuento_motivo: motivo || null }).eq('id', candId);
+    if (error) { toast('Error al guardar: ' + msgError(error), true); return; }
+    await recargarBusqueda(found.b.id); refreshBusqueda(found.b.id); toast('Demora justificada ✓');
+}
+
+async function quitarCand(candId) {
+    const found = buscarCand(candId);
+    if (!found) return;
+    const nombre = nombrePostulante(postulantesById.get(found.c.postulante_id));
+    if (!(await confirmar(`¿Quitar a ${nombre} de ${found.b.numero}? Sigue en la base de postulantes.`))) return;
+    const { error } = await sb.from('seleccion_candidatos').delete().eq('id', candId);
+    if (error) { toast('Error al quitar: ' + msgError(error), true); return; }
+    await recargarBusqueda(found.b.id); refreshView(); toast('Quitado de la vacante');
+}
+
+// ══════════════════════════════════════════════
+//  BASE DE POSTULANTES
+// ══════════════════════════════════════════════
+const CAMPOS_POSTULANTE = ['nombre', 'apellido', 'dni', 'telefono', 'email', 'fecha_nacimiento', 'zona', 'localidad',
+    'sede_entrevista', 'fecha_entrevista', 'puesto_interes', 'horario', 'curso_manipulacion', 'antecedentes',
+    'cv_url', 'observaciones', 'estado', 'id_postulante'];
+
+async function savePostulante() {
+    const id  = +document.getElementById('p-id').value || null;
+    const bid = +document.getElementById('p-bid').value || null;
+    const row = {};
+    CAMPOS_POSTULANTE.forEach(f => {
+        const v = document.getElementById('p-' + f.replace(/_/g, '-')).value.trim();
+        row[f] = v || null;
+    });
+    row.dni = row.dni ? row.dni.replace(/\D/g, '') : null;
+    if (!row.nombre) { toast('Ingresá el nombre', true); return; }
+    if (!row.estado) row.estado = 'Aprobado';
+    if (!fechaValida(row.fecha_nacimiento) || !fechaValida(row.fecha_entrevista)) { toast('Hay una fecha inválida', true); return; }
+
+    const q = id ? sb.from('seleccion_postulantes').update(row).eq('id', id) : sb.from('seleccion_postulantes').insert(row);
+    const { data, error } = await q.select();
+    if (error) { toast(error.code === '23505' ? 'Ya hay un postulante con ese DNI en la base' : 'Error al guardar: ' + msgError(error), true); return; }
+    if (!data || data.length === 0) { toast('No se guardó (sin permiso)', true); return; }
+    const p = data[0];
+    if (id) postulantes = postulantes.map(x => x.id === id ? p : x);
+    else postulantes = [p, ...postulantes];
+    indexarPostulantes();
+    closeModal('modal-postulante');
+    if (bid && !id) await colocarEnVacante(p.id, bid);
+    else { refreshView(); toast(id ? 'Postulante actualizado ✓' : 'Postulante agregado a la base ✓'); }
+}
+
+async function updatePostulanteField(id, field, val) {
+    if (typeof val === 'string') val = val.trim();
+    const { data, error } = await sb.from('seleccion_postulantes').update({ [field]: val || null }).eq('id', id).select();
+    if (error) { toast('Error al guardar: ' + msgError(error), true); return; }
+    if (!data || data.length === 0) { toast('No se guardó (sin permiso)', true); return; }
+    postulantes = postulantes.map(x => x.id === id ? data[0] : x);
+    indexarPostulantes();
+    refreshView(); toast('Guardado ✓');
+}
+
+async function removePostulante(id) {
+    const p = postulantesById.get(id);
+    const n = candidaturasDe(id).length;
+    if (!(await confirmar(`¿Eliminar a ${nombrePostulante(p)} de la base?${n ? ` También se lo quita de ${n} vacante(s).` : ''} Esta acción no se puede deshacer.`))) return;
+    const { error } = await sb.from('seleccion_postulantes').delete().eq('id', id);
+    if (error) { toast('Error al eliminar: ' + msgError(error), true); return; }
+    postulantes = postulantes.filter(x => x.id !== id);
+    indexarPostulantes();
+    busquedas.forEach(b => { b.candidatos = b.candidatos.filter(c => c.postulante_id !== id); });
+    refreshView(); toast('Postulante eliminado');
+}
+
+// ══════════════════════════════════════════════
+//  EQUIPO (solo admin)
+// ══════════════════════════════════════════════
+async function saveMiembro() {
+    const val = id => document.getElementById(id).value.trim();
+    const row = {
+        nombre: val('eq-nombre'),
+        nombre_completo: val('eq-nombre-completo') || null,
+        es_selector: document.getElementById('eq-es-selector').checked,
+        color: val('eq-color') || null,
+        orden: equipo.length
+    };
+    if (!row.nombre) { toast('Ingresá el nombre', true); return; }
+    const { error } = await sb.from('seleccion_equipo').insert(row);
+    if (error) { toast('Error al guardar: ' + msgError(error), true); return; }
+    ['eq-nombre', 'eq-nombre-completo'].forEach(i => document.getElementById(i).value = '');
+    await despuesDeCambiarEquipo('Agregado al equipo ✓');
+}
+
+async function updateMiembro(id, field, val) {
+    if (field === 'nombre' && !val) { toast('El nombre no puede quedar vacío', true); renderEquipoModal(); return; }
+    const { error } = await sb.from('seleccion_equipo').update({ [field]: val }).eq('id', id);
+    if (error) { toast('Error al guardar: ' + msgError(error), true); renderEquipoModal(); return; }
+    await despuesDeCambiarEquipo('Guardado ✓');
+}
+
+async function removeMiembro(id) {
+    const m = equipo.find(e => e.id === id);
+    if (!(await confirmar(`¿Eliminar a ${m?.nombre} del equipo? Deja de aparecer como selector (sus búsquedas no se borran).`))) return;
+    const { error } = await sb.from('seleccion_equipo').delete().eq('id', id);
+    if (error) { toast('Error al eliminar: ' + msgError(error), true); return; }
+    await despuesDeCambiarEquipo('Eliminado del equipo');
+}
+
+async function despuesDeCambiarEquipo(msg) {
+    await loadEquipo();
+    renderEquipoModal();
+    renderSelectorChips();
+    refreshView();
+    toast(msg);
 }
