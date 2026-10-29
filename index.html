@@ -14,30 +14,6 @@
 </head>
 <body>
 
-<!-- ══ LANDING ══ -->
-<div id="landing-screen" class="hidden">
-    <div class="landing-main">
-        <div class="landing-hero">
-            <div class="landing-hero-left">
-                <div class="landing-hero-icon">🐢</div>
-                <div>
-                    <div class="landing-hero-eyebrow">Tortuguitas · Sabores Express y Hamburguesas Extremas</div>
-                    <div class="landing-hero-title">Portal de <span>Selección</span></div>
-                    <div class="landing-hero-sub" id="landing-saludo"></div>
-                </div>
-            </div>
-            <div class="landing-hero-actions">
-                <button class="landing-hero-btn" onclick="goToApp()">Ir al Pipeline <i class="fas fa-arrow-right"></i></button>
-                <button class="landing-hero-btn secondary" onclick="goToApp(null, 'base')"><i class="fas fa-database"></i> Base de postulantes</button>
-                <button class="landing-hero-btn secondary" id="landing-btn-stats" onclick="goToApp(null, 'stats')"><i class="fas fa-chart-pie"></i> Estadísticas</button>
-            </div>
-        </div>
-        <div class="landing-section-hdr">Selectores <span class="tip">· tocá una tarjeta para ver solo sus búsquedas</span></div>
-        <div class="landing-team-grid" id="landing-team-grid"></div>
-        <div style="text-align:center;margin-top:28px"><button class="btn-sm" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Salir</button></div>
-    </div>
-</div>
-
 <!-- ══ LOGIN ══ -->
 <div id="login-screen" class="hidden">
     <div class="login-box">
@@ -65,8 +41,6 @@
         <div class="topnav-right">
             <button class="topnav-btn" onclick="recargarDatos()" title="Volver a traer los datos"><i class="fas fa-sync-alt"></i> Actualizar</button>
             <button class="topnav-btn" id="btn-equipo" onclick="openEquipoModal()" title="Lista de selectores"><i class="fas fa-users-cog"></i> Equipo</button>
-            <button class="topnav-btn hidden" id="salir-vista-aislada" onclick="salirVistaAislada()"><i class="fas fa-arrow-left"></i> Volver a selección</button>
-            <button class="topnav-btn" onclick="showHome()" title="Pantalla de inicio"><i class="fas fa-home"></i> Inicio</button>
             <div class="topnav-sep"></div>
             <button class="topnav-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Salir</button>
         </div>
@@ -75,16 +49,19 @@
     <main class="main">
         <div class="top-bar">
             <div>
-                <div class="page-title" id="main-title">Pipeline de Selección</div>
+                <div class="page-title" id="main-title">Vacantes</div>
                 <div class="page-subtitle" id="main-sub"></div>
             </div>
-            <!-- Un solo botón de alta, según la pantalla (render.js: showView) -->
-            <button class="btn-primary" id="btn-nueva-busqueda" onclick="openNuevaBusqueda()"><i class="fas fa-plus"></i> Nueva búsqueda</button>
-            <button class="btn-primary hidden" id="btn-nuevo-postulante" onclick="openPostulanteModal()"><i class="fas fa-user-plus"></i> Nuevo postulante</button>
+            <!-- Botones de alta según la pantalla (render.js: showView) -->
+            <div class="top-bar-acciones">
+                <button class="btn-secundario" id="btn-importar" onclick="openImportar()"><i class="fas fa-file-import"></i> Importar solicitudes</button>
+                <button class="btn-primary" id="btn-nueva-busqueda" onclick="openNuevaBusqueda()"><i class="fas fa-plus"></i> Nueva vacante</button>
+                <button class="btn-primary hidden" id="btn-nuevo-postulante" onclick="openPostulanteModal()"><i class="fas fa-user-plus"></i> Nuevo postulante</button>
+            </div>
         </div>
 
         <div class="inline-nav">
-            <button class="inline-nav-btn active" id="nav-pipeline" onclick="showView('pipeline')"><i class="fas fa-table"></i> Pipeline</button>
+            <button class="inline-nav-btn active" id="nav-vacantes" onclick="showView('vacantes')"><i class="fas fa-table"></i> Vacantes</button>
             <button class="inline-nav-btn" id="nav-base" onclick="showView('base')"><i class="fas fa-database"></i> Base de postulantes</button>
             <button class="inline-nav-btn" id="nav-stats" onclick="showView('stats')"><i class="fas fa-chart-bar"></i> Estadísticas</button>
             <button class="inline-nav-btn" id="nav-informe" onclick="showView('informe')"><i class="fas fa-file-export"></i> Informe</button>
@@ -92,19 +69,18 @@
 
         <div class="selector-chips" id="selector-chips"></div>
 
-        <div class="filters" id="filters-pipeline">
+        <div class="filters" id="filters-vacantes">
             <span class="filter-label">Filtrar:</span>
-            <select class="filter-select" id="f-marca" onchange="applyFilters()"></select>
-            <select class="filter-select" id="f-zona" onchange="applyFilters()"></select>
-            <select class="filter-select" id="f-regional" onchange="applyFilters()"></select>
+            <select class="filter-select" id="f-estado" onchange="applyFilters()"></select>
             <select class="filter-select" id="f-status" onchange="applyFilters()"></select>
-            <select class="filter-select" id="f-motivo" onchange="applyFilters()"></select>
+            <select class="filter-select" id="f-regional" onchange="applyFilters()"></select>
             <select class="filter-select" id="f-alerta" onchange="applyFilters()">
-                <option value="">Alertas: todas</option>
+                <option value="">Mostrar: todas</option>
+                <option value="libres">Solo sin persona</option>
                 <option value="72">Solo alerta 72hs zonal</option>
                 <option value="plazo">Solo fuera de plazo</option>
             </select>
-            <input class="filter-input" id="f-search" placeholder="Buscar local, puesto, N°, candidato…" oninput="applyFiltersDebounced()">
+            <input class="filter-input" id="f-search" placeholder="Buscar local, N°, nombre, DNI…" oninput="applyFiltersDebounced()">
         </div>
 
         <div class="filters hidden" id="filters-base">
@@ -128,25 +104,21 @@
         </div>
 
         <!-- Sugerencias para los campos de texto (se completan con lo ya cargado) -->
-        <datalist id="dl-local"></datalist><datalist id="dl-local-ent"></datalist>
-        <datalist id="dl-regional"></datalist><datalist id="dl-zonal"></datalist>
-        <datalist id="dl-puesto"></datalist><datalist id="dl-jornada"></datalist>
+        <datalist id="dl-local"></datalist><datalist id="dl-regional"></datalist><datalist id="dl-zonal"></datalist>
+        <datalist id="dl-nacionalidad"></datalist><datalist id="dl-provincia"></datalist><datalist id="dl-pais"></datalist><datalist id="dl-altas"></datalist>
         <datalist id="dl-sede"></datalist><datalist id="dl-localidad"></datalist><datalist id="dl-puesto-interes"></datalist>
 
-        <!-- PIPELINE -->
-        <div id="view-pipeline">
+        <!-- VACANTES: misma grilla que la hoja Solicitudes -->
+        <div id="view-vacantes">
             <div class="kpi-row" id="kpi-row"></div>
-            <div class="table-wrap">
-                <table class="tabla-pipeline">
-                    <thead><tr>
-                        <th style="width:150px">N° · Motivo · Fechas</th>
-                        <th style="width:175px">Local · Marca · Zona</th>
-                        <th style="width:160px">Puesto · Jornada</th>
-                        <th style="width:190px">Estado de búsqueda</th>
-                        <th style="width:250px">Candidatos</th>
-                        <th style="width:160px">Ingreso</th>
-                        <th style="width:175px">Demora (hd) · Acciones</th>
-                    </tr></thead>
+            <div class="page-tabs" id="marca-tabs">
+                <button class="page-tab active" onclick="cambiarMarca('',this)">Todas</button>
+                <button class="page-tab tab-extremas" onclick="cambiarMarca('Hamburguesas Extremas',this)">Solicitudes Extremas</button>
+                <button class="page-tab tab-sabores" onclick="cambiarMarca('Sabores Express',this)">Solicitudes Sabores</button>
+            </div>
+            <div class="table-wrap grilla-wrap">
+                <table class="grilla">
+                    <thead id="grilla-head"></thead>
                     <tbody id="table-body"></tbody>
                 </table>
             </div>
@@ -175,8 +147,8 @@
         <div id="view-stats" class="hidden">
             <div class="page-tabs">
                 <button class="page-tab active" onclick="switchStatsTab('general',this)">General</button>
-                <button class="page-tab" onclick="switchStatsTab('Sabores Express',this)">Sabores Express</button>
                 <button class="page-tab" onclick="switchStatsTab('Hamburguesas Extremas',this)">Hamburguesas Extremas</button>
+                <button class="page-tab" onclick="switchStatsTab('Sabores Express',this)">Sabores Express</button>
             </div>
             <div id="stats-content"></div>
         </div>
@@ -185,8 +157,8 @@
         <div id="view-informe" class="hidden">
             <div class="chart-card informe-descarga">
                 <div>
-                    <div class="chart-card-title" style="margin:0;padding:0;border:none"><i class="fas fa-file-csv"></i> Descargar el estado de todas las vacantes</div>
-                    <p class="tip" style="font-style:normal;margin-top:6px;max-width:560px">CSV con fechas, tramos de demora, candidatos y alertas de cada vacante, listo para Excel o Google Sheets.</p>
+                    <div class="chart-card-title" style="margin:0;padding:0;border:none"><i class="fas fa-file-csv"></i> Descargar todas las vacantes</div>
+                    <p class="tip" style="font-style:normal;margin-top:6px;max-width:560px">CSV con las mismas columnas que la hoja Solicitudes, más estado de la vacante, demoras y alertas.</p>
                 </div>
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
                     <select class="form-input" id="informe-selector-filter" style="max-width:220px"></select>
@@ -198,29 +170,65 @@
     </main>
 </div>
 
-<!-- ══ MODAL: NUEVA BÚSQUEDA ══ -->
+<!-- ══ MODAL: NUEVA VACANTE ══ -->
 <div id="modal-nueva" class="modal-bg hidden">
     <div class="modal-box" style="max-width:640px">
-        <div class="modal-title"><i class="fas fa-plus-circle" style="font-size:13px;opacity:.5;margin-right:6px"></i> Alta de Nueva Búsqueda</div>
+        <div class="modal-title"><i class="fas fa-plus-circle" style="font-size:13px;opacity:.5;margin-right:6px"></i> Nueva vacante</div>
         <div class="form-row">
             <div class="form-group"><label>Marca</label><select class="form-input" id="n-marca"></select></div>
-            <div class="form-group"><label>Zona</label><select class="form-input" id="n-zona"></select></div>
-            <div class="form-group"><label>Local</label><input class="form-input" id="n-local" list="dl-local" placeholder="Ej: EXTREMAS CASEROS"></div>
-            <div class="form-group"><label>Local de entrenamiento</label><input class="form-input" id="n-local-ent" list="dl-local-ent" placeholder="Si entrena en otro local"></div>
+            <div class="form-group"><label>Selector</label><select class="form-input" id="n-selector"></select></div>
             <div class="form-group"><label>Regional</label><input class="form-input" id="n-regional" list="dl-regional"></div>
             <div class="form-group"><label>Zonal</label><input class="form-input" id="n-zonal" list="dl-zonal"></div>
-            <div class="form-group"><label>Puesto</label><input class="form-input" id="n-puesto" list="dl-puesto" placeholder="Ej: Part time (5hs)"></div>
-            <div class="form-group"><label>Jornada / turno</label><input class="form-input" id="n-jornada" list="dl-jornada" placeholder="Ej: Rotativo"></div>
-            <div class="form-group"><label>Nivel</label><select class="form-input" id="n-nivel"></select></div>
+            <div class="form-group"><label>Local</label><input class="form-input" id="n-local" list="dl-local" placeholder="Ej: EXTREMAS CASEROS"></div>
+            <div class="form-group"><label>Local entrenamiento</label><input class="form-input" id="n-local-ent" list="dl-local" placeholder="Si entrena en otro local"></div>
+            <div class="form-group"><label>Puesto</label><select class="form-input" id="n-puesto"></select></div>
+            <div class="form-group"><label>Jornada</label><select class="form-input" id="n-jornada"></select></div>
+            <div class="form-group form-full"><label>Notas sobre la solicitud</label><input class="form-input" id="n-notas" placeholder="Ej: perfil con experiencia, 18 a 23…"></div>
+            <div class="form-group"><label>Zona</label><select class="form-input" id="n-zona"></select></div>
             <div class="form-group"><label>Motivo</label><select class="form-input" id="n-motivo"></select></div>
-            <div class="form-group"><label>Selector a cargo</label><select class="form-input" id="n-selector"></select></div>
             <div class="form-group"><label>Fecha de apertura</label><input class="form-input" id="n-inicio" type="date"></div>
-            <div class="form-group"><label>Cantidad de vacantes</label><input class="form-input" id="n-cantidad" type="number" min="1" max="20" value="1"></div>
-            <div class="form-group form-full"><label>Notas sobre la solicitud</label><input class="form-input" id="n-notas" placeholder="Ej: perfil con experiencia, entrevista con gerente…"></div>
+            <div class="form-group"><label>Cantidad (filas iguales)</label><input class="form-input" id="n-cantidad" type="number" min="1" max="20" value="1"></div>
         </div>
         <div class="modal-footer">
             <button class="btn-cancel" onclick="closeModal('modal-nueva')">Cancelar</button>
             <button class="btn-primary" onclick="addNew()"><i class="fas fa-check"></i> Crear</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ MODAL: IMPORTAR SOLICITUDES (carga masiva) ══ -->
+<div id="modal-importar" class="modal-bg hidden">
+    <div class="modal-box" style="max-width:1100px">
+        <div class="modal-title"><i class="fas fa-file-import" style="font-size:13px;opacity:.5;margin-right:6px"></i> Importar solicitudes</div>
+        <ol class="pasos">
+            <li>En la hoja <strong>SOLICITUDES DE PERSONAL</strong> seleccioná las filas de los locales (podés incluir el encabezado) y copiá con <strong>Ctrl+C</strong>.</li>
+            <li>Pegá acá abajo con <strong>Ctrl+V</strong> y tocá <strong>Revisar</strong>: se arma una vacante por cada perfil pedido en <em>Perfiles a solicitar</em> (GT, ET, ENT, FULL, PART).</li>
+        </ol>
+        <div class="form-row" style="grid-template-columns:1fr 1fr 1fr">
+            <div class="form-group"><label>Marca (si el local no la dice)</label><select class="form-input" id="imp-marca"></select></div>
+            <div class="form-group"><label>Fecha de apertura</label><input class="form-input" id="imp-inicio" type="date"></div>
+            <div class="form-group"><label>Jornada</label><select class="form-input" id="imp-jornada"></select></div>
+        </div>
+        <textarea class="form-input" id="imp-texto" rows="6" placeholder="Pegá acá las filas copiadas de la planilla…" style="font-family:var(--mono);font-size:11px"></textarea>
+        <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn-sm" id="btn-revisar" onclick="revisarImportacion()"><i class="fas fa-search"></i> Revisar</button>
+            <span class="tip" id="imp-resumen"></span>
+        </div>
+        <div id="imp-preview" class="imp-preview"></div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeModal('modal-importar')">Cancelar</button>
+            <button class="btn-primary" id="btn-crear-importadas" onclick="crearImportadas()" disabled><i class="fas fa-check"></i> Crear vacantes</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ MODAL: DETALLE DE UNA VACANTE ══ -->
+<div id="modal-detalle" class="modal-bg hidden">
+    <div class="modal-box" style="max-width:860px">
+        <div class="modal-title" id="detalle-title">Vacante</div>
+        <div id="detalle-content"></div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeModal('modal-detalle')">Cerrar</button>
         </div>
     </div>
 </div>
@@ -267,27 +275,28 @@
         </div>
         <div id="colocar-lista" class="colocar-lista"></div>
         <div class="modal-footer">
+            <button class="btn-sm" onclick="nuevoDesdeColocar()" style="margin-right:auto"><i class="fas fa-user-plus"></i> No está en la base: cargar nuevo</button>
             <button class="btn-cancel" onclick="closeModal('modal-colocar')">Cerrar</button>
         </div>
     </div>
 </div>
 
-<!-- ══ MODAL: EQUIPO (solo admin) ══ -->
+<!-- ══ MODAL: EQUIPO ══ -->
 <div id="modal-equipo" class="modal-bg hidden">
     <div class="modal-box" style="max-width:980px">
         <div class="modal-title">Selectores del equipo</div>
-        <p class="tip" style="font-style:normal;margin-bottom:12px">Arman las tarjetas de inicio, los filtros y la lista de "Selector a cargo". Para entrar al portal alcanza con el código del equipo.</p>
+        <p class="tip" style="font-style:normal;margin-bottom:12px">Arman los filtros de selector y la columna "Selector" de las vacantes. Si destildás "Toma búsquedas", la persona queda guardada pero no aparece como selector.</p>
         <div id="equipo-lista" style="overflow-x:auto"></div>
         <div class="section-hdr" style="margin-top:18px">Agregar integrante</div>
         <div class="form-row" style="grid-template-columns:repeat(3,1fr)">
-            <div class="form-group"><label>Nombre (el que se ve)</label><input class="form-input" id="eq-nombre"></div>
-            <div class="form-group"><label>Nombre completo</label><input class="form-input" id="eq-nombre-completo"></div>
+            <div class="form-group"><label>Nombre (el que se ve)</label><input class="form-input" id="eq-nombre" placeholder="Ej: ALBANA" onkeydown="if(event.key==='Enter')saveMiembro()"></div>
+            <div class="form-group"><label>Nombre completo</label><input class="form-input" id="eq-nombre-completo" onkeydown="if(event.key==='Enter')saveMiembro()"></div>
             <div class="form-group"><label>Color</label><input class="form-input" id="eq-color" type="color" value="#005f73" style="height:36px;padding:2px"></div>
-            <div class="form-group"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text)"><input type="checkbox" id="eq-es-selector" checked> Toma búsquedas (selector)</label></div>
+            <div class="form-group"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)"><input type="checkbox" id="eq-es-selector" checked> Toma búsquedas (selector)</label></div>
         </div>
         <div class="modal-footer">
             <button class="btn-cancel" onclick="closeModal('modal-equipo')">Cerrar</button>
-            <button class="btn-primary" onclick="saveMiembro()"><i class="fas fa-user-plus"></i> Agregar</button>
+            <button class="btn-primary" id="btn-agregar-miembro" onclick="saveMiembro()"><i class="fas fa-user-plus"></i> Agregar</button>
         </div>
     </div>
 </div>
@@ -300,6 +309,7 @@
 <script src="api.js"></script>
 <script src="render.js"></script>
 <script src="stats.js"></script>
+<script src="importar.js"></script>
 <script>initApp();</script>
 
 </body>
