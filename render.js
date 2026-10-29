@@ -18,12 +18,12 @@ function renderLanding() {
     document.getElementById('landing-team-grid').innerHTML = sels.length ? sels.map(e => {
         const color = colorDe(e.nombre);
         const abiertas = busquedas.filter(b => b.selector === e.nombre && b.status === 'Proceso').length;
-        return `<div class="landing-team-card" style="border-top-color:${color}">
-            <div class="landing-team-avatar clickable" style="background:${color}" data-sel="${esc(e.nombre)}" onclick="goToApp(this.dataset.sel)" title="Ver las búsquedas de ${esc(e.nombre)}">${esc(iniciales(e.nombre_completo || e.nombre))}</div>
-            <div class="landing-team-name">${esc(e.nombre_completo || e.nombre)}</div>
-            <div class="landing-team-role">Selector</div>
-            <div class="landing-team-tag" style="color:${color}">${abiertas} en proceso</div>
-        </div>`;
+        return `<button class="landing-team-card" style="--team:${color}" data-sel="${esc(e.nombre)}" onclick="goToApp(this.dataset.sel)" title="Ver las búsquedas de ${esc(e.nombre)}">
+            <span class="landing-team-name">${esc(e.nombre_completo || e.nombre)}</span>
+            <span class="landing-team-role">Selector</span>
+            <span class="landing-team-tag">${abiertas} búsqueda${abiertas === 1 ? '' : 's'} en proceso</span>
+            <span class="landing-team-avatar">${esc(iniciales(e.nombre_completo || e.nombre))}</span>
+        </button>`;
     }).join('') : `<span class="tip">Todavía no hay selectores cargados: entrá al Pipeline y agregalos desde el botón "Equipo" de arriba.</span>`;
 }
 
@@ -67,7 +67,7 @@ function aplicarVisibilidad() {
     const esAdmin = isAdmin();
     document.getElementById('selector-chips').classList.toggle('hidden', vistaAislada);
     document.getElementById('salir-vista-aislada').classList.toggle('hidden', !vistaAislada);
-    ['nav-stats', 'nav-charts'].forEach(id => document.getElementById(id).classList.toggle('hidden', !esAdmin || vistaAislada));
+    document.getElementById('nav-stats').classList.toggle('hidden', !esAdmin || vistaAislada);
     document.getElementById('nav-informe').classList.toggle('hidden', vistaAislada);
 }
 
@@ -75,17 +75,18 @@ const TITULOS = {
     pipeline: ['Pipeline de Selección', 'Vacantes por local: candidatos, envío al zonal, onboarding e ingreso'],
     base:     ['Base de Postulantes', 'Postulantes aprobados en entrevista, listos para colocar en una vacante'],
     stats:    ['Estadísticas', 'Cumplimiento por marca, zona, regional y selector'],
-    charts:   ['Gráficos', 'Visualizaciones del pipeline'],
     informe:  ['Informe', 'Alertas del día y exportación a CSV']
 };
 
 function showView(v, btn = null) {
-    if ((v === 'stats' || v === 'charts') && (!isAdmin() || vistaAislada)) {
+    if (v === 'stats' && (!isAdmin() || vistaAislada)) {
         toast('Acceso restringido a administradores', true);
         v = 'pipeline';
     }
     vistaActual = v;
-    ['pipeline', 'base', 'stats', 'charts', 'informe'].forEach(id => document.getElementById('view-' + id).classList.toggle('hidden', id !== v));
+    ['pipeline', 'base', 'stats', 'informe'].forEach(id => document.getElementById('view-' + id).classList.toggle('hidden', id !== v));
+    document.getElementById('btn-nueva-busqueda').classList.toggle('hidden', v !== 'pipeline');
+    document.getElementById('btn-nuevo-postulante').classList.toggle('hidden', v !== 'base');
     document.querySelectorAll('.inline-nav-btn[id^="nav-"]').forEach(b => b.classList.toggle('active', b.id === 'nav-' + v));
     document.getElementById('filters-pipeline').classList.toggle('hidden', v !== 'pipeline');
     document.getElementById('filters-base').classList.toggle('hidden', v !== 'base');
@@ -94,7 +95,6 @@ function showView(v, btn = null) {
     document.getElementById('main-sub').textContent = TITULOS[v][1];
     window.scrollTo({ top: 0, behavior: 'smooth' });
     resetPaginado();
-    if (typeof destroyCharts === 'function') destroyCharts();
     refreshView();
 }
 
@@ -103,7 +103,6 @@ function refreshView() {
     if (vistaActual === 'pipeline') { filteredIds = computeFilteredIds(); renderTable(); }
     else if (vistaActual === 'base') renderBase();
     else if (vistaActual === 'stats') renderStats(statsTab);
-    else if (vistaActual === 'charts') renderCharts(chartsTab);
     else if (vistaActual === 'informe') renderInforme();
 }
 
@@ -340,10 +339,10 @@ function renderRow(b) {
             <div class="mini-campo"><span>Decisión del zonal:</span>${fechaInp('decision_zonal', b.decision_zonal, 'Se completa sola con el primer candidato aprobado; frena el tramo del Zonal')}</div>
             ${b.reopened_from ? `<div class="reab-de"><i class="fas fa-redo" style="font-size:8px"></i> Reapertura de ${esc(b.reopened_from)}</div>` : ''}
         </td>
-        <td>
+        <td class="${marcaClass(b.marca)}">
             ${inp('local', b.local, 'list="dl-local" placeholder="Local"', 'font-weight:700;font-size:13px')}
             <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;align-items:center">
-                ${sel('marca', MARCAS, b.marca)}
+                ${isLocked ? `<strong>${esc(b.marca)}</strong>` : `<select class="inline-select ${marcaClass(b.marca)}" onchange="updateField(${b.id},'marca',this.value)">${optionsHtml(MARCAS, b.marca)}</select>`}
                 ${sel('zona', ZONAS, b.zona, '— Zona —')}
             </div>
             <div class="mini-campo"><span>Entrenamiento:</span>${inp('local_entrenamiento', b.local_entrenamiento, 'list="dl-local-ent" placeholder="Local de entrenamiento"')}</div>
@@ -495,13 +494,13 @@ function renderKPIs() {
     const cubiertas = validas.filter(cubierta).length;
     const pct = validas.length ? Math.round(cubiertas / validas.length * 100) : 0;
     const enCurso = data.filter(vacanteAbierta).reduce((a, b) => a + b.candidatos.filter(c => CAND_ACTIVOS.includes(c.estado)).length, 0);
-    document.getElementById('kpi-row').innerHTML = `
-        <div class="kpi"><div class="kpi-num">${validas.length}</div><div class="kpi-lbl">Vacantes</div></div>
-        <div class="kpi"><div class="kpi-num" style="color:var(--blue)">${data.filter(b => b.status === 'Proceso').length}</div><div class="kpi-lbl">En proceso</div></div>
-        <div class="kpi"><div class="kpi-num" style="color:var(--green)">${cubiertas}</div><div class="kpi-lbl">Cubiertas</div><div class="kpi-sub">${pct}% cumplimiento</div></div>
-        <div class="kpi"><div class="kpi-num" style="color:var(--orange)">${enCurso}</div><div class="kpi-lbl">Candidatos en curso</div></div>
-        <div class="kpi"><div class="kpi-num" style="color:var(--red)">${data.filter(fueraDePlazo).length}</div><div class="kpi-lbl">Fuera de plazo</div></div>
-        <div class="kpi"><div class="kpi-num" style="color:var(--red)">${data.filter(alertaZonalVencida).length}</div><div class="kpi-lbl">Alertas 72hs zonal</div></div>`;
+    document.getElementById('kpi-row').innerHTML =
+        kpiHtml(validas.length, 'Vacantes') +
+        kpiHtml(data.filter(b => b.status === 'Proceso').length, 'En proceso', 'azul') +
+        kpiHtml(cubiertas, 'Cubiertas', 'verde', `${pct}% cumplimiento`) +
+        kpiHtml(enCurso, 'Candidatos en curso', 'ambar') +
+        kpiHtml(data.filter(fueraDePlazo).length, 'Fuera de plazo', 'rosa') +
+        kpiHtml(data.filter(alertaZonalVencida).length, 'Alertas 72hs zonal', 'rosa');
 }
 
 let _filtroTimer = null;
@@ -591,13 +590,13 @@ function renderBase() {
 
     const total = conDisp.length;
     const disponibles = conDisp.filter(x => x.disp === 'Disponible' && puedeColocarse(x.p)).length;
-    document.getElementById('kpi-row-base').innerHTML = `
-        <div class="kpi"><div class="kpi-num">${total}</div><div class="kpi-lbl">En la base</div></div>
-        <div class="kpi"><div class="kpi-num" style="color:var(--green)">${disponibles}</div><div class="kpi-lbl">Disponibles</div></div>
-        <div class="kpi"><div class="kpi-num" style="color:var(--blue)">${conDisp.filter(x => x.disp === 'En vacante').length}</div><div class="kpi-lbl">En una vacante</div></div>
-        <div class="kpi"><div class="kpi-num" style="color:#92400e">${conDisp.filter(x => x.disp === 'Ingresó').length}</div><div class="kpi-lbl">Ingresaron</div></div>
-        <div class="kpi"><div class="kpi-num" style="color:var(--orange)">${conDisp.filter(x => !docCompleta(x.p)).length}</div><div class="kpi-lbl">Doc. incompleta</div></div>
-        <div class="kpi"><div class="kpi-num" style="color:var(--red)">${conDisp.filter(x => x.p.estado === 'Bloqueado').length}</div><div class="kpi-lbl">Bloqueados</div></div>`;
+    document.getElementById('kpi-row-base').innerHTML =
+        kpiHtml(total, 'En la base') +
+        kpiHtml(disponibles, 'Disponibles', 'azul') +
+        kpiHtml(conDisp.filter(x => x.disp === 'En vacante').length, 'En una vacante', 'ambar') +
+        kpiHtml(conDisp.filter(x => x.disp === 'Ingresó').length, 'Ingresaron', 'verde') +
+        kpiHtml(conDisp.filter(x => !docCompleta(x.p)).length, 'Doc. incompleta', 'gris') +
+        kpiHtml(conDisp.filter(x => x.p.estado === 'Bloqueado').length, 'Bloqueados', 'rosa');
 
     const abiertas = vacantesAbiertas();
     const visibles = list.slice(0, baseVisibles);

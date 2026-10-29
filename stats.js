@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════
-//  ESTADÍSTICAS (solo admin) + INFORME
+//  ESTADÍSTICAS + INFORME
 // ══════════════════════════════════════════════
 let statsTab = 'general';
 function switchStatsTab(tab, btn) {
@@ -103,12 +103,12 @@ function renderInforme() {
 
     document.getElementById('informe-content').innerHTML = `
     ${seccion('Para hoy', 'Lo que conviene mover primero.')}
-    <div class="mini-kpi-row">
-        <div class="mini-kpi"><div class="mini-kpi-num" style="color:var(--red)">${busquedas.filter(alertaZonalVencida).length}</div><div class="mini-kpi-lbl">Alertas 72hs zonal</div><div class="mini-kpi-sub">vacantes con candidatos sin respuesta</div></div>
-        <div class="mini-kpi"><div class="mini-kpi-num" style="color:var(--orange)">${aprobadosSinOnb.length}</div><div class="mini-kpi-lbl">Aprobados sin citar</div><div class="mini-kpi-sub">falta citarlos a onboarding</div></div>
-        <div class="mini-kpi"><div class="mini-kpi-num" style="color:var(--blue)">${onb.length - onbVencidos.length}</div><div class="mini-kpi-lbl">Onboardings agendados</div></div>
-        <div class="mini-kpi"><div class="mini-kpi-num" style="color:var(--red)">${onbVencidos.length}</div><div class="mini-kpi-lbl">ONB sin actualizar</div><div class="mini-kpi-sub">ya pasó la fecha</div></div>
-        <div class="mini-kpi"><div class="mini-kpi-num" style="color:var(--green)">${conIngreso.length ? Math.round(retenidos / conIngreso.length * 100) : 0}%</div><div class="mini-kpi-lbl">Permanencia 90hd</div><div class="mini-kpi-sub">${retenidos} de ${conIngreso.length} ingresos</div></div>
+    <div class="kpi-row">
+        ${kpiHtml(busquedas.filter(alertaZonalVencida).length, 'Alertas 72hs zonal', 'rosa', 'vacantes con candidatos sin respuesta')}
+        ${kpiHtml(aprobadosSinOnb.length, 'Aprobados sin citar', 'ambar', 'falta citarlos a onboarding')}
+        ${kpiHtml(onb.length - onbVencidos.length, 'Onboardings agendados', 'azul')}
+        ${kpiHtml(onbVencidos.length, 'ONB sin actualizar', 'rosa', 'ya pasó la fecha')}
+        ${kpiHtml((conIngreso.length ? Math.round(retenidos / conIngreso.length * 100) : 0) + '%', 'Permanencia 90hd', 'verde', `${retenidos} de ${conIngreso.length} ingresos`)}
     </div>
 
     <div class="charts-grid" style="margin-top:8px">
