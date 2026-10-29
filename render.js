@@ -84,7 +84,7 @@ function renderSelectorChips() {
         const style = color
             ? ` style="${activo ? `background:${color};border-color:${color};color:#fff;` : `background:${color}1a;border-color:${color}66;color:${color};`}"`
             : '';
-        return `<button class="selector-chip${activo ? ' active' : ''}"${style} data-sel="${esc(s)}" onclick="filtrarPorSelector(this.dataset.sel)">${esc(s || 'Todos los selectores')}</button>`;
+        return `<button class="selector-chip${activo ? ' active' : ''}${s ? ' con-avatar' : ''}"${style} data-sel="${esc(s)}" onclick="filtrarPorSelector(this.dataset.sel)">${s ? avatarHtml(s, 'avatar-chip') : ''}${esc(s || 'Todos los selectores')}</button>`;
     }).join('');
 }
 function filtrarPorSelector(nombre) {
@@ -274,6 +274,7 @@ function renderRow(b) {
                 <span class="tag ${tagClass(b.status)}">${esc(cubierta(b) ? 'Cubierta' : b.status)}</span>
                 ${vacanteAbierta(b) ? `<span class="demora-badge ${demoraClass(dias, limiteDe(b))}" title="Días hábiles abierta · límite ${limiteDe(b)}hd">${dias}hd</span>` : ''}
             </div>
+            ${b.estado_nomina ? `<div class="num-linea">${nominaHtml(b)}</div>` : ''}
             ${alerta ? `<div class="alerta-72" title="En ENVIADO A ZONAL hace ${daysDiff(b.fecha_estado)} días hábiles">⚠ ${daysDiff(b.fecha_estado)}hd sin respuesta</div>` : ''}
         </td>
         ${COLUMNAS.map(c => `<td class="col-${c.g.toLowerCase()}">${celda(b, c)}</td>`).join('')}
@@ -299,6 +300,25 @@ function renderKPIs() {
         kpiHtml(cuenta('CITADO') + cuenta('HUELLA'), 'Citados / huella', 'ambar') +
         kpiHtml(cubiertas, 'Cubiertas', 'verde', `${pct}% cumplimiento`) +
         kpiHtml(data.filter(alertaZonalVencida).length, 'Alertas 72hs zonal', 'rosa');
+    renderLeyendaNomina(abiertas);
+}
+
+// Referencia de nómina de los locales (vacantes abiertas); cada una filtra la grilla
+function renderLeyendaNomina(abiertas) {
+    const box = document.getElementById('nomina-leyenda');
+    if (!box) return;
+    const filtro = document.getElementById('f-alerta').value;
+    box.innerHTML = `<span class="nomina-leyenda-tit">Nómina del local</span>` + ESTADOS_NOMINA.map(e => {
+        const n = abiertas.filter(b => b.estado_nomina === e).length;
+        const activo = filtro === 'nom:' + e;
+        return `<button class="nomina nomina-${NOMINA_INFO[e].clase}${activo ? ' activo' : ''}" data-e="${esc(e)}" onclick="filtrarNomina(this.dataset.e)"
+            title="${activo ? 'Quitar filtro' : 'Ver solo las vacantes abiertas en locales: ' + NOMINA_INFO[e].lbl}"><i></i>${NOMINA_INFO[e].lbl} <strong>${n}</strong></button>`;
+    }).join('');
+}
+function filtrarNomina(e) {
+    const sel = document.getElementById('f-alerta');
+    sel.value = sel.value === 'nom:' + e ? '' : 'nom:' + e;
+    applyFilters();
 }
 
 let _filtroTimer = null;
@@ -318,6 +338,7 @@ function computeFilteredIds() {
         if (alerta === '72' && !alertaZonalVencida(b)) return false;
         if (alerta === 'plazo' && !fueraDePlazo(b)) return false;
         if (alerta === 'libres' && !(vacanteAbierta(b) && !tienePersona(b))) return false;
+        if (alerta.startsWith('nom:') && b.estado_nomina !== alerta.slice(4)) return false;
         if (search) {
             const hay = [b.numero, b.local, b.local_entrenamiento, b.puesto, b.selector, b.regional, b.zonal, b.nombre, b.apellido, b.dni, b.notas].join(' ').toLowerCase();
             if (!hay.includes(search)) return false;
@@ -372,6 +393,8 @@ function renderDetalle(id) {
                     <div class="form-group"><label>Enviado al zonal</label>${fecha('enviado_zonal')}</div>
                     <div class="form-group"><label>Aprobado por el zonal</label>${fecha('decision_zonal')}</div>
                     <div class="form-group"><label>Fecha de baja <span class="tip">(si dejó la empresa)</span></label>${fecha('fecha_baja')}</div>
+                    <div class="form-group"><label>Nómina del local <span class="tip">(SOLICITUDES DE PERSONAL)</span></label>${sel('estado_nomina', ESTADOS_NOMINA, '— Sin dato —')}</div>
+                    <div class="form-group"><label>Detalle de nómina</label><input class="form-input" value="${esc(b.nomina_detalle || '')}" placeholder="Ej: PART: ideal 6 · real 5" onchange="updateField(${b.id},'nomina_detalle',this.value)"></div>
                 </div>
                 ${perm}
                 <div class="section-hdr" style="margin-top:16px">Historial y comentarios</div>
@@ -595,10 +618,12 @@ function renderEquipoModal() {
     const box = document.getElementById('equipo-lista');
     if (!box) return;
     box.innerHTML = equipo.length ? `
-        <table class="equipo-table"><thead><tr><th>Nombre</th><th>Nombre completo</th><th>Toma búsquedas</th><th>Color</th><th>Activo</th><th></th></tr></thead>
+        <table class="equipo-table"><thead><tr><th></th><th>Nombre</th><th>Nombre completo</th><th>Foto (link)</th><th>Toma búsquedas</th><th>Color</th><th>Activo</th><th></th></tr></thead>
         <tbody>${equipo.map(m => `<tr class="${m.activo ? '' : 'row-locked'}">
+            <td>${avatarHtml(m.nombre, 'avatar-equipo')}</td>
             <td><input class="inline-input inline-input-box" value="${esc(m.nombre)}" onchange="updateMiembro(${m.id},'nombre',this.value.trim())"></td>
             <td><input class="inline-input inline-input-box" value="${esc(m.nombre_completo)}" onchange="updateMiembro(${m.id},'nombre_completo',this.value.trim()||null)"></td>
+            <td><input class="inline-input inline-input-box" value="${esc(m.foto_url || '')}" placeholder="https://…" style="min-width:160px" onchange="updateMiembro(${m.id},'foto_url',this.value.trim()||null)"></td>
             <td style="text-align:center"><input type="checkbox" ${m.es_selector ? 'checked' : ''} onchange="updateMiembro(${m.id},'es_selector',this.checked)"></td>
             <td><input type="color" value="${esc(colorDe(m.nombre))}" onchange="updateMiembro(${m.id},'color',this.value)"></td>
             <td style="text-align:center"><input type="checkbox" ${m.activo ? 'checked' : ''} onchange="updateMiembro(${m.id},'activo',this.checked)"></td>
