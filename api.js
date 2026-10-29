@@ -46,7 +46,7 @@ function msgError(error) {
     if (code === 'PGRST202' || /seleccion_codigo_ok/.test(m)) return 'falta configurar el código del equipo en Supabase (sql/codigo_equipo.sql)';
     if (code === '42501' || /row-level security/i.test(m)) return 'el código del equipo no es válido (¿lo cambiaron?). Tocá Salir y volvé a ingresarlo';
     if (code === '23505') return 'ya existe un registro igual (DNI o postulante repetido)';
-    if (code === 'PGRST204' || /column .* (does not exist|of .* in the schema cache)/i.test(m)) return 'faltan columnas nuevas en Supabase (correr sql/solicitud_tal_cual.sql)';
+    if (code === 'PGRST204' || /column .* (does not exist|of .* in the schema cache)/i.test(m)) return `faltan columnas nuevas en Supabase (correr sql/${/seleccion_postulantes/.test(m) ? 'sync_base_drive' : 'solicitud_tal_cual'}.sql)`;
     if (/abort|timeout|57014/i.test(m + code)) return 'la consulta tardó demasiado';
     return m;
 }
@@ -325,6 +325,7 @@ async function colocarEnVacante(postulanteId, busquedaId) {
     const update = {
         postulante_id: p.id, nombre: p.nombre, apellido: p.apellido || null, email: p.email || null, tel: p.telefono || null,
         fecha_nacimiento: p.fecha_nacimiento || null, dni: p.dni || null, localidad: p.localidad || null,
+        cuil: p.cuil || null, nacionalidad: p.nacionalidad || null, tel_emergencia: p.tel_emergencia || null,
         id_postulante: p.id_postulante || null, estado: null, fecha_estado: null, fecha_citacion: null, hora_citacion: null
     };
     const row = await guardarBusqueda(busquedaId, update);
@@ -362,7 +363,7 @@ async function liberarVacante(id, sinPreguntar = false) {
 // ══════════════════════════════════════════════
 const CAMPOS_POSTULANTE = ['nombre', 'apellido', 'dni', 'telefono', 'email', 'fecha_nacimiento', 'zona', 'localidad',
     'sede_entrevista', 'fecha_entrevista', 'puesto_interes', 'horario', 'curso_manipulacion', 'antecedentes',
-    'cv_url', 'observaciones', 'estado', 'id_postulante'];
+    'cv_url', 'observaciones', 'estado', 'id_postulante', 'cuil', 'nacionalidad', 'tel_emergencia', 'sugerido_para'];
 
 async function savePostulante() {
     const id  = +document.getElementById('p-id').value || null;
@@ -373,6 +374,7 @@ async function savePostulante() {
         row[f] = v || null;
     });
     row.dni = row.dni ? row.dni.replace(/\D/g, '') : null;
+    row.cuil = row.cuil ? row.cuil.replace(/\D/g, '') : null;
     if (!row.nombre) { toast('Ingresá el nombre', true); return; }
     if (!row.estado) row.estado = 'Aprobado';
     if (!fechaValida(row.fecha_nacimiento) || !fechaValida(row.fecha_entrevista)) { toast('Hay una fecha inválida', true); return; }

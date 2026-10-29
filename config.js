@@ -37,7 +37,7 @@ const MOTIVOS  = ['Rotación', 'Apertura', 'Expansión', 'Reemplazo'];
 const ESTADOS_BUSQUEDA   = ['Proceso', 'Pausada', 'Cerrada', 'Finalizada', 'Cancelada'];
 const ESTADOS_POSTULANTE = ['Aprobado', 'En espera', 'Bloqueado', 'Descartado'];
 const SEDES_ENTREVISTA   = ['Florida', 'Merlo', 'Adrogué', 'Pilar', 'Virtual'];
-const HORARIOS           = ['Cualquiera', 'Mañana', 'Tarde y noche', 'Noche'];
+const HORARIOS           = ['Cualquiera', 'Mañana', 'Mañana y tarde', 'Tarde', 'Tarde y noche', 'Noche'];
 const DOC_OPCIONES       = ['Sí', 'No', 'En trámite'];
 
 // Desplegables de la hoja "Solicitudes Sabores / Extremas"

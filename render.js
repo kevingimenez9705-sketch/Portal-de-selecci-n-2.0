@@ -428,7 +428,7 @@ function renderBase() {
         if (disp === 'Disponible' && !puedeColocarse(p)) return false; // igual que el KPI: bloqueados/descartados no cuentan
         if (doc === 'completa' && !docCompleta(p)) return false;
         if (doc === 'incompleta' && docCompleta(p)) return false;
-        if (horario && p.horario !== horario) return false;
+        if (horario && p.horario !== horario && p.horario !== 'Cualquiera') return false;
         if (search) {
             const hay = [p.nombre, p.apellido, p.dni, p.telefono, p.email, p.localidad, p.puesto_interes, p.id_postulante].join(' ').toLowerCase();
             if (!hay.includes(search)) return false;
@@ -487,7 +487,8 @@ function renderPostulanteRow(p, disp, libres) {
         </td>
         <td><div style="font-weight:600">${esc(p.zona || '—')}</div><div class="cand-meta">${esc(p.localidad || '')}</div></td>
         <td><div style="font-weight:600">${esc(p.puesto_interes || '—')}</div><div class="cand-meta">${esc(p.horario || '')}</div>
-            <div class="cand-meta">${p.sede_entrevista ? 'Entrevista: ' + esc(p.sede_entrevista) : ''}${p.fecha_entrevista ? ' · ' + fmtFecha(p.fecha_entrevista) : ''}</div></td>
+            <div class="cand-meta">${p.sede_entrevista ? 'Entrevista: ' + esc(p.sede_entrevista) : ''}${p.fecha_entrevista ? ' · ' + fmtFecha(p.fecha_entrevista) : ''}</div>
+            ${p.sugerido_para ? `<div class="cand-meta" title="Lo que eligió en Elegí tu vacante"><i class="fas fa-hand-pointer" style="font-size:9px"></i> ${esc(p.sugerido_para)}</div>` : ''}</td>
         <td>${docBadges(p)}${p.cv_url ? `<div style="margin-top:4px"><a href="${esc(p.cv_url)}" target="_blank" rel="noopener" class="cv-link"><i class="fas fa-file-alt"></i> CV</a></div>` : ''}</td>
         <td>
             <select class="inline-select" onchange="updatePostulanteField(${p.id},'estado',this.value)">${optionsHtml(ESTADOS_POSTULANTE, p.estado)}</select>
