@@ -356,3 +356,30 @@ select.celda { cursor: pointer; }
     .filter-input { min-width: 0; width: 100%; }
     .detalle-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Fotos del equipo (link en Equipo); sin foto quedan las iniciales ── */
+.avatar { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; border-radius: 50%; overflow: hidden; color: #fff; font-size: 10px; font-weight: 800; vertical-align: middle; }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #fff; }
+.selector-chip.con-avatar { display: inline-flex; align-items: center; gap: 7px; padding: 4px 14px 4px 4px; }
+.avatar-chip { width: 26px; height: 26px; box-shadow: 0 0 0 2px #fff; }
+.avatar-equipo { width: 34px; height: 34px; font-size: 12px; }
+.avatar-barra { width: 20px; height: 20px; font-size: 9px; margin-right: 6px; }
+
+/* ── Logos en las pestañas de marca ── */
+.page-tab .tab-logo { width: 20px; height: 20px; border-radius: 50%; object-fit: contain; background: #fff; margin: -3px 7px -3px -4px; vertical-align: middle; }
+
+/* ── Nómina del local (SOLICITUDES DE PERSONAL): excedido / debe completar / completo ── */
+.tabs-y-leyenda { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.nomina-leyenda { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+.nomina-leyenda-tit { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: 2px; }
+.nomina { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; font-size: 10px; font-weight: 800; white-space: nowrap; line-height: 1.5; }
+.nomina i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+button.nomina { cursor: pointer; padding: 5px 11px; font-size: 11px; font-family: inherit; }
+button.nomina strong { font-family: var(--mono); }
+button.nomina.activo { box-shadow: 0 0 0 2px currentColor; }
+.nomina-excedido  { background: var(--danger); color: var(--danger-text); border-color: #fecdd3; }
+.nomina-excedido i  { background: #dc2626; }
+.nomina-completar { background: var(--warn); color: var(--warn-text); border-color: #fde68a; }
+.nomina-completar i { background: #f59e0b; }
+.nomina-completo  { background: var(--ok); color: var(--ok-text); border-color: #bbf7d0; }
+.nomina-completo i  { background: var(--green); }

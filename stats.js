@@ -19,11 +19,11 @@ function agrupar(lista, key) {
     lista.forEach(b => { const k = (typeof key === 'function' ? key(b) : b[key]) || 'Sin dato'; (m[k] = m[k] || []).push(b); });
     return m;
 }
-function barrasCumplimiento(grupos, claseFill = '') {
+function barrasCumplimiento(grupos, claseFill = '', conFoto = false) {
     const filas = Object.entries(grupos).map(([k, l]) => ({ k, ...metricas(l) })).filter(f => f.total)
         .sort((a, b) => b.pendientes - a.pendientes || a.k.localeCompare(b.k));
     return filas.length ? filas.map(f => `
-        <div class="bar-row"><div class="bar-row-top"><span>${esc(f.k)}</span>
+        <div class="bar-row"><div class="bar-row-top"><span>${conFoto && equipo.some(e => e.nombre === f.k) ? avatarHtml(f.k, 'avatar-barra') : ''}${esc(f.k)}</span>
             <span>${f.cubiertas}/${f.total} · ${f.pct}%${f.pendientes ? ` · <span style="color:var(--red)">${f.pendientes} pend.</span>` : ''}</span></div>
             <div class="bar-track"><div class="bar-fill ${claseFill}" style="width:${f.pct}%"></div></div></div>`).join('')
         : '<span class="tip">Sin datos</span>';
@@ -58,7 +58,7 @@ function renderStats(tab) {
             </div>
             ${tab === 'general' ? `<div class="stat-card"><div class="stat-card-title">Cumplimiento por marca</div>${barrasCumplimiento(agrupar(subset, 'marca'))}</div>` : ''}
             <div class="stat-card"><div class="stat-card-title">Cumplimiento por zona</div>${barrasCumplimiento(agrupar(subset, 'zona'), 'bar-fill-blue')}</div>
-            <div class="stat-card"><div class="stat-card-title">Cumplimiento por selector</div>${barrasCumplimiento(agrupar(subset, 'selector'), 'bar-fill-green')}</div>
+            <div class="stat-card"><div class="stat-card-title">Cumplimiento por selector</div>${barrasCumplimiento(agrupar(subset, 'selector'), 'bar-fill-green', true)}</div>
             <div class="stat-card"><div class="stat-card-title">Cumplimiento por regional</div>${barrasCumplimiento(agrupar(subset, 'regional'))}</div>
             <div class="stat-card"><div class="stat-card-title">Aperturas vs resto</div>${barrasCumplimiento(agrupar(subset, b => b.motivo === 'Apertura' ? 'Locales en apertura' : 'Locales sin apertura'), 'bar-fill-orange')}</div>
             <div class="stat-card"><div class="stat-card-title"><i class="fas fa-fire" style="color:var(--red);margin-right:5px"></i>Locales más críticos</div>
@@ -94,6 +94,7 @@ function renderInforme() {
     const sinPersona = abiertas.filter(b => !tienePersona(b)).map(b => ({ b, dias: daysDiff(b.inicio) })).sort((a, c) => c.dias - a.dias);
     const conIngreso = busquedas.filter(b => b.ingreso && cubierta(b));
     const retenidos = conIngreso.filter(b => daysDiff(b.ingreso, b.fecha_baja || null) >= 90).length;
+    const enExcedidos = abiertas.filter(b => b.estado_nomina === 'EXCEDIDO');
 
     const seccion = (titulo, sub) => `<div style="margin:26px 0 12px"><div class="section-hdr" style="font-size:12px;letter-spacing:1px">${titulo}</div><div class="tip" style="font-style:normal">${sub}</div></div>`;
     const tdP = b => `<td><strong>${esc(nombreCompleto(b) || '—')}</strong>${b.tel ? `<div class="cand-meta">${esc(b.tel)} ${waLink(b.tel) ? `<a href="${waLink(b.tel)}" target="_blank" rel="noopener" class="wa-link"><i class="fab fa-whatsapp"></i></a>` : ''}</div>` : ''}</td>`;
@@ -137,6 +138,14 @@ function renderInforme() {
                 + (sinPersona.length > 15 ? `<div class="tip" style="margin-top:8px">+ ${sinPersona.length - 15} más — están todas en el CSV</div>` : '')
             : '<span class="tip">Todas las vacantes abiertas tienen a alguien</span>'}
         </div>
+        <div class="chart-card">
+            <div class="chart-card-title"><i class="fas fa-triangle-exclamation"></i> Vacantes abiertas en locales excedidos · ${enExcedidos.length}</div>
+            ${enExcedidos.length ? tablaInforme(['N°', 'Local', 'Puesto', 'Nómina', 'Persona', 'Selector'], enExcedidos.map(b => `<tr>
+                <td><button class="link-btn" data-num="${esc(b.numero)}" onclick="verEnPipeline(this.dataset.num)">${esc(b.numero)}</button></td><td>${esc(b.local)}</td><td>${esc(b.puesto)}</td>
+                <td class="mono">${esc(b.nomina_detalle || 'Excedido')}</td><td>${esc(nombreCompleto(b) || '—')}</td><td>${esc(b.selector || '—')}</td></tr>`))
+                + '<div class="tip" style="margin-top:8px">Según SOLICITUDES DE PERSONAL el local tiene más gente que la estructura ideal: revisar con el zonal antes de avanzar.</div>'
+            : '<span class="tip">Ninguna vacante abierta en un local excedido</span>'}
+        </div>
     </div>`;
 }
 
@@ -146,12 +155,12 @@ function descargarInformeCSV() {
     const base = selector ? busquedas.filter(b => b.selector === selector) : busquedas;
     const headers = ['N°', 'Marca', ...COLUMNAS.map(c => c.t.toUpperCase()), 'Zona', 'Motivo', 'Estado de la vacante', 'Apertura',
         'Enviado al zonal', 'Aprobado por el zonal', 'Fecha de baja', 'Tramo Selección (hd)', 'Tramo Zonal (hd)', 'Espera inicio (hd)', 'Total (hd)',
-        'Alerta 72hs zonal', 'Fuera de plazo', 'Reapertura de'];
+        'Alerta 72hs zonal', 'Fuera de plazo', 'Reapertura de', 'Nómina del local', 'Detalle de nómina'];
     const rows = base.map(b => {
         const t = tramosDemora(b);
         return [b.numero, b.marca, ...COLUMNAS.map(c => b[c.f]), b.zona, b.motivo, b.status, b.inicio,
             b.enviado_zonal, b.decision_zonal, b.fecha_baja, t.t1, t.t2NA ? '' : t.t2, t.t3NA ? '' : t.t3, t.total,
-            alertaZonalVencida(b) ? 'Sí' : 'No', fueraDePlazo(b) ? 'Sí' : 'No', b.reopened_from];
+            alertaZonalVencida(b) ? 'Sí' : 'No', fueraDePlazo(b) ? 'Sí' : 'No', b.reopened_from, b.estado_nomina, b.nomina_detalle];
     });
     descargarCSV(`vacantes${selector ? '_' + selector.toLowerCase().replace(/\s+/g, '-') : ''}_${today()}.csv`, headers, rows);
     toast('Informe descargado ✓');
@@ -159,10 +168,12 @@ function descargarInformeCSV() {
 
 function descargarBaseCSV() {
     const headers = ['Nombre', 'Apellido', 'DNI', 'Teléfono', 'Email', 'Fecha nacimiento', 'Zona', 'Localidad', 'Sede entrevista', 'Fecha entrevista',
-        'Puesto de interés', 'Horario', 'Curso manipulación', 'Antecedentes', 'Estado', 'Disponibilidad', 'Vacantes', 'Observaciones', 'ID postulante'];
+        'Puesto de interés', 'Horario', 'Curso manipulación', 'Antecedentes', 'Estado', 'Disponibilidad', 'Vacantes', 'Observaciones', 'ID postulante',
+        'CUIL', 'Nacionalidad', 'Tel. emergencia', 'Sugerido para', 'Origen'];
     const rows = postulantes.map(p => [p.nombre, p.apellido, p.dni, p.telefono, p.email, p.fecha_nacimiento, p.zona, p.localidad, p.sede_entrevista, p.fecha_entrevista,
         p.puesto_interes, p.horario, p.curso_manipulacion, p.antecedentes, p.estado, disponibilidad(p),
-        vacantesDe(p.id).map(b => `${b.numero} ${b.local} (${b.estado || 'sin estado'})`).join(' | '), p.observaciones, p.id_postulante]);
+        vacantesDe(p.id).map(b => `${b.numero} ${b.local} (${b.estado || 'sin estado'})`).join(' | '), p.observaciones, p.id_postulante,
+        p.cuil, p.nacionalidad, p.tel_emergencia, p.sugerido_para, p.origen]);
     descargarCSV(`base_postulantes_${today()}.csv`, headers, rows);
     toast('Base descargada ✓');
 }

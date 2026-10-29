@@ -102,6 +102,32 @@ function colorDe(nombre) {
 function iniciales(nombre) {
     return String(nombre || '?').trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase();
 }
+// Foto del miembro del equipo (link en Equipo); si no hay o no carga, quedan las iniciales
+function fotoDe(nombre) {
+    const url = equipo.find(e => e.nombre === nombre)?.foto_url || '';
+    return /^https:\/\//i.test(url) ? url : '';
+}
+function avatarHtml(nombre, clase = '') {
+    const foto = fotoDe(nombre);
+    return `<span class="avatar ${clase}" style="background:${colorDe(nombre)}" aria-hidden="true">${esc(iniciales(nombre))}${foto
+        ? `<img src="${esc(foto)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>`;
+}
+
+// Texto de la planilla → valor de ESTADOS_NOMINA ('' si no se reconoce)
+function nominaDe(texto) {
+    const t = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    if (/EXCED|EXCESO|SOBRA/.test(t)) return 'EXCEDIDO';
+    if (/DEBE|FALTA|PEND|INCOMPLET|A COMPLETAR/.test(t)) return 'DEBE COMPLETAR';
+    if (/COMPLET|CUBIERT|\bOK\b/.test(t)) return 'COMPLETO';
+    return '';
+}
+function nominaHtml(b) {
+    const info = NOMINA_INFO[b.estado_nomina];
+    if (!info) return '';
+    const titulo = `Nómina del local (SOLICITUDES DE PERSONAL): ${info.lbl}${b.nomina_detalle ? ' · ' + b.nomina_detalle : ''}`;
+    return `<span class="nomina nomina-${info.clase}" title="${esc(titulo)}"><i></i>${info.lbl}</span>`;
+}
+
 function nombrePostulante(p) { return p ? [p.nombre, p.apellido].filter(Boolean).join(' ') : '(postulante borrado)'; }
 
 // ── CLASES DE ESTILO ──

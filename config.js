@@ -37,7 +37,7 @@ const MOTIVOS  = ['Rotación', 'Apertura', 'Expansión', 'Reemplazo'];
 const ESTADOS_BUSQUEDA   = ['Proceso', 'Pausada', 'Cerrada', 'Finalizada', 'Cancelada'];
 const ESTADOS_POSTULANTE = ['Aprobado', 'En espera', 'Bloqueado', 'Descartado'];
 const SEDES_ENTREVISTA   = ['Florida', 'Merlo', 'Adrogué', 'Pilar', 'Virtual'];
-const HORARIOS           = ['Cualquiera', 'Mañana', 'Tarde y noche', 'Noche'];
+const HORARIOS           = ['Cualquiera', 'Mañana', 'Mañana y tarde', 'Tarde', 'Tarde y noche', 'Noche'];
 const DOC_OPCIONES       = ['Sí', 'No', 'En trámite'];
 
 // Desplegables de la hoja "Solicitudes Sabores / Extremas"
@@ -97,7 +97,20 @@ const PERFILES_SOLICITUD = [
     { col: 'PART', puesto: 'PART TIME (5HS)' },
 ];
 // Posición de cada columna cuando se pegan filas sin el encabezado (A = 0)
-const SOLICITUD_POSICIONES = { gr: 0, gz: 1, local: 2, estado: 4, obs: 25, perfiles: { GT: 20, ET: 21, ENT: 22, FULL: 23, PART: 24 } };
+const SOLICITUD_POSICIONES = {
+    gr: 0, gz: 1, local: 2, estado: 4, nomina: 19, obs: 25,
+    ideal:    { GT: 5,  ET: 6,  ENT: 7,  FULL: 8,  PART: 9 },     // ESTRUCTURA IDEAL
+    real:     { GT: 12, ET: 13, ENT: 14, FULL: 15, PART: 16 },    // ESTRUCTURA REAL (iCheck)
+    perfiles: { GT: 20, ET: 21, ENT: 22, FULL: 23, PART: 24 }     // PERFILES A SOLICITAR
+};
+
+// "ESTADO DE NÓMINA" del local en SOLICITUDES DE PERSONAL: referencia de si está excedido o no
+const ESTADOS_NOMINA = ['DEBE COMPLETAR', 'EXCEDIDO', 'COMPLETO'];
+const NOMINA_INFO = {
+    'DEBE COMPLETAR': { clase: 'completar', lbl: 'Debe completar' },
+    'EXCEDIDO':       { clase: 'excedido',  lbl: 'Excedido' },
+    'COMPLETO':       { clase: 'completo',  lbl: 'Completo' }
+};
 
 // Datos de la persona: se vacían al liberar la vacante
 const CAMPOS_PERSONA = ['nombre', 'apellido', 'email', 'tel', 'tel_emergencia', 'fecha_nacimiento', 'nacionalidad', 'cuil', 'dni', 'sexo',
