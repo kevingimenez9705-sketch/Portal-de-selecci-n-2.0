@@ -42,7 +42,7 @@ function parseTSV(text) {
     return rows.filter(r => r.some(c => c.trim() !== ''));
 }
 
-const normTxt = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase().replace(/\s+/g, ' ');
+const normTxt = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ');
 
 // Si se copió el encabezado se usan sus posiciones; si no, las de la hoja original
 function columnasSolicitud(rows) {

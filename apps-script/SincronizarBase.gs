@@ -11,7 +11,7 @@
    - Quien figure ACTIVO en la pestaña BLOQUEADOS llega como "Bloqueado".
 
    INSTALAR (una sola vez):
-   1. Supabase: correr sql/sync_base_drive.sql en el SQL Editor.
+   1. Supabase: sql/sync_base_drive.sql (ya aplicado en ats-gastronomico).
    2. script.google.com → Nuevo proyecto → pegar este archivo.
    3. ⚙️ Configuración del proyecto → Propiedades de la secuencia de comandos
       → Agregar: CODIGO_EQUIPO = (el código del equipo del portal).
@@ -191,7 +191,7 @@ function bloqueados_(libro) {
    ========================================================= */
 
 function normalizar_(v) {
-  return String(v == null ? '' : v).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  return String(v == null ? '' : v).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
