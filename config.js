@@ -18,10 +18,19 @@ if (!window.supabase) {
         </div>`;
     throw new Error('window.supabase no está disponible');
 }
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// No hay usuarios: cada consulta lleva el código del equipo y la base solo responde
+// si es el correcto (ver sql/codigo_equipo.sql). El cliente se arma al ingresarlo.
+const CODIGO_KEY = 'portalSeleccion.codigoEquipo';
+let sb = null;
+function crearCliente(codigo) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        global: { headers: { 'x-codigo-equipo': codigo } },
+        auth: { persistSession: false, autoRefreshToken: false }
+    });
+}
 
 // ── Listas fijas (las mismas que usa Tareas grupales) ──
-// Los nombres del equipo NO van acá: salen de la tabla seleccion_equipo.
+// Los nombres de los selectores NO van acá: salen de la tabla seleccion_equipo.
 const MARCAS   = ['Sabores Express', 'Hamburguesas Extremas'];
 const ZONAS    = ['CABA', 'Norte', 'Oeste', 'Sur', 'Lejanos', 'Interior'];
 const MOTIVOS  = ['Rotación', 'Apertura', 'Expansión', 'Reemplazo'];
@@ -60,8 +69,7 @@ const COLORES_EQUIPO = ['#6a4c93', '#9b2226', '#ca6702', '#005f73', '#2d6a4f', '
 // ── Estado global de la app ──
 let busquedas = [];        // vacantes, cada una con .candidatos y .comentarios
 let postulantes = [];      // base de postulantes
-let equipo = [];           // seleccion_equipo
-let currentProfile = null; // fila de seleccion_equipo del usuario logueado
+let equipo = [];           // seleccion_equipo (lista de selectores)
 let filteredIds = null;
 let selectorFiltroActivo = '';
 let vistaAislada = false;  // entró desde la foto de un selector: solo ve lo suyo

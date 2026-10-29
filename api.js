@@ -1,16 +1,30 @@
 // ══════════════════════════════════════════════
-//  AUTH + CARGA DE DATOS
+//  ACCESO CON CÓDIGO DEL EQUIPO + CARGA DE DATOS
 // ══════════════════════════════════════════════
+// El código queda guardado en el navegador: se pide una sola vez por computadora.
+function codigoGuardado() { try { return localStorage.getItem(CODIGO_KEY) || ''; } catch (e) { return ''; } }
+function guardarCodigo(codigo) { try { codigo ? localStorage.setItem(CODIGO_KEY, codigo) : localStorage.removeItem(CODIGO_KEY); } catch (e) { /* modo incógnito: se pide en cada visita */ } }
+
+// Pregunta a la base si el código es el del equipo. Devuelve true/false, o lanza si falla la conexión.
+async function codigoValido(codigo) {
+    crearCliente(codigo);
+    const { data, error } = await sb.rpc('seleccion_codigo_ok');
+    if (error) throw error;
+    return data === true;
+}
+
 async function login() {
-    const email = document.getElementById('login-email').value.trim();
-    const pass  = document.getElementById('login-pass').value;
+    const codigo = document.getElementById('login-codigo').value.trim();
     showLoginError('');
-    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-    if (error) { showLoginError('Email o contraseña incorrectos'); return; }
+    if (!codigo) { showLoginError('Ingresá el código del equipo'); return; }
+    try {
+        if (!(await codigoValido(codigo))) { showLoginError('Código incorrecto'); return; }
+    } catch (e) { showLoginError('No se pudo verificar el código: ' + msgError(e)); return; }
+    guardarCodigo(codigo);
     await arrancar();
 }
 
-async function logout() { await sb.auth.signOut(); location.reload(); }
+function logout() { guardarCodigo(''); location.reload(); }
 
 function showLoginError(msg) {
     const el = document.getElementById('login-error');
@@ -29,7 +43,8 @@ function msgError(error) {
     const code = error?.code || '';
     const m = error?.message || code || 'error desconocido';
     if (code === '42P01' || code === 'PGRST205' || /does not exist|Could not find the table/i.test(m)) return 'faltan crear las tablas del portal en Supabase (sql/portal_seleccion.sql)';
-    if (code === '42501' || /row-level security/i.test(m)) return 'tu usuario no tiene permiso para esto';
+    if (code === 'PGRST202' || /seleccion_codigo_ok/.test(m)) return 'falta configurar el código del equipo en Supabase (sql/codigo_equipo.sql)';
+    if (code === '42501' || /row-level security/i.test(m)) return 'el código del equipo no es válido (¿lo cambiaron?). Tocá Salir y volvé a ingresarlo';
     if (code === '23505') return 'ya existe un registro igual (DNI o postulante repetido)';
     if (/abort|timeout|57014/i.test(m + code)) return 'la consulta tardó demasiado';
     return m;
@@ -88,22 +103,12 @@ function aplicarCambiosBusqueda(row) {
     if (b) Object.assign(b, row);
 }
 
-// Arranque después del login (o al volver con la sesión abierta).
+// Arranque con el código ya verificado.
 async function arrancar() {
     mostrarPantalla('loading-screen');
     document.getElementById('loading-txt').textContent = 'Cargando datos...';
     try {
-        const { data: { user } } = await sb.auth.getUser();
-        if (!user) { mostrarPantalla('login-screen'); return; }
         await loadEquipo();
-        const email = (user.email || '').toLowerCase();
-        currentProfile = equipo.find(e => e.activo && (e.email || '').toLowerCase() === email) || null;
-        if (!currentProfile) {
-            await sb.auth.signOut();
-            mostrarPantalla('login-screen');
-            showLoginError(`El usuario ${user.email} no está habilitado en el portal. Pedile a un administrador que lo agregue en "Equipo".`);
-            return;
-        }
         await loadData();
         await checkAndFinalizeSearches();
         datosCargados = true;
@@ -117,9 +122,18 @@ async function arrancar() {
 }
 
 async function initApp() {
-    const { data: { session } } = await sb.auth.getSession();
-    if (session) await arrancar();
-    else mostrarPantalla('login-screen');
+    const codigo = codigoGuardado();
+    if (!codigo) { mostrarPantalla('login-screen'); return; }
+    try {
+        if (await codigoValido(codigo)) { await arrancar(); return; }
+        // Cambiaron el código: hay que volver a ingresarlo
+        guardarCodigo('');
+        mostrarPantalla('login-screen');
+        showLoginError('El código del equipo cambió: ingresá el nuevo');
+    } catch (e) {
+        mostrarPantalla('login-screen');
+        showLoginError('No se pudo conectar: ' + msgError(e));
+    }
 }
 
 // Botón "Actualizar": vuelve a traer todo.
@@ -172,7 +186,7 @@ async function addEstadoEntry(id) {
     const input = document.getElementById('estado-input-' + id);
     const texto = input?.value.trim();
     if (!texto) return;
-    const { error } = await sb.from('seleccion_comentarios').insert({ busqueda_id: id, texto, fecha: today() });
+    const { error } = await sb.from('seleccion_comentarios').insert({ busqueda_id: id, texto, fecha: today(), autor: vistaAislada ? selectorFiltroActivo : null });
     if (error) { toast('Error al guardar: ' + msgError(error), true); return; }
     await recargarBusqueda(id); refreshBusqueda(id); toast('Comentario agregado ✓');
 }
@@ -229,7 +243,7 @@ async function reabrir(id) {
     const { data: nueva, error } = await sb.from('seleccion_busquedas').insert(nuevaRow).select().single();
     if (error) { toast('Error al reabrir: ' + msgError(error), true); return; }
     const texto = `Reapertura de ${orig.numero} — "${orig.puesto}" en ${orig.local}. Anterior ingresado: ${orig.ingreso_nombre || 'N/D'} (${orig.ingreso ? fmtFecha(orig.ingreso) : 'sin fecha'})`;
-    await sb.from('seleccion_comentarios').insert({ busqueda_id: nueva.id, texto, fecha: today() });
+    await sb.from('seleccion_comentarios').insert({ busqueda_id: nueva.id, texto, fecha: today(), autor: null });
     if (orig.ingreso && !orig.fecha_baja) {
         const f = await pedirTexto('Fecha de baja del que había ingresado (AAAA-MM-DD). Dejá vacío si no corresponde:', today());
         if (f && f.trim()) {
@@ -426,24 +440,19 @@ async function saveMiembro() {
     const row = {
         nombre: val('eq-nombre'),
         nombre_completo: val('eq-nombre-completo') || null,
-        email: val('eq-email').toLowerCase() || null,
-        rol: val('eq-rol') || 'selector',
         es_selector: document.getElementById('eq-es-selector').checked,
         color: val('eq-color') || null,
         orden: equipo.length
     };
     if (!row.nombre) { toast('Ingresá el nombre', true); return; }
     const { error } = await sb.from('seleccion_equipo').insert(row);
-    if (error) { toast(error.code === '23505' ? 'Ese email ya está en el equipo' : 'Error al guardar: ' + msgError(error), true); return; }
-    ['eq-nombre', 'eq-nombre-completo', 'eq-email'].forEach(i => document.getElementById(i).value = '');
+    if (error) { toast('Error al guardar: ' + msgError(error), true); return; }
+    ['eq-nombre', 'eq-nombre-completo'].forEach(i => document.getElementById(i).value = '');
     await despuesDeCambiarEquipo('Agregado al equipo ✓');
 }
 
 async function updateMiembro(id, field, val) {
-    if (field === 'email' && typeof val === 'string') val = val.trim().toLowerCase() || null;
-    if (id === currentProfile.id && ((field === 'rol' && val !== 'admin') || (field === 'activo' && !val))) {
-        if (!(await confirmar('Te estás quitando el acceso de administrador a vos mismo. ¿Seguir?'))) { renderEquipoModal(); return; }
-    }
+    if (field === 'nombre' && !val) { toast('El nombre no puede quedar vacío', true); renderEquipoModal(); return; }
     const { error } = await sb.from('seleccion_equipo').update({ [field]: val }).eq('id', id);
     if (error) { toast('Error al guardar: ' + msgError(error), true); renderEquipoModal(); return; }
     await despuesDeCambiarEquipo('Guardado ✓');
@@ -451,7 +460,7 @@ async function updateMiembro(id, field, val) {
 
 async function removeMiembro(id) {
     const m = equipo.find(e => e.id === id);
-    if (!(await confirmar(`¿Eliminar a ${m?.nombre} del equipo? Deja de poder entrar al portal (sus búsquedas no se borran).`))) return;
+    if (!(await confirmar(`¿Eliminar a ${m?.nombre} del equipo? Deja de aparecer como selector (sus búsquedas no se borran).`))) return;
     const { error } = await sb.from('seleccion_equipo').delete().eq('id', id);
     if (error) { toast('Error al eliminar: ' + msgError(error), true); return; }
     await despuesDeCambiarEquipo('Eliminado del equipo');
@@ -459,7 +468,6 @@ async function removeMiembro(id) {
 
 async function despuesDeCambiarEquipo(msg) {
     await loadEquipo();
-    currentProfile = equipo.find(e => e.id === currentProfile.id) || currentProfile;
     renderEquipoModal();
     renderSelectorChips();
     refreshView();

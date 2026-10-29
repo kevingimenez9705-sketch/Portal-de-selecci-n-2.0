@@ -30,7 +30,7 @@
             <div class="landing-hero-actions">
                 <button class="landing-hero-btn" onclick="goToApp()">Ir al Pipeline <i class="fas fa-arrow-right"></i></button>
                 <button class="landing-hero-btn secondary" onclick="goToApp(null, 'base')"><i class="fas fa-database"></i> Base de postulantes</button>
-                <button class="landing-hero-btn secondary hidden" id="landing-btn-stats" onclick="goToApp(null, 'stats')"><i class="fas fa-chart-pie"></i> Estadísticas</button>
+                <button class="landing-hero-btn secondary" id="landing-btn-stats" onclick="goToApp(null, 'stats')"><i class="fas fa-chart-pie"></i> Estadísticas</button>
             </div>
         </div>
         <div class="landing-section-hdr">Selectores <span class="tip" style="font-family:'DM Sans',sans-serif;font-weight:500">· tocá una tarjeta para ver solo sus búsquedas</span></div>
@@ -44,11 +44,10 @@
     <div class="login-box">
         <div class="login-logo">Portal de<br>Selección 2.0</div>
         <div class="login-sub">Sabores Express · Hamburguesas Extremas</div>
-        <label class="login-label">Email</label>
-        <input class="login-input" id="login-email" type="email" placeholder="usuario@empresa.com" onkeydown="if(event.key==='Enter')login()">
-        <label class="login-label">Contraseña</label>
-        <input class="login-input" id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')login()">
-        <button class="login-btn" onclick="login()">Ingresar</button>
+        <label class="login-label">Código del equipo</label>
+        <input class="login-input" id="login-codigo" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')login()">
+        <button class="login-btn" onclick="login()">Entrar</button>
+        <div class="tip" style="margin-top:10px">Se pide una sola vez: queda guardado en esta computadora.</div>
         <div class="login-error" id="login-error"></div>
     </div>
 </div>
@@ -65,9 +64,8 @@
     <nav class="topnav">
         <div class="topnav-logo">Portal de Selección 2.0</div>
         <div class="topnav-right">
-            <span class="topnav-user"><strong id="topnav-nombre">—</strong> · <span id="topnav-rol">—</span></span>
             <button class="topnav-btn" onclick="recargarDatos()" title="Volver a traer los datos"><i class="fas fa-sync-alt"></i> Actualizar</button>
-            <button class="topnav-btn hidden" id="btn-equipo" onclick="openEquipoModal()" title="Quién entra al portal y lista de selectores"><i class="fas fa-users-cog"></i> Equipo</button>
+            <button class="topnav-btn" id="btn-equipo" onclick="openEquipoModal()" title="Lista de selectores"><i class="fas fa-users-cog"></i> Equipo</button>
             <button class="topnav-btn hidden" id="salir-vista-aislada" onclick="salirVistaAislada()"><i class="fas fa-arrow-left"></i> Volver a selección</button>
             <button class="topnav-btn" onclick="showHome()" title="Pantalla de inicio"><i class="fas fa-home"></i> Inicio</button>
             <div class="topnav-sep"></div>
@@ -290,15 +288,13 @@
 <!-- ══ MODAL: EQUIPO (solo admin) ══ -->
 <div id="modal-equipo" class="modal-bg hidden">
     <div class="modal-box" style="max-width:980px">
-        <div class="modal-title">Equipo del portal</div>
-        <p class="tip" style="font-style:normal;margin-bottom:12px">Para que alguien pueda entrar: agregalo acá con su email <strong>y</strong> crealo en Supabase → Authentication → Users → "Add user" con el mismo email y una contraseña.</p>
+        <div class="modal-title">Selectores del equipo</div>
+        <p class="tip" style="font-style:normal;margin-bottom:12px">Arman las tarjetas de inicio, los filtros y la lista de "Selector a cargo". Para entrar al portal alcanza con el código del equipo.</p>
         <div id="equipo-lista" style="overflow-x:auto"></div>
         <div class="section-hdr" style="margin-top:18px">Agregar integrante</div>
         <div class="form-row" style="grid-template-columns:repeat(3,1fr)">
             <div class="form-group"><label>Nombre (el que se ve)</label><input class="form-input" id="eq-nombre"></div>
             <div class="form-group"><label>Nombre completo</label><input class="form-input" id="eq-nombre-completo"></div>
-            <div class="form-group"><label>Email (login)</label><input class="form-input" id="eq-email" type="email"></div>
-            <div class="form-group"><label>Rol</label><select class="form-input" id="eq-rol"><option value="selector">Selector</option><option value="admin">Admin</option></select></div>
             <div class="form-group"><label>Color</label><input class="form-input" id="eq-color" type="color" value="#005f73" style="height:36px;padding:2px"></div>
             <div class="form-group"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text)"><input type="checkbox" id="eq-es-selector" checked> Toma búsquedas (selector)</label></div>
         </div>

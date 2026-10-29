@@ -13,8 +13,7 @@ function showHome() {
 function renderLanding() {
     const hora = new Date().getHours();
     const saludo = hora < 12 ? 'Buenos días' : hora < 20 ? 'Buenas tardes' : 'Buenas noches';
-    document.getElementById('landing-saludo').textContent = `${saludo}, ${currentProfile?.nombre || ''} — acceso rápido a las vacantes, la base de postulantes y los números del equipo.`;
-    document.getElementById('landing-btn-stats').classList.toggle('hidden', !isAdmin());
+    document.getElementById('landing-saludo').textContent = `${saludo} — acceso rápido a las vacantes, la base de postulantes y los números del equipo.`;
     const sels = equipo.filter(e => e.activo && e.es_selector);
     document.getElementById('landing-team-grid').innerHTML = sels.length ? sels.map(e => {
         const color = colorDe(e.nombre);
@@ -22,10 +21,10 @@ function renderLanding() {
         return `<div class="landing-team-card" style="border-top-color:${color}">
             <div class="landing-team-avatar clickable" style="background:${color}" data-sel="${esc(e.nombre)}" onclick="goToApp(this.dataset.sel)" title="Ver las búsquedas de ${esc(e.nombre)}">${esc(iniciales(e.nombre_completo || e.nombre))}</div>
             <div class="landing-team-name">${esc(e.nombre_completo || e.nombre)}</div>
-            <div class="landing-team-role">Selector${e.rol === 'admin' ? ' · Admin' : ''}</div>
+            <div class="landing-team-role">Selector</div>
             <div class="landing-team-tag" style="color:${color}">${abiertas} en proceso</div>
         </div>`;
-    }).join('') : `<span class="tip">Todavía no hay selectores cargados. ${isAdmin() ? 'Agregalos desde el botón "Equipo".' : 'Pedile a un administrador que los cargue.'}</span>`;
+    }).join('') : `<span class="tip">Todavía no hay selectores cargados: entrá al Pipeline y agregalos desde el botón "Equipo" de arriba.</span>`;
 }
 
 // Con un nombre (clic en la tarjeta del selector) entra "aislado": solo lo de esa persona.
@@ -43,10 +42,6 @@ function salirVistaAislada() { showHome(); }
 
 // Datos de la barra superior, menús según el rol y opciones de los formularios.
 function prepararApp() {
-    const esAdmin = isAdmin();
-    document.getElementById('topnav-nombre').textContent = (esAdmin ? '🔑 ' : '👤 ') + (currentProfile?.nombre || '');
-    document.getElementById('topnav-rol').textContent = esAdmin ? 'admin' : 'selector';
-    document.getElementById('btn-equipo').classList.toggle('hidden', !esAdmin);
 
     const fill = (id, lista, vacio = null) => { const el = document.getElementById(id); if (el) el.innerHTML = optionsHtml(lista, null, vacio); };
     fill('n-marca', MARCAS);
@@ -673,7 +668,7 @@ function openNuevaBusqueda() {
     document.getElementById('n-nivel').value = 'Operativo';
     document.getElementById('n-inicio').value = today();
     document.getElementById('n-cantidad').value = 1;
-    const selDefault = selectorFiltroActivo || (currentProfile?.es_selector ? currentProfile.nombre : '');
+    const selDefault = selectorFiltroActivo;
     document.getElementById('n-selector').innerHTML = optionsHtml(selectores(), selDefault, '— Sin asignar —');
     openModal('modal-nueva');
 }
@@ -751,15 +746,13 @@ function renderEquipoModal() {
     const box = document.getElementById('equipo-lista');
     if (!box) return;
     box.innerHTML = equipo.length ? `
-        <table class="equipo-table"><thead><tr><th>Nombre</th><th>Nombre completo</th><th>Email (login)</th><th>Rol</th><th>Selector</th><th>Color</th><th>Activo</th><th></th></tr></thead>
+        <table class="equipo-table"><thead><tr><th>Nombre</th><th>Nombre completo</th><th>Toma búsquedas</th><th>Color</th><th>Activo</th><th></th></tr></thead>
         <tbody>${equipo.map(m => `<tr>
             <td><input class="inline-input inline-input-box" value="${esc(m.nombre)}" onchange="updateMiembro(${m.id},'nombre',this.value.trim())"></td>
             <td><input class="inline-input inline-input-box" value="${esc(m.nombre_completo)}" onchange="updateMiembro(${m.id},'nombre_completo',this.value.trim()||null)"></td>
-            <td><input class="inline-input inline-input-box" value="${esc(m.email)}" onchange="updateMiembro(${m.id},'email',this.value)"></td>
-            <td><select class="inline-select" onchange="updateMiembro(${m.id},'rol',this.value)">${optionsHtml(['selector', 'admin'], m.rol)}</select></td>
             <td style="text-align:center"><input type="checkbox" ${m.es_selector ? 'checked' : ''} onchange="updateMiembro(${m.id},'es_selector',this.checked)"></td>
             <td><input type="color" value="${esc(colorDe(m.nombre))}" onchange="updateMiembro(${m.id},'color',this.value)"></td>
             <td style="text-align:center"><input type="checkbox" ${m.activo ? 'checked' : ''} onchange="updateMiembro(${m.id},'activo',this.checked)"></td>
-            <td>${m.id !== currentProfile.id ? `<button class="btn-sm btn-danger" onclick="removeMiembro(${m.id})"><i class="fas fa-trash" style="font-size:9px"></i></button>` : ''}</td>
-        </tr>`).join('')}</tbody></table>` : '<span class="tip">Sin integrantes</span>';
+            <td><button class="btn-sm btn-danger" onclick="removeMiembro(${m.id})"><i class="fas fa-trash" style="font-size:9px"></i></button></td>
+        </tr>`).join('')}</tbody></table>` : '<span class="tip">Todavía no hay nadie cargado</span>';
 }

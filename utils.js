@@ -1,7 +1,8 @@
 // ══════════════════════════════════════════════
 //  UTILIDADES Y HELPERS
 // ══════════════════════════════════════════════
-function isAdmin() { return currentProfile?.rol === 'admin'; }
+// Con el código del equipo todos pueden todo (como la cuenta compartida del panel de Staff)
+function isAdmin() { return true; }
 
 // Fecha local (AAAA-MM-DD). toISOString() da la fecha UTC: en Argentina,
 // después de las 21 hs devolvía el día de mañana.

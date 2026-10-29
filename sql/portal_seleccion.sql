@@ -12,7 +12,8 @@
 --    seleccion_equipo      → quién puede entrar y con qué rol; también arma la
 --                            lista de selectores (no hay nombres en el código)
 --
---  Acceso: solo usuarios logueados cuyo email esté activo en seleccion_equipo.
+--  Acceso: este archivo arma el acceso por usuario; después correr
+--  codigo_equipo.sql, que lo reemplaza por un único código del equipo.
 --  Se puede volver a correr sin romper nada.
 -- ══════════════════════════════════════════════════════════════════════════
 
