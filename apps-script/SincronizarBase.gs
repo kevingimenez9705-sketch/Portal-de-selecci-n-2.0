@@ -284,20 +284,24 @@ function telefono_(v) {
 }
 
 // Fecha → "aaaa-mm-dd". Acepta fechas de la hoja o texto dd/mm/aaaa.
+// Un año de dos cifras ("12/1/96", que la hoja guarda como año 0096) se toma como 1996.
 function fecha_(v) {
-  let d = null;
-  if (v instanceof Date) d = v;
-  else {
+  let a, mes, d;
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return '';
+    a = +Utilities.formatDate(v, SYNC.ZONA_HORARIA, 'yyyy');
+    mes = +Utilities.formatDate(v, SYNC.ZONA_HORARIA, 'M');
+    d = +Utilities.formatDate(v, SYNC.ZONA_HORARIA, 'd');
+  } else {
     const m = texto_(v).match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-    if (m) {
-      d = new Date(+m[3], +m[2] - 1, +m[1], 12);
-      if (d.getDate() !== +m[1] || d.getMonth() !== +m[2] - 1) d = null;   // 31/02 → sin fecha
-    }
+    if (!m) return '';
+    d = +m[1]; mes = +m[2]; a = +m[3];
   }
-  if (!d || isNaN(d.getTime())) return '';
-  const anio = +Utilities.formatDate(d, SYNC.ZONA_HORARIA, 'yyyy');
-  if (anio < 1930 || anio > new Date().getFullYear()) return '';
-  return Utilities.formatDate(d, SYNC.ZONA_HORARIA, 'yyyy-MM-dd');
+  if (a < 100) a += a > 30 ? 1900 : 2000;
+  const f = new Date(Date.UTC(a, mes - 1, d));
+  if (f.getUTCDate() !== d || f.getUTCMonth() !== mes - 1) return '';   // 31/02 → sin fecha
+  if (a < 1930 || a > new Date().getFullYear()) return '';
+  return a + '-' + ('0' + mes).slice(-2) + '-' + ('0' + d).slice(-2);
 }
 
 function siNo_(v) {

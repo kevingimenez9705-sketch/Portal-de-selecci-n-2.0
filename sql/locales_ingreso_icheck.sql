@@ -7,7 +7,7 @@
 --                      dirección y razón social (Direcciones Sabores/Extremas).
 --  seleccion_zonas:    localidad de residencia → zona y localidades cercanas.
 --  seleccion_ingresos: respuestas del formulario de ingreso ("Proceso de
---                      Ingreso"); el Apps Script SincronizarBase.gs las manda con
+--                      Ingreso"); el flujo de n8n las manda cada 10 min con
 --                      seleccion_sync_ingresos() y el portal las copia a la vacante
 --                      por email.
 --  icheck_exportado:   fecha en que la vacante (en HUELLA) se bajó para iCheck.
@@ -80,7 +80,8 @@ declare
     nuevas int := 0; actualizadas int := 0; omitidas int := 0;
     insertada boolean;
 begin
-    if not public.seleccion_codigo_ok() then
+    -- El portal (código del equipo) o el flujo de n8n (clave de servicio)
+    if not (public.seleccion_codigo_ok() or current_user = 'service_role') then
         raise exception 'Código del equipo inválido' using errcode = '42501';
     end if;
     if jsonb_typeof(filas) is distinct from 'array' then
@@ -128,4 +129,4 @@ end;
 $$;
 
 revoke execute on function public.seleccion_sync_ingresos(jsonb) from public;
-grant execute on function public.seleccion_sync_ingresos(jsonb) to anon, authenticated;
+grant execute on function public.seleccion_sync_ingresos(jsonb) to anon, authenticated, service_role;
