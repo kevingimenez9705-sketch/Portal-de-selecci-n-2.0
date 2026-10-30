@@ -24,7 +24,7 @@ async function openDatosIngreso() {
     try { ingresos = await fetchTodo('seleccion_ingresos'); }
     catch (e) { box.innerHTML = `<span class="tip">No se pudieron leer las respuestas: ${esc(msgError(e))}</span>`; return; }
     if (!ingresos.length) {
-        box.innerHTML = '<p class="tip" style="font-style:normal">Todavía no llegó ninguna respuesta del formulario de ingreso. Llegan solas con la sincronización de la planilla (apps-script/SincronizarBase.gs, pestaña Proceso de Ingreso).</p>';
+        box.innerHTML = '<p class="tip" style="font-style:normal">Todavía no llegó ninguna respuesta del formulario de ingreso. Llegan solas cada 10 minutos desde la pestaña Proceso de Ingreso de TAREAS GRUPALES (flujo de n8n).</p>';
         return;
     }
 
