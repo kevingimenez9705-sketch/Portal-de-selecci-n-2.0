@@ -1,11 +1,10 @@
 -- ══════════════════════════════════════════════════════════════════════════
 --  BASE DE DATOS de TAREAS GRUPALES → Base de postulantes del portal
 -- ──────────────────────────────────────────────────────────────────────────
---  El flujo de n8n "Selección - BASE DE DATOS e Ingreso → Portal 2.0" (cada
---  10 min) lee la pestaña BASE DE DATOS (la que ya carga el script de la
---  planilla) y llama a seleccion_sync_postulantes() con las filas. La planilla
---  sigue igual: el portal recibe una copia. apps-script/SincronizarBase.gs hace
---  lo mismo desde la planilla, si alguna vez se prefiere sin n8n.
+--  El Apps Script apps-script/SincronizarBase.gs (SincronizarPortal, cada 10 min)
+--  lee la pestaña BASE DE DATOS (la que ya carga el script de la planilla) y
+--  llama a seleccion_sync_postulantes() con las filas. La planilla sigue igual:
+--  el portal recibe una copia.
 --
 --  Reglas:
 --   - Se reconoce a la persona por DNI y, si no tiene, por email.
@@ -14,7 +13,7 @@
 --     editó en el portal no se pisa. Excepciones: "Sugerido para" se toma
 --     de la planilla, y si la planilla dice Bloqueado/Descartado, se aplica.
 --   - Exige el código del equipo (encabezado x-codigo-equipo) o la clave
---     de servicio (la credencial de Supabase de n8n).
+--     de servicio.
 --
 --  CÓMO EJECUTAR: Supabase → ats-gastronomico → SQL Editor → pegar todo → Run.
 --  Se puede volver a correr sin problema.
@@ -38,7 +37,7 @@ declare
     n int;
     nuevos int := 0; completados int := 0; sin_cambios int := 0; omitidas int := 0;
 begin
-    -- El portal (código del equipo) o el flujo de n8n (clave de servicio)
+    -- El portal (código del equipo) o la clave de servicio
     if not (public.seleccion_codigo_ok() or current_user = 'service_role') then
         raise exception 'Código del equipo inválido' using errcode = '42501';
     end if;

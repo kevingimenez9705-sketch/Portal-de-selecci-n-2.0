@@ -13,7 +13,8 @@
 --  disponibilidad; la vacante la asigna el equipo de Selección.
 --  Misma persona = coincide DNI, CUIL, mail o WhatsApp (últimos 10 dígitos).
 --
---  La planilla TAREAS GRUPALES sigue igual: el flujo de n8n copia cada 10 min
+--  La planilla TAREAS GRUPALES sigue igual: el Apps Script SincronizarPortal
+--  (apps-script/SincronizarBase.gs) copia cada 10 min
 --  lo nuevo a BASE DE DATOS y BLOQUEADOS (seleccion_web_pendientes y
 --  seleccion_web_en_planilla) y trae BLOQUEADOS al portal
 --  (seleccion_sync_bloqueados).
@@ -22,7 +23,7 @@
 --  Se puede volver a correr sin problema.
 -- ══════════════════════════════════════════════════════════════════════════
 
--- BLOQUEADOS: los de la planilla (los trae n8n) y los que bloquea la página
+-- BLOQUEADOS: los de la planilla (los trae el Apps Script) y los que bloquea la página
 create table if not exists public.seleccion_bloqueados (
     id          bigint generated always as identity primary key,
     fecha       timestamptz not null default now(),
@@ -36,13 +37,13 @@ create table if not exists public.seleccion_bloqueados (
     motivo      text,
     activo      boolean not null default true,
     origen      text not null default 'PLANILLA' check (origen in ('PLANILLA', 'PORTAL')),
-    en_planilla timestamptz   -- PORTAL: cuándo n8n la copió a la pestaña BLOQUEADOS
+    en_planilla timestamptz   -- PORTAL: cuándo el Apps Script la copió a la pestaña BLOQUEADOS
 );
 
 alter table public.seleccion_postulantes
     add column if not exists interesado  text,
     add column if not exists formulario  jsonb,         -- lo que mandó la página, tal cual va a BASE DE DATOS
-    add column if not exists en_planilla timestamptz;   -- cuándo n8n copió ese formulario a la planilla
+    add column if not exists en_planilla timestamptz;   -- cuándo el Apps Script copió ese formulario a la planilla
 
 alter table public.seleccion_bloqueados enable row level security;
 drop policy if exists "Portal: código del equipo" on public.seleccion_bloqueados;
@@ -388,7 +389,7 @@ begin
 end;
 $$;
 
--- ── Lo que llama n8n (clave de servicio) ──
+-- ── Lo que llama el Apps Script de la planilla (código del equipo) ──
 
 -- Altas de la página que todavía no están en la planilla, con lo que va en cada columna
 create or replace function public.seleccion_web_pendientes() returns jsonb
@@ -417,7 +418,7 @@ begin
 end;
 $$;
 
--- n8n ya copió estas filas a la planilla
+-- El Apps Script ya copió estas filas a la planilla
 create or replace function public.seleccion_web_en_planilla(tabla text, ids bigint[]) returns int
 language plpgsql volatile security invoker set search_path = public as $$
 declare n int;
@@ -485,7 +486,7 @@ begin
         execute format('revoke execute on function public.%s from public', f);
         execute format('grant execute on function public.%s to anon, authenticated', f);
     end loop;
-    -- n8n (clave de servicio) y el portal (código del equipo)
+    -- El Apps Script y el portal (código del equipo); service_role por si vuelve a usarse n8n
     foreach f in array array['seleccion_web_pendientes()', 'seleccion_web_en_planilla(text, bigint[])', 'seleccion_sync_bloqueados(jsonb)'] loop
         execute format('revoke execute on function public.%s from public', f);
         execute format('grant execute on function public.%s to anon, authenticated, service_role', f);

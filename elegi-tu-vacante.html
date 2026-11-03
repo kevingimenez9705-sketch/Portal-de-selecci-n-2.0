@@ -348,7 +348,7 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
   /* ================= Utilidades ================= */
   var $ = function (id) { return document.getElementById(id); };
   function norm(v) {
-    return String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+    return String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
   }
   function esc(t) {
     return String(t).replace(/[&<>"']/g, function (c) {
