@@ -250,7 +250,7 @@ var PortalSync = (function () {
       agregarFilas_(libro, SYNC.HOJA_BLOQUEADOS, COLUMNAS_BLOQUEADOS, bloq.map(function (b) {
         return {
           fecha: fechaDeTexto_(b.fecha, SYNC.ZONA_HORARIA), dni: comoTexto_(b.dni), cuil: comoTexto_(b.cuil),
-          nombre: seguro_(b.nombre), apellido: seguro_(b.apellido), mail: b.mail || '', tel: comoTexto_(b.tel),
+          nombre: seguro_(b.nombre), apellido: seguro_(b.apellido), mail: seguro_(b.mail), tel: comoTexto_(b.tel),
           localidad: seguro_(b.localidad), motivo: b.motivo || '', activo: b.activo || 'SÍ'
         };
       }));
@@ -261,7 +261,7 @@ var PortalSync = (function () {
       asegurarColumnas_(libro.getSheetByName(SYNC.HOJA_BASE), COLUMNAS_NUEVAS_BASE);
       agregarFilas_(libro, SYNC.HOJA_BASE, COLUMNAS_BASE, base.map(function (x) {
         return {
-          nombre: seguro_(x.nombre), apellido: seguro_(x.apellido), email: x.mail || '', telefono: comoTexto_(x.tel),
+          nombre: seguro_(x.nombre), apellido: seguro_(x.apellido), email: seguro_(x.mail), telefono: comoTexto_(x.tel),
           fecha_nacimiento: fechaDeTexto_(x.fecha_nacimiento, tz), zona: x.zona || '', localidad: seguro_(x.localidad),
           sede_entrevista: x.sede || '', estado: 'EN ESPERA', puesto_interes: x.puesto || '', horario: x.horario || '',
           observaciones: seguro_(x.observaciones), curso_manipulacion: x.manipulacion || '', antecedentes: x.antecedentes || '',

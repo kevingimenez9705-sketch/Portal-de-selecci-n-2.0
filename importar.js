@@ -175,6 +175,8 @@ function revisarImportacion(filasExcel) {
     busquedas.filter(vacanteAbierta).forEach(b => {
         const n = nominaLocal.get(normTxt(b.local));
         if (!n) return;
+        // Excepción marcada a mano ("Falta completar"): si el local sigue excedido, no vuelve a "Excedido"
+        if (n.estado === 'EXCEDIDO' && esExcepcionNomina(b)) return;
         const perfil = PERFILES_SOLICITUD.find(p => p.puesto === b.puesto)?.col;
         const detalle = (perfil && n.detalle(perfil)) || null;
         if (b.estado_nomina !== n.estado || (b.nomina_detalle || null) !== detalle) {
@@ -251,12 +253,14 @@ function nominaAActualizar() {
     const excepcion = new Set(importLineas.filter(l => l.faltaCompletar).map(l => normTxt(l.local)));
     return importNomina.filter(u => !(u.estado_nomina === 'EXCEDIDO' && excepcion.has(normTxt(busquedas.find(b => b.id === u.id)?.local))));
 }
+const DETALLE_EXCEPCION = 'Excepción: local excedido';
+const esExcepcionNomina = b => b.estado_nomina === 'DEBE COMPLETAR' && b.nomina_detalle === DETALLE_EXCEPCION;
 function marcarFaltaCompletar(i, si) {
     const l = importLineas[i];
     l.faltaCompletar = si;
     l.usar = si;
     l.estado_nomina = si ? 'DEBE COMPLETAR' : 'EXCEDIDO';
-    l.nomina_detalle = si ? 'Excepción: local excedido' : l.nomina_detalle_orig;
+    l.nomina_detalle = si ? DETALLE_EXCEPCION : l.nomina_detalle_orig;
     renderImportPreview();
 }
 
