@@ -81,7 +81,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .btn-danger { border-color: var(--extremas-line); color: var(--red); }
 .btn-danger:hover { background: var(--red); border-color: var(--red); color: #fff; }
 .btn-danger-solid { background: var(--red) !important; box-shadow: none !important; }
-.btn-secundario { background: var(--card); color: var(--purple); border: 1px solid var(--purple-line); min-height: 42px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.btn-secundario { text-decoration: none; background: var(--card); color: var(--purple); border: 1px solid var(--purple-line); min-height: 42px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 8px; }
 .btn-secundario:hover { background: var(--purple-soft); border-color: var(--purple); }
 .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 .btn-cancel { background: none; border: 1px solid var(--line); color: var(--muted); min-height: 42px; padding: 9px 16px; border-radius: 12px; cursor: pointer; font-size: 13px; font-weight: 700; }
