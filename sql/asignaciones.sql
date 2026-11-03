@@ -61,7 +61,9 @@ begin
         select * into l from seleccion_locales s
          where s.marca = r.marca and (seleccion_clave_local_(s.local) = seleccion_clave_local_(r.local)
             or seleccion_clave_local_(r.local) in (select seleccion_clave_local_(a) from unnest(coalesce(s.alias, '{}')) a))
-         order by s.activo desc nulls last, s.id limit 1;
+         -- primero el nombre exacto (local o alias): "SANTA FE 1" y "SANTA FE (PROVINCIA)" comparten clave
+         order by (seleccion_norm_(r.local) = seleccion_norm_(s.local) or seleccion_norm_(r.local) in (select seleccion_norm_(a) from unnest(coalesce(s.alias, '{}')) a)) desc,
+                  s.activo desc nulls last, s.id limit 1;
         if not found then
             if array_length(sin_local, 1) is null or array_length(sin_local, 1) < 40 then sin_local := sin_local || trim(r.local); end if;
             continue;
