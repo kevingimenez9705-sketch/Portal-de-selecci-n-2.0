@@ -235,6 +235,20 @@ function descargarCSV(nombre, headers, rows) {
     URL.revokeObjectURL(url);
 }
 
+// Lector y escritor de Excel (SheetJS): se carga solo cuando hace falta (importar solicitudes, bajar iCheck)
+let _cargaXLSX = null;
+function cargarXLSX() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (!_cargaXLSX) _cargaXLSX = new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = () => window.XLSX ? res(window.XLSX) : rej(new Error('No se pudo cargar el lector de Excel'));
+        s.onerror = () => { _cargaXLSX = null; rej(new Error('No se pudo cargar el lector de Excel: revisá tu conexión')); };
+        document.head.appendChild(s);
+    });
+    return _cargaXLSX;
+}
+
 // ── MODALES ──
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }

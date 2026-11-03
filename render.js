@@ -261,7 +261,7 @@ function celda(b, c) {
 
 function sugeridosHtml(b) {
     const n = sugeridosDe(b);
-    return n ? `<button class="sugeridos" onclick="openColocarModal(${b.id})" title="Candidatos disponibles de la base que viven en ${esc(titulo_(localidadDeVacante(b)))} o eligieron este local">${n} de ${esc(titulo_(localidadDeVacante(b)))}</button>` : '';
+    return n ? `<button class="sugeridos" onclick="openColocarModal(${b.id})" title="Candidatos disponibles de la base que viven en ${esc(titulo_(localidadDeVacante(b)))}">${n} de ${esc(titulo_(localidadDeVacante(b)))}</button>` : '';
 }
 const titulo_ = s => String(s || '').toLowerCase().replace(/(^|[\s\/(-])(\p{L})/gu, (m, a, c) => a + c.toUpperCase());
 
@@ -589,8 +589,9 @@ function openColocarModal(bid) {
     const b = busquedas.find(x => x.id === bid);
     document.getElementById('colocar-title').textContent = `Colocar en ${b.numero} · ${b.local} · ${b.puesto}`;
     document.getElementById('colocar-search').value = '';
-    document.getElementById('colocar-solo-zona').checked = !!b.zona;
-    document.getElementById('colocar-solo-zona-lbl').textContent = b.zona ? `Solo zona ${b.zona}` : 'Solo misma zona';
+    const loc = localidadDeVacante(b);
+    document.getElementById('colocar-solo-zona').checked = !!loc;
+    document.getElementById('colocar-solo-zona-lbl').textContent = loc ? `Solo de ${titulo_(loc)}` : 'Solo de la localidad del local';
     renderColocarLista();
     openModal('modal-colocar');
     setTimeout(() => document.getElementById('colocar-search').focus(), 50);
@@ -628,22 +629,23 @@ function cercania(p, b, ctx = contextoVacante(b)) {
     if (ctx.zona && normTxt(p.zona || zp?.zona) === ctx.zona) return 3;
     return 4;
 }
-// Candidatos disponibles que viven en la localidad del local (o lo eligieron): se avisa en la vacante vacía
+// Referidos: candidatos disponibles que viven en la localidad del local (Extremas Munro → de Munro).
+// Si no hay nadie de esa localidad no se refiere a nadie.
 function sugeridosDe(b) {
-    const ctx = contextoVacante(b);
-    return postulantes.filter(p => puedeColocarse(p) && cercania(p, b, ctx) <= 1 && disponibilidad(p) === 'Disponible').length;
+    const loc = localidadDeVacante(b);
+    return postulantes.filter(p => puedeColocarse(p) && mismaLocalidad(p.localidad, loc) && disponibilidad(p) === 'Disponible').length;
 }
 
 function renderColocarLista() {
     const b = busquedas.find(x => x.id === colocarBid);
     if (!b) return;
     const search = document.getElementById('colocar-search').value.trim().toLowerCase();
-    const soloZona = document.getElementById('colocar-solo-zona').checked && b.zona;
     const ctx = contextoVacante(b);
+    const soloLocalidad = document.getElementById('colocar-solo-zona').checked && ctx.localidad;
     const lista = postulantes
         .filter(p => p.estado !== 'Descartado' && p.id !== b.postulante_id)
         .map(p => ({ p, disp: disponibilidad(p), cerca: cercania(p, b, ctx) }))
-        .filter(x => !soloZona || x.cerca < 4)
+        .filter(({ p }) => !soloLocalidad || mismaLocalidad(p.localidad, ctx.localidad))
         .filter(({ p }) => !search || [p.nombre, p.apellido, p.dni, p.localidad, p.telefono].join(' ').toLowerCase().includes(search))
         .sort((x, y) => (x.disp === 'Disponible' ? 0 : 1) - (y.disp === 'Disponible' ? 0 : 1)
             || (x.cerca - y.cerca)
@@ -662,7 +664,7 @@ function renderColocarLista() {
                 ? `<span class="tip">Bloqueado</span>`
                 : `<button class="btn-sm" onclick="colocarDesdeModal(${p.id})"><i class="fas fa-link" style="font-size:9px"></i> Colocar</button>`}
         </div>`).join('') + (lista.length > 60 ? `<div class="tip" style="padding:8px">+ ${lista.length - 60} más: afiná la búsqueda</div>` : '')
-        : `<span class="tip">No hay postulantes ${soloZona ? 'de esa zona ' : ''}para colocar. ${soloZona ? 'Destildá "solo misma zona" o ' : ''}cargá uno nuevo.</span>`;
+        : `<span class="tip">No hay postulantes ${soloLocalidad ? 'de ' + esc(titulo_(ctx.localidad)) + ' ' : ''}para colocar. ${soloLocalidad ? 'Destildá "Solo de…" para ver al resto o ' : ''}cargá uno nuevo.</span>`;
 }
 
 async function colocarDesdeModal(pid) {

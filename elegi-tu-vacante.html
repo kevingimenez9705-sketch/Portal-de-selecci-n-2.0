@@ -163,6 +163,14 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
             </label>
             <input id="nacOtra" placeholder="¿Cuál?" maxlength="40" aria-label="Otra nacionalidad" hidden>
           </div>
+          <label>Sexo <small>(como figura en el DNI)</small>
+            <select id="sexo" aria-required="true">
+              <option value="">Elegí una opción</option>
+              <option>Femenino</option>
+              <option>Masculino</option>
+              <option value="X">X (no binario)</option>
+            </select>
+          </label>
         </div>
 
         <h2 class="section-title">Contacto</h2>
@@ -173,6 +181,17 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
           <label>¿Dónde vivís?
             <select id="locDatos" aria-required="true"><option value="">Cargando…</option></select>
           </label>
+        </div>
+
+        <h2 class="section-title">Domicilio</h2>
+        <div class="grid2">
+          <label>Calle<input id="domicilio" autocomplete="address-line1" placeholder="Ej: Av. Rivadavia" maxlength="80" aria-required="true"></label>
+          <label>Número<input id="numero" inputmode="numeric" placeholder="Ej: 4932" maxlength="10" aria-required="true"></label>
+          <label>Código postal<input id="codigoPostal" autocomplete="postal-code" placeholder="Ej: 1650" maxlength="10" aria-required="true"></label>
+          <label>Provincia
+            <select id="provincia" aria-required="true"><option value="">Cargando…</option></select>
+          </label>
+          <label>País<input id="pais" autocomplete="country-name" value="Argentina" maxlength="40" aria-required="true"></label>
         </div>
 
         <div class="intro warn" id="cargaError" role="alert" hidden>
@@ -301,7 +320,7 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
       <button type="button" class="ghost" id="back">Volver al inicio</button>
     </section>
   </main>
-  <p class="ver">Versión 2026-10-30.1</p>
+  <p class="ver">Versión 2026-11-03.1</p>
 </div>
 
 <script>
@@ -438,6 +457,7 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
       if (!cargado) {
         $('sede').innerHTML = opciones(DATA.sedes, 'Elegí la sede');
         $('inicio').innerHTML = opciones(DATA.inicios, 'Elegí una opción');
+        $('provincia').innerHTML = opciones(DATA.provincias || [], 'Elegí tu provincia');
         $('puestos').innerHTML = DATA.puestos.map(function (p) { return '<button type="button" class="pill" data-v="' + esc(p) + '" aria-pressed="false">' + esc(p) + '</button>'; }).join('');
       }
       cargado = true;
@@ -465,7 +485,13 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
       mail: $('mail').value.trim(),
       tel: $('cel').value.trim(),
       telEmergencia: $('telEmerg').value.trim(),
-      localidad: loc ? loc.nombre : ''
+      localidad: loc ? loc.nombre : '',
+      sexo: $('sexo').value,
+      domicilio: $('domicilio').value.trim(),
+      numero: $('numero').value.trim(),
+      codigoPostal: $('codigoPostal').value.trim(),
+      provincia: $('provincia').value,
+      pais: $('pais').value.trim()
     };
   }
   function cuilValido(c) {
@@ -501,6 +527,12 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
     if (te.length < 8) return { msg: 'Completá un teléfono de emergencia válido.', campo: 'telEmerg' };
     if (te === d.tel.replace(/\D/g, '')) return { msg: 'El teléfono de emergencia tiene que ser de otra persona.', campo: 'telEmerg' };
     if (!d.localidad) return { msg: 'Elegí dónde vivís.', campo: 'locDatos' };
+    if (!d.sexo) return { msg: 'Elegí el sexo que figura en tu DNI.', campo: 'sexo' };
+    if (!d.domicilio) return { msg: 'Completá la calle de tu domicilio.', campo: 'domicilio' };
+    if (!d.numero) return { msg: 'Completá el número de tu domicilio.', campo: 'numero' };
+    if (!/^[A-Z]?\d{4}[A-Z]{0,3}$/i.test(d.codigoPostal.replace(/\s+/g, ''))) return { msg: 'Revisá el código postal (4 números, o el CPA completo).', campo: 'codigoPostal' };
+    if (!d.provincia) return { msg: 'Elegí tu provincia.', campo: 'provincia' };
+    if (!d.pais) return { msg: 'Completá tu país.', campo: 'pais' };
     return null;
   }
   function docs() {
@@ -525,31 +557,21 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
     api('verificarPostulante', { datos: d }, 30000)
       .then(function (r) {
         r = r || {};
-        if (r.bloqueado) {
-          // pendiente: quedó bloqueado por documentación pero todavía no completó el formulario de la base
-          if (r.pendiente && r.docs) abrirBaseDoc(r.docs); else mostrarBloqueado();
-          return;
-        }
+        if (r.bloqueado) { mostrarBloqueado(); return; }
         if (r.postulado) { mostrarYaPostulado(r.postulado); return; }
-        if (!faltantes(dc).length) { abrirBaseSola(d); return; }
-        // Documentación incompleta: queda bloqueado (no puede volver a ingresar) y completa el formulario.
-        return api('registrarDocIncompleta', { datos: d, docs: dc }).then(function (x) {
-          x = x || {};
-          if (x.motivo === 'yaPostulado') { mostrarYaPostulado(x.vacante); return; }
-          if (x.pendiente === false) { mostrarBloqueado(); return; }
-          abrirBaseDoc(dc);
-        });
+        // Documentación incompleta: completa igual el formulario y queda en la base En espera
+        if (faltantes(dc).length) abrirBaseDoc(dc); else abrirBaseSola(d);
       })
       .then(function () { ocupado($('continuar'), false); })
       .catch(function (e) { ocupado($('continuar'), false); $('errDatos').textContent = msgError(e); });
   });
 
-  // Ya completó sus datos con documentación incompleta: no puede volver a ingresar
+  // Figura en BLOQUEADOS (por ejemplo, dijo que no le interesaba la propuesta): no puede volver a ingresar
   function mostrarBloqueado() {
     var nombre = $('nombre').value.trim();
     $('docTitulo').textContent = (nombre ? nombre + ', ' : '') + 'ya tenemos tus datos registrados.';
-    $('docTexto').textContent = 'Tu postulación quedó en espera porque la documentación figuraba incompleta. ' +
-      'Cuando tengas el Curso de Manipulación de Alimentos y el Certificado de Antecedentes Penales, el equipo de Selección se va a comunicar con vos.';
+    $('docTexto').textContent = 'No hace falta que vuelvas a completar el formulario: el equipo de Selección ya tiene tu postulación ' +
+      'y se va a comunicar con vos si surge una propuesta para tu perfil.';
     mostrar('doc');
     $('salir').focus();
   }
@@ -569,7 +591,7 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
     $('titulo').textContent = 'Postulación registrada';
   }
 
-  // Documentación incompleta: aviso + formulario obligatorio de la base (sin volver atrás)
+  // Documentación incompleta: aviso + formulario de la base (queda En espera)
   function abrirBaseDoc(dc) {
     state.origenBase = 'doc';
     state.docsBloqueo = dc;
@@ -579,7 +601,7 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
       'Te falta: ' + esc(faltantes(dc).join(' y ')) + '. Completá estos datos para quedar en nuestra base: ' +
       'cuando tengas la documentación y haya un cupo libre, te vamos a contactar.';
     $('locBase').value = state.loc;
-    $('cancelSave').hidden = true;
+    $('cancelSave').hidden = false;
     $('err').textContent = '';
     mostrar('base');
     $('titulo').textContent = 'Documentación incompleta';
@@ -602,7 +624,7 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
   $('cancelSave').addEventListener('click', function () { mostrar('datos'); });
   $('cargaRetry').addEventListener('click', function () { cargar(); });
 
-  var CAMPOS_DATOS = ['nombre', 'apellido', 'dni', 'cuil', 'fechaNac', 'nacOtra', 'mail', 'cel', 'telEmerg'];
+  var CAMPOS_DATOS = ['nombre', 'apellido', 'dni', 'cuil', 'fechaNac', 'nacOtra', 'mail', 'cel', 'telEmerg', 'domicilio', 'numero', 'codigoPostal', 'pais'];
   CAMPOS_DATOS.forEach(function (id) {
     $(id).addEventListener('input', function () { $('errDatos').textContent = ''; });
   });
@@ -655,6 +677,9 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
       $('errDatos').textContent = '';
       if (g.id === 'puestos') $('avisoExp').hidden = !esJerarquico(b.getAttribute('data-v'));
     });
+  });
+  ['sexo', 'provincia'].forEach(function (id) {
+    $(id).addEventListener('change', function () { $('errDatos').textContent = ''; });
   });
   ['sede', 'inicio'].forEach(function (id) {
     $(id).addEventListener('change', function () { $('err').textContent = ''; });
@@ -730,6 +755,9 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
     CAMPOS_DATOS.forEach(function (id) { $(id).value = ''; });
     $('nacionalidad').value = '';
     $('nacOtra').hidden = true;
+    $('sexo').value = '';
+    $('provincia').value = '';
+    $('pais').value = 'Argentina';
     limpiarGrupos(['manipulacion', 'antecedentes', 'jornada', 'dias', 'franja', 'puestos', 'interesado']);
     state.origenBase = 'datos';
     state.docsBloqueo = null;

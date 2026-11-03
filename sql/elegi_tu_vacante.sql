@@ -6,8 +6,13 @@
 --
 --   seleccion_web_datos()                   localidades, sedes y puestos
 --   seleccion_web_verificar(datos)          ¿bloqueado? ¿ya ocupa una vacante?
---   seleccion_web_doc_incompleta(datos, docs)  bloquea por documentación
+--   seleccion_web_doc_incompleta(datos, docs)  revisa (ya no bloquea)
 --   seleccion_web_guardar(datos, extra)     lo suma a la Base de postulantes
+--
+--  Bloqueado = dijo que NO le interesa la propuesta (queda en la Base, visible,
+--  y en BLOQUEADOS con motivo NO INTERESADO EN LA PROPUESTA). Con la
+--  documentación incompleta entra En espera, con el aviso en observaciones; los
+--  bloqueos viejos por DOCUMENTACIÓN INCOMPLETA ya no frenan a nadie.
 --
 --  Como en la planilla (SOLO_BASE = true): la persona deja sus datos y su
 --  disponibilidad; la vacante la asigna el equipo de Selección.
@@ -42,6 +47,12 @@ create table if not exists public.seleccion_bloqueados (
 
 alter table public.seleccion_postulantes
     add column if not exists interesado  text,
+    add column if not exists sexo             text,
+    add column if not exists domicilio        text,
+    add column if not exists domicilio_numero text,
+    add column if not exists codigo_postal    text,
+    add column if not exists provincia        text,
+    add column if not exists pais             text,
     add column if not exists formulario  jsonb,         -- lo que mandó la página, tal cual va a BASE DE DATOS
     add column if not exists en_planilla timestamptz;   -- cuándo el Apps Script copió ese formulario a la planilla
 
@@ -96,7 +107,11 @@ language sql immutable set search_path = public as $$
         'inicios',  jsonb_build_array('Inmediata', 'En 15 días', 'En 1 mes', 'Más adelante'),
         'jornadas', jsonb_build_array('Part-time', 'Full-time'),
         'franjas',  jsonb_build_array('Mañana', 'Tarde', 'Noche'),
-        'dias',     jsonb_build_array('Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'))
+        'dias',     jsonb_build_array('Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'),
+        'sexos',    jsonb_build_array('Femenino', 'Masculino', 'X'),
+        'provincias', jsonb_build_array('Buenos Aires', 'CABA', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba', 'Corrientes',
+                      'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja', 'Mendoza', 'Misiones', 'Neuquén', 'Río Negro',
+                      'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe', 'Santiago del Estero', 'Tierra del Fuego', 'Tucumán'))
 $$;
 
 -- Datos personales limpios y validados (limpiarPostulante_). Error = mensaje para la persona.
@@ -112,6 +127,14 @@ declare
     v_dni      text := regexp_replace(coalesce(d->>'dni', ''), '\D', '', 'g');
     v_cuil     text := regexp_replace(coalesce(d->>'cuil', ''), '\D', '', 'g');
     v_loc      text := seleccion_texto_(d->>'localidad', 80);
+    -- Lo que lleva la vacante: sexo (como en el DNI: F, M o X) y domicilio
+    v_sexo     text := case seleccion_texto_(d->>'sexo', 20) when 'Femenino' then 'F' when 'Masculino' then 'M' when 'X' then 'X'
+                            when 'F' then 'F' when 'M' then 'M' else '' end;
+    v_dom      text := seleccion_texto_(d->>'domicilio', 80);
+    v_num      text := seleccion_texto_(d->>'numero', 10);
+    v_cp       text := upper(replace(seleccion_texto_(d->>'codigoPostal', 10), ' ', ''));
+    v_prov     text := seleccion_texto_(d->>'provincia', 40);
+    v_pais     text := seleccion_texto_(d->>'pais', 40);
     v_fnac     date;
     v_edad     int;
 begin
@@ -135,21 +158,30 @@ begin
         raise exception 'El teléfono de emergencia tiene que ser de otra persona.';
     end if;
     if v_loc = '' then raise exception 'Elegí dónde vivís.'; end if;
+    if v_sexo = '' then raise exception 'Elegí el sexo que figura en tu DNI.'; end if;
+    if v_dom = '' then raise exception 'Completá la calle de tu domicilio.'; end if;
+    if v_num = '' then raise exception 'Completá el número de tu domicilio.'; end if;
+    if v_cp !~ '^[A-Z]?\d{4}[A-Z]{0,3}$' then raise exception 'Revisá el código postal (4 números, o el CPA completo).'; end if;
+    if not (seleccion_web_opciones_()->'provincias' ? v_prov) then raise exception 'Elegí tu provincia.'; end if;
+    if v_pais = '' then raise exception 'Completá tu país.'; end if;
 
     return jsonb_build_object(
         'nombre', v_nombre, 'apellido', v_apellido, 'mail', v_mail, 'tel', v_tel, 'tel_emergencia', v_tel_e,
         'fecha_nac', v_fnac, 'nacionalidad', v_nac, 'dni', v_dni, 'cuil', v_cuil, 'localidad', v_loc,
+        'sexo', v_sexo, 'domicilio', v_dom, 'domicilio_numero', v_num, 'codigo_postal', v_cp, 'provincia', v_prov, 'pais', v_pais,
         -- claves para reconocer a la misma persona
         'k_dni', ltrim(v_dni, '0'),
         'k_tel', case when length(seleccion_clave_tel_(v_tel)) >= 8 then seleccion_clave_tel_(v_tel) else '' end);
 end;
 $$;
 
--- Motivo del bloqueo ACTIVO de la persona ('' si no tiene motivo) o null si no está bloqueada
+-- Motivo del bloqueo ACTIVO de la persona ('' si no tiene motivo) o null si no está bloqueada.
+-- Los bloqueos por documentación incompleta ya no cuentan.
 create or replace function public.seleccion_web_bloqueo_(p jsonb) returns text
 language sql stable set search_path = public as $$
     select coalesce(b.motivo, '') from seleccion_bloqueados b
      where b.activo
+       and seleccion_norm_(b.motivo) not like '%DOCUMENTACION INCOMPLETA%'
        and ((p->>'k_dni' <> '' and ltrim(regexp_replace(coalesce(b.dni, ''), '\D', '', 'g'), '0') = p->>'k_dni')
          or regexp_replace(coalesce(b.cuil, ''), '\D', '', 'g') = p->>'cuil'
          or lower(trim(coalesce(b.mail, ''))) = p->>'mail'
@@ -239,26 +271,20 @@ language sql stable security definer set search_path = public as $$
                                       from seleccion_zonas z), '[]'::jsonb))
 $$;
 
--- Paso 1: ¿ya quedó bloqueada por documentación? (pendiente = todavía no completó la base) ¿ya ocupa una vacante?
+-- Paso 1: ¿está bloqueada? ¿ya ocupa una vacante?
 create or replace function public.seleccion_web_verificar(datos jsonb) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare
     p jsonb := seleccion_web_persona_(datos);
-    v_motivo text := seleccion_web_bloqueo_(p);
-    v_docs jsonb;
-    v_pendiente boolean;
 begin
-    if v_motivo is not null then
-        v_docs := seleccion_web_docs_(v_motivo);
-        v_pendiente := v_docs is not null and seleccion_web_postulante_id_(p) is null;
-        return jsonb_build_object('bloqueado', true, 'pendiente', v_pendiente,
-                                  'docs', case when v_pendiente then v_docs end, 'postulado', null);
+    if seleccion_web_bloqueo_(p) is not null then
+        return jsonb_build_object('bloqueado', true, 'pendiente', false, 'docs', null, 'postulado', null);
     end if;
     return jsonb_build_object('bloqueado', false, 'pendiente', false, 'docs', null, 'postulado', seleccion_web_postulacion_(p));
 end;
 $$;
 
--- Documentación incompleta: queda bloqueada (como en BLOQUEADOS). La fila de la base llega después con el formulario.
+-- Documentación incompleta: ya no bloquea (entra En espera con el formulario). Queda por si una pestaña vieja la llama.
 create or replace function public.seleccion_web_doc_incompleta(datos jsonb, docs jsonb) returns jsonb
 language plpgsql volatile security definer set search_path = public as $$
 declare
@@ -269,18 +295,9 @@ declare
 begin
     if v_manip is null or v_antec is null then raise exception 'Respondé las preguntas de documentación.'; end if;
     if v_manip = 'Sí' and v_antec = 'Sí' then raise exception 'La documentación está completa.'; end if;
-    perform pg_advisory_xact_lock(hashtext('seleccion_web'));
-
-    if seleccion_web_bloqueo_(p) is null then
-        -- Quien ya ocupa una vacante no se bloquea
-        v_previa := seleccion_web_postulacion_(p);
-        if v_previa is not null then return jsonb_build_object('ok', false, 'motivo', 'yaPostulado', 'vacante', v_previa); end if;
-        perform seleccion_web_freno_();
-        insert into seleccion_bloqueados (dni, cuil, nombre, apellido, mail, tel, localidad, motivo, activo, origen)
-        values (p->>'dni', p->>'cuil', p->>'nombre', p->>'apellido', p->>'mail', p->>'tel', p->>'localidad',
-                'DOCUMENTACIÓN INCOMPLETA: falta ' || seleccion_web_faltan_(v_manip, v_antec), true, 'PORTAL');
-    end if;
-    return jsonb_build_object('ok', true, 'pendiente', seleccion_web_postulante_id_(p) is null);
+    v_previa := seleccion_web_postulacion_(p);
+    if v_previa is not null then return jsonb_build_object('ok', false, 'motivo', 'yaPostulado', 'vacante', v_previa); end if;
+    return jsonb_build_object('ok', true, 'pendiente', true);
 end;
 $$;
 
@@ -300,7 +317,7 @@ declare
     v_coment text := seleccion_texto_(e->>'comentarios', 500);
     v_dias text[]; v_franjas text[]; v_jornadas text[];
     v_motivo text; v_docs jsonb; v_previa jsonb; v_faltan text; v_motivo_doc text;
-    v_horario text; v_observ text; v_categoria text; v_formulario jsonb; v_id bigint;
+    v_horario text; v_observ text; v_categoria text; v_formulario jsonb; v_id bigint; v_estado text;
 begin
     -- Días, horarios y jornada: solo valores de la lista, en el orden de la lista
     select coalesce(array_agg(x order by n), '{}') into v_dias from jsonb_array_elements_text(o->'dias') with ordinality as t(x, n)
@@ -313,16 +330,7 @@ begin
     perform pg_advisory_xact_lock(hashtext('seleccion_web'));
 
     v_motivo := seleccion_web_bloqueo_(p);
-    if v_motivo is not null then
-        -- Solo sigue quien quedó bloqueado por documentación y todavía no completó este formulario.
-        -- Valen las respuestas de documentación del bloqueo, no las que mande ahora.
-        v_docs := seleccion_web_docs_(v_motivo);
-        if v_docs is null or seleccion_web_postulante_id_(p) is not null then
-            return jsonb_build_object('ok', false, 'motivo', 'bloqueado');
-        end if;
-        v_manip := v_docs->>'manipulacion';
-        v_antec := v_docs->>'antecedentes';
-    end if;
+    if v_motivo is not null then return jsonb_build_object('ok', false, 'motivo', 'bloqueado'); end if;
     -- Quien ya ocupa una vacante no se suma además a la base
     v_previa := seleccion_web_postulacion_(p);
     if v_previa is not null then return jsonb_build_object('ok', false, 'motivo', 'yaPostulado', 'vacante', v_previa); end if;
@@ -350,17 +358,19 @@ begin
     v_formulario := jsonb_build_object('fecha', now(), 'horario', v_horario, 'observaciones', v_observ, 'inicio', v_inicio,
                                        'comentarios', v_coment, 'dias', to_jsonb(v_dias), 'franjas', to_jsonb(v_franjas),
                                        'jornadas', to_jsonb(v_jornadas));
+    v_estado := case when v_interesado = 'No' then 'Bloqueado' else 'En espera' end;
 
     v_id := seleccion_web_postulante_id_(p);
     if v_id is null then
         insert into seleccion_postulantes (nombre, apellido, dni, cuil, telefono, email, fecha_nacimiento, nacionalidad, tel_emergencia,
             zona, localidad, sede_entrevista, puesto_interes, horario, curso_manipulacion, antecedentes, interesado,
-            observaciones, estado, origen, creado_por, formulario, en_planilla)
+            observaciones, estado, origen, creado_por, formulario, en_planilla,
+            sexo, domicilio, domicilio_numero, codigo_postal, provincia, pais)
         values (p->>'nombre', p->>'apellido', p->>'dni', p->>'cuil', p->>'tel', p->>'mail', (p->>'fecha_nac')::date, p->>'nacionalidad',
             p->>'tel_emergencia', seleccion_web_zona_(p->>'localidad'), p->>'localidad', v_sede, v_puesto, v_categoria, v_manip, v_antec,
-            v_interesado, v_observ || ' · Disponibilidad: ' || v_horario,
-            case when v_motivo_doc is not null then 'Bloqueado' else 'En espera' end,
-            'ELEGÍ TU VACANTE', 'Elegí tu vacante', v_formulario, null);
+            v_interesado, v_observ || ' · Disponibilidad: ' || v_horario, v_estado,
+            'ELEGÍ TU VACANTE', 'Elegí tu vacante', v_formulario, null,
+            p->>'sexo', p->>'domicilio', p->>'domicilio_numero', p->>'codigo_postal', p->>'provincia', p->>'pais');
     else
         -- Ya estaba en la base: se actualiza su disponibilidad (en la planilla suma una fila nueva, como antes).
         -- Nombre, contacto y estado que cargó el equipo no se pisan; solo se completan si estaban vacíos.
@@ -375,15 +385,18 @@ begin
             sede_entrevista = v_sede, puesto_interes = v_puesto, horario = v_categoria,
             curso_manipulacion = v_manip, antecedentes = v_antec, interesado = v_interesado,
             observaciones = v_observ || ' · Disponibilidad: ' || v_horario,
-            estado = case when v_motivo_doc is not null and t.estado is distinct from 'Descartado' then 'Bloqueado' else t.estado end,
+            estado = case when v_interesado = 'No' and t.estado is distinct from 'Descartado' then 'Bloqueado' else t.estado end,
+            sexo = p->>'sexo', domicilio = p->>'domicilio', domicilio_numero = p->>'domicilio_numero',
+            codigo_postal = p->>'codigo_postal', provincia = p->>'provincia', pais = p->>'pais',
             formulario = v_formulario, en_planilla = null
          where t.id = v_id;
     end if;
 
-    -- Documentación incompleta sin bloqueo previo: queda bloqueado igual que antes
-    if v_motivo_doc is not null and v_motivo is null then
+    -- No le interesa la propuesta: queda bloqueado (también en la pestaña BLOQUEADOS)
+    if v_interesado = 'No' then
         insert into seleccion_bloqueados (dni, cuil, nombre, apellido, mail, tel, localidad, motivo, activo, origen)
-        values (p->>'dni', p->>'cuil', p->>'nombre', p->>'apellido', p->>'mail', p->>'tel', p->>'localidad', v_motivo_doc, true, 'PORTAL');
+        values (p->>'dni', p->>'cuil', p->>'nombre', p->>'apellido', p->>'mail', p->>'tel', p->>'localidad',
+                'NO INTERESADO EN LA PROPUESTA', true, 'PORTAL');
     end if;
     return jsonb_build_object('ok', true);
 end;
@@ -406,7 +419,9 @@ begin
                     'observaciones', t.formulario->>'observaciones', 'manipulacion', t.curso_manipulacion,
                     'antecedentes', t.antecedentes, 'interesado', t.interesado, 'dni', t.dni,
                     'cuil', case when t.cuil ~ '^\d{11}$' then substr(t.cuil, 1, 2) || '-' || substr(t.cuil, 3, 8) || '-' || substr(t.cuil, 11) else t.cuil end,
-                    'nacionalidad', t.nacionalidad, 'tel_emergencia', t.tel_emergencia) order by t.id)
+                    'nacionalidad', t.nacionalidad, 'tel_emergencia', t.tel_emergencia,
+                    'sexo', t.sexo, 'domicilio', t.domicilio, 'domicilio_numero', t.domicilio_numero,
+                    'codigo_postal', t.codigo_postal, 'provincia', t.provincia, 'pais', t.pais) order by t.id)
                   from seleccion_postulantes t where t.formulario is not null and t.en_planilla is null), '[]'::jsonb),
         'bloqueados', coalesce((select jsonb_agg(jsonb_build_object(
                     'id', b.id, 'fecha', to_char(b.fecha at time zone 'America/Argentina/Buenos_Aires', 'FMDD/FMMM/YYYY HH24:MI:SS'),

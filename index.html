@@ -210,17 +210,19 @@
     <div class="modal-box" style="max-width:1100px">
         <div class="modal-title"><i class="fas fa-file-import" style="font-size:13px;opacity:.5;margin-right:6px"></i> Importar solicitudes</div>
         <ol class="pasos">
-            <li>En la hoja <strong>SOLICITUDES DE PERSONAL</strong> seleccioná las filas de los locales (podés incluir el encabezado) y copiá con <strong>Ctrl+C</strong>.</li>
-            <li>Pegá acá abajo con <strong>Ctrl+V</strong> y tocá <strong>Revisar</strong>: se arma una vacante por cada perfil pedido en <em>Perfiles a solicitar</em> (GT, ET, ENT, FULL, PART).</li>
+            <li><strong>Recomendado:</strong> en la planilla de <strong>SOLICITUDES DE PERSONAL</strong> andá a Archivo → Descargar → <strong>Microsoft Excel (.xlsx)</strong> y subilo acá: se leen todas las filas, sin copiar ni pegar.</li>
+            <li>También podés copiar las filas (con el encabezado) y pegarlas abajo, y tocar <strong>Revisar</strong>. Se arma una vacante por cada perfil pedido en <em>Perfiles a solicitar</em> (GT, ET, ENT, FULL, PART).</li>
         </ol>
         <div class="form-row" style="grid-template-columns:1fr 1fr 1fr">
             <div class="form-group"><label>Marca (si el local no la dice)</label><select class="form-input" id="imp-marca"></select></div>
             <div class="form-group"><label>Fecha de apertura</label><input class="form-input" id="imp-inicio" type="date"></div>
             <div class="form-group"><label>Jornada</label><select class="form-input" id="imp-jornada"></select></div>
         </div>
-        <textarea class="form-input" id="imp-texto" rows="6" placeholder="Pegá acá las filas copiadas de la planilla…" style="font-family:var(--mono);font-size:11px"></textarea>
+        <label class="imp-archivo"><i class="fas fa-file-excel"></i> <span id="imp-archivo-txt">Subir el Excel de la planilla (.xlsx)</span>
+            <input type="file" id="imp-archivo" accept=".xlsx,.xls,.ods" onchange="leerExcelSolicitudes(this)"></label>
+        <textarea class="form-input" id="imp-texto" rows="4" placeholder="…o pegá acá las filas copiadas de la planilla" style="font-family:var(--mono);font-size:11px"></textarea>
         <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <button class="btn-sm" id="btn-revisar" onclick="revisarImportacion()"><i class="fas fa-search"></i> Revisar</button>
+            <button class="btn-sm" id="btn-revisar" onclick="revisarImportacion()"><i class="fas fa-search"></i> Revisar lo pegado</button>
             <span class="tip" id="imp-resumen"></span>
         </div>
         <div id="imp-preview" class="imp-preview"></div>
@@ -259,7 +261,7 @@
         <div class="modal-footer">
             <button class="btn-cancel" onclick="closeModal('modal-icheck')">Cerrar</button>
             <button class="btn-secundario" id="btn-icheck-cargados" onclick="marcarIcheckCargados()"><i class="fas fa-check-double"></i> Ya los cargué</button>
-            <button class="btn-primary" id="btn-icheck-bajar" onclick="descargarIcheck()"><i class="fas fa-download"></i> Descargar</button>
+            <button class="btn-primary" id="btn-icheck-bajar" onclick="descargarIcheck()"><i class="fas fa-download"></i> Descargar Excel para iCheck</button>
         </div>
     </div>
 </div>
@@ -301,6 +303,13 @@
             <div class="form-group"><label>Nacionalidad</label><input class="form-input" id="p-nacionalidad" list="dl-nacionalidad"></div>
             <div class="form-group"><label>Tel. de emergencia</label><input class="form-input" id="p-tel-emergencia"></div>
             <div class="form-group"><label>Sugerido para (Elegí tu vacante)</label><input class="form-input" id="p-sugerido-para"></div>
+            <div class="form-group"><label>¿Le interesa la propuesta?</label><select class="form-input" id="p-interesado"><option value="">—</option><option>Sí</option><option>No</option></select></div>
+            <div class="form-group"><label>Sexo (DNI)</label><select class="form-input" id="p-sexo"><option value="">—</option><option value="F">F</option><option value="M">M</option><option value="X">X</option></select></div>
+            <div class="form-group"><label>Domicilio (calle)</label><input class="form-input" id="p-domicilio"></div>
+            <div class="form-group"><label>Número</label><input class="form-input" id="p-domicilio-numero"></div>
+            <div class="form-group"><label>Código postal</label><input class="form-input" id="p-codigo-postal"></div>
+            <div class="form-group"><label>Provincia</label><input class="form-input" id="p-provincia"></div>
+            <div class="form-group"><label>País</label><input class="form-input" id="p-pais"></div>
             <div class="form-group form-full"><label>CV (link)</label><input class="form-input" id="p-cv-url" placeholder="https://drive.google.com/…"></div>
             <div class="form-group form-full"><label>Observaciones</label><input class="form-input" id="p-observaciones"></div>
         </div>
