@@ -20,10 +20,11 @@
    1. TAREAS GRUPALES → Extensiones → Apps Script → ＋ Archivo → Secuencia de
       comandos → nombre: SincronizarPortal → pegar este archivo → Guardar.
       (También funciona como proyecto aparte en script.google.com.)
-   2. ⚙️ Configuración del proyecto → Propiedades de la secuencia de comandos
-      → Agregar: CODIGO_EQUIPO = (el código del equipo del portal).
-   3. Elegir probarConexionPortal → Ejecutar → aceptar permisos → tiene que decir ✅.
-   4. Elegir activarSincronizacionPortal → Ejecutar.
+   2. Más abajo, en CODIGO_PORTAL_PARA_GUARDAR, escribir el código del equipo
+      entre las comillas → Guardar → elegir guardarCodigoPortal → Ejecutar →
+      aceptar permisos → tiene que decir ✅. Después BORRAR el código de esa
+      línea (dejar '') y Guardar: ya quedó guardado aparte, sin estar a la vista.
+   3. Elegir activarSincronizacionPortal → Ejecutar.
    Listo. Para frenarla: desactivarSincronizacionPortal. A mano: sincronizarPortal.
    ========================================================= */
 
@@ -32,6 +33,21 @@ function sincronizarPortalProgramado_() { return PortalSync.sincronizar(false); 
 function activarSincronizacionPortal() { return PortalSync.activar(); }
 function desactivarSincronizacionPortal() { return PortalSync.desactivar(); }
 function probarConexionPortal() { return PortalSync.probarConexion(); }
+
+// PASO 2 de INSTALAR: el código va acá solo un momento. Después de ejecutar guardarCodigoPortal, dejalo vacío ('').
+var CODIGO_PORTAL_PARA_GUARDAR = '';
+
+function guardarCodigoPortal() {
+  const c = String(CODIGO_PORTAL_PARA_GUARDAR || '').trim();
+  if (!c) {
+    const ya = PropertiesService.getScriptProperties().getProperty('CODIGO_EQUIPO');
+    throw new Error(ya ? 'El código ya está guardado. Para cambiarlo, escribilo en CODIGO_PORTAL_PARA_GUARDAR y volvé a ejecutar.'
+                       : 'Escribí el código del equipo en CODIGO_PORTAL_PARA_GUARDAR (entre las comillas), guardá y volvé a ejecutar.');
+  }
+  PropertiesService.getScriptProperties().setProperty('CODIGO_EQUIPO', c);
+  if (PortalSync.probarConexion() !== true) throw new Error('❌ Quedó guardado, pero el portal no lo reconoce: revisá que sea el mismo código del portal.');
+  console.log('✅ Código guardado. Ahora borrá el código de CODIGO_PORTAL_PARA_GUARDAR (dejá \'\'), guardá y seguí con activarSincronizacionPortal.');
+}
 
 var PortalSync = (function () {
 
@@ -507,7 +523,7 @@ var PortalSync = (function () {
 
   function codigoEquipo_() {
     const c = PropertiesService.getScriptProperties().getProperty('CODIGO_EQUIPO');
-    if (!c) throw new Error('Falta el código: ⚙️ Configuración del proyecto → Propiedades de la secuencia de comandos → CODIGO_EQUIPO.');
+    if (!c) throw new Error('Falta el código del equipo: escribilo en CODIGO_PORTAL_PARA_GUARDAR y ejecutá guardarCodigoPortal.');
     return c.trim();
   }
 
