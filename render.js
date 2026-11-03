@@ -81,8 +81,12 @@ function renderSelectorChips() {
     const box = document.getElementById('selector-chips');
     box.innerHTML = ['', ...selectores()].map(s => {
         const activo = s === selectorFiltroActivo;
-        // Chips neutros: el único color del tablero es el estado de cada búsqueda
-        return `<button class="selector-chip${activo ? ' active' : ''}${s ? ' con-avatar' : ''}" data-sel="${esc(s)}" onclick="filtrarPorSelector(this.dataset.sel)">${s ? avatarHtml(s, 'avatar-chip') : ''}${esc(s || 'Todos los selectores')}</button>`;
+        // Cada selector con su color (Equipo); "Todos" queda neutro
+        const color = s ? colorDe(s) : null;
+        const style = color
+            ? ` style="${activo ? `background:${color};border-color:${color};color:#fff;` : `border-color:${color}55;color:#334155;`}"`
+            : '';
+        return `<button class="selector-chip${activo ? ' active' : ''}${s ? ' con-avatar' : ''}"${style} data-sel="${esc(s)}" onclick="filtrarPorSelector(this.dataset.sel)">${s ? avatarHtml(s, 'avatar-chip') : ''}${esc(s || 'Todos los selectores')}</button>`;
     }).join('');
 }
 function filtrarPorSelector(nombre) {

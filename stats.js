@@ -25,7 +25,7 @@ function barrasCumplimiento(grupos, claseFill = '', conFoto = false) {
     return filas.length ? filas.map(f => `
         <div class="bar-row"><div class="bar-row-top"><span>${conFoto && equipo.some(e => e.nombre === f.k) ? avatarHtml(f.k, 'avatar-barra') : ''}${esc(f.k)}</span>
             <span>${f.cubiertas}/${f.total} · ${f.pct}%${f.pendientes ? ` · <span style="color:var(--red)">${f.pendientes} pend.</span>` : ''}</span></div>
-            <div class="bar-track"><div class="bar-fill ${claseFill}" style="width:${f.pct}%"></div></div></div>`).join('')
+            <div class="bar-track"><div class="bar-fill ${claseFill}" style="width:${f.pct}%${conFoto && equipo.some(e => e.nombre === f.k) ? ';background:' + colorDe(f.k) : ''}"></div></div></div>`).join('')
         : '<span class="tip">Sin datos</span>';
 }
 
