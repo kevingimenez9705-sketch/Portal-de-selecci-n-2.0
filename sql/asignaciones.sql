@@ -47,28 +47,41 @@ language sql immutable set search_path = public as $$
     end
 $$;
 
+-- Rendimiento: la clave de cada local del portal (y de sus alias) se calcula UNA vez
+-- por llamada y se cruza con las filas de la hoja. Antes se recalculaba por cada
+-- fila × cada local (200 × 229 × 11 regex) y superaba el statement_timeout (3 s).
 create or replace function public.seleccion_asignaciones_sync(filas jsonb) returns jsonb
 language plpgsql volatile security definer set search_path = public as $$   -- definer: usa seleccion_norm_ (cerrada al público); igual exige el código
 declare
-    r record; l record; v_sel text; nueva jsonb; vieja jsonb;
+    r record; v_sel text; nueva jsonb; vieja jsonb;
     actualizados int := 0; sin_cambios int := 0;
     sin_local text[] := '{}'; sin_selector text[] := '{}';
 begin
     if not (seleccion_codigo_ok() or current_user = 'service_role') then
         raise exception 'Código de equipo inválido' using errcode = '42501';
     end if;
-    for r in select * from jsonb_to_recordset(coalesce(filas, '[]')) as x(marca text, selector text, regional text, zonal text, local text, estado text) loop
-        select * into l from seleccion_locales s
-         where s.marca = r.marca and (seleccion_clave_local_(s.local) = seleccion_clave_local_(r.local)
-            or seleccion_clave_local_(r.local) in (select seleccion_clave_local_(a) from unnest(coalesce(s.alias, '{}')) a))
+    for r in
+        with h as (
+            select x.*, row_number() over () as n,
+                   seleccion_clave_local_(x.local) as clave, seleccion_norm_(x.local) as norm
+              from jsonb_to_recordset(coalesce(filas, '[]')) as x(marca text, selector text, regional text, zonal text, local text, estado text)
+        ), p as (   -- cada local del portal con su nombre y sus alias, ya normalizados
+            select s.id, s.marca, s.activo, seleccion_clave_local_(t.nombre) as clave, seleccion_norm_(t.nombre) as norm
+              from seleccion_locales s
+             cross join lateral (select s.local as nombre union all select a from unnest(coalesce(s.alias, '{}')) a) t
+             where s.marca in (select distinct h.marca from h)
+        )
+        select distinct on (h.n) h.*, p.id as local_id
+          from h left join p on p.marca = h.marca and p.clave = h.clave
          -- primero el nombre exacto (local o alias): "SANTA FE 1" y "SANTA FE (PROVINCIA)" comparten clave
-         order by (seleccion_norm_(r.local) = seleccion_norm_(s.local) or seleccion_norm_(r.local) in (select seleccion_norm_(a) from unnest(coalesce(s.alias, '{}')) a)) desc,
-                  s.activo desc nulls last, s.id limit 1;
-        if not found then
+         order by h.n, coalesce(p.norm = h.norm, false) desc, p.activo desc nulls last, p.id
+    loop
+        if r.local_id is null then
             if array_length(sin_local, 1) is null or array_length(sin_local, 1) < 40 then sin_local := sin_local || trim(r.local); end if;
             continue;
         end if;
         -- El selector de la hoja ("AGUSTINA", "Agustina Castillo") → nombre del equipo en el portal
+        v_sel := null;
         select e.nombre into v_sel from seleccion_equipo e
          where e.es_selector and nullif(trim(r.selector), '') is not null
            and (seleccion_norm_(e.nombre) = seleccion_norm_(split_part(r.selector, '·', 1))
@@ -80,7 +93,7 @@ begin
         end if;
         nueva := jsonb_strip_nulls(jsonb_build_object('selector', v_sel, 'regional', nullif(trim(r.regional), ''),
             'zonal', nullif(trim(r.zonal), ''), 'estado_nomina', seleccion_estado_nomina_(r.estado)));
-        vieja := coalesce(l.asignacion_hoja, '{}');
+        select coalesce(s.asignacion_hoja, '{}') into vieja from seleccion_locales s where s.id = r.local_id;
         if nueva = vieja then sin_cambios := sin_cambios + 1; continue; end if;
         update seleccion_locales set
             selector      = case when nueva ? 'selector' and nueva->>'selector' is distinct from vieja->>'selector' then nueva->>'selector' else selector end,
@@ -88,7 +101,7 @@ begin
             zonal         = case when nueva ? 'zonal' and nueva->>'zonal' is distinct from vieja->>'zonal' then nueva->>'zonal' else zonal end,
             estado_nomina = case when nueva ? 'estado_nomina' and nueva->>'estado_nomina' is distinct from vieja->>'estado_nomina' then nueva->>'estado_nomina' else estado_nomina end,
             asignacion_hoja = nueva
-         where id = l.id;
+         where id = r.local_id;
         actualizados := actualizados + 1;
     end loop;
     return jsonb_build_object('actualizados', actualizados, 'sin_cambios', sin_cambios,
