@@ -11,7 +11,8 @@
 --   - Si no está en el portal, se agrega (origen = 'TAREAS GRUPALES').
 --   - Si ya está, solo se completan los datos vacíos: lo que el equipo
 --     editó en el portal no se pisa. Excepciones: "Sugerido para" se toma
---     de la planilla, y si la planilla dice Bloqueado/Descartado, se aplica.
+--     de la planilla, y si la planilla dice Bloqueado/Descartado, se aplica
+--     (Bloqueado = no le interesa la propuesta o figura en BLOQUEADOS).
 --   - Exige el código del equipo (encabezado x-codigo-equipo) o la clave
 --     de servicio.
 --
@@ -24,7 +25,14 @@ alter table public.seleccion_postulantes
     add column if not exists nacionalidad   text,
     add column if not exists tel_emergencia text,
     add column if not exists sugerido_para  text,
-    add column if not exists origen         text;   -- 'TAREAS GRUPALES' si vino de la planilla
+    add column if not exists origen         text,   -- 'TAREAS GRUPALES' si vino de la planilla
+    add column if not exists interesado       text,
+    add column if not exists sexo             text,
+    add column if not exists domicilio        text,
+    add column if not exists domicilio_numero text,
+    add column if not exists codigo_postal    text,
+    add column if not exists provincia        text,
+    add column if not exists pais             text;
 
 create index if not exists seleccion_postulantes_email_idx on public.seleccion_postulantes (lower(trim(email)));
 
@@ -65,12 +73,20 @@ begin
                nullif(regexp_replace(coalesce(r.cuil, ''), '\D', '', 'g'), '') as cuil,
                nullif(trim(r.nacionalidad), '')                             as nacionalidad,
                nullif(trim(r.tel_emergencia), '')                           as tel_emergencia,
-               nullif(trim(r.sugerido_para), '')                            as sugerido_para
+               nullif(trim(r.sugerido_para), '')                            as sugerido_para,
+               case when r.interesado in ('Sí', 'No') then r.interesado end as interesado,
+               case when upper(trim(r.sexo)) in ('F', 'M', 'X') then upper(trim(r.sexo)) end as sexo,
+               nullif(trim(r.domicilio), '')                                as domicilio,
+               nullif(trim(r.domicilio_numero), '')                         as domicilio_numero,
+               nullif(trim(r.codigo_postal), '')                            as codigo_postal,
+               nullif(trim(r.provincia), '')                                as provincia,
+               nullif(trim(r.pais), '')                                     as pais
           into x
           from jsonb_to_record(f) as r(nombre text, apellido text, dni text, telefono text, email text,
                fecha_nacimiento text, zona text, localidad text, sede_entrevista text, puesto_interes text,
                horario text, curso_manipulacion text, antecedentes text, cv_url text, observaciones text,
-               estado text, cuil text, nacionalidad text, tel_emergencia text, sugerido_para text);
+               estado text, cuil text, nacionalidad text, tel_emergencia text, sugerido_para text,
+               interesado text, sexo text, domicilio text, domicilio_numero text, codigo_postal text, provincia text, pais text);
 
         if x.nombre is null or (x.dni is null and x.email is null) then
             omitidas := omitidas + 1;
@@ -88,10 +104,12 @@ begin
         if v_id is null then
             insert into seleccion_postulantes (nombre, apellido, dni, telefono, email, fecha_nacimiento, zona, localidad,
                 sede_entrevista, puesto_interes, horario, curso_manipulacion, antecedentes, cv_url, observaciones, estado,
-                cuil, nacionalidad, tel_emergencia, sugerido_para, origen)
+                cuil, nacionalidad, tel_emergencia, sugerido_para, origen,
+                interesado, sexo, domicilio, domicilio_numero, codigo_postal, provincia, pais)
             values (x.nombre, x.apellido, x.dni, x.telefono, x.email, x.fecha_nacimiento, x.zona, x.localidad,
                 x.sede_entrevista, x.puesto_interes, x.horario, x.curso_manipulacion, x.antecedentes, x.cv_url, x.observaciones, x.estado,
-                x.cuil, x.nacionalidad, x.tel_emergencia, x.sugerido_para, 'TAREAS GRUPALES');
+                x.cuil, x.nacionalidad, x.tel_emergencia, x.sugerido_para, 'TAREAS GRUPALES',
+                x.interesado, x.sexo, x.domicilio, x.domicilio_numero, x.codigo_postal, x.provincia, x.pais);
             nuevos := nuevos + 1;
             continue;
         end if;
@@ -117,11 +135,19 @@ begin
             cuil               = coalesce(p.cuil, x.cuil),
             nacionalidad       = coalesce(p.nacionalidad, x.nacionalidad),
             tel_emergencia     = coalesce(p.tel_emergencia, x.tel_emergencia),
-            sugerido_para      = coalesce(x.sugerido_para, p.sugerido_para)
+            sugerido_para      = coalesce(x.sugerido_para, p.sugerido_para),
+            interesado         = coalesce(p.interesado, x.interesado),
+            sexo               = coalesce(p.sexo, x.sexo),
+            domicilio          = coalesce(p.domicilio, x.domicilio),
+            domicilio_numero   = coalesce(p.domicilio_numero, x.domicilio_numero),
+            codigo_postal      = coalesce(p.codigo_postal, x.codigo_postal),
+            provincia          = coalesce(p.provincia, x.provincia),
+            pais               = coalesce(p.pais, x.pais)
         where p.id = v_id
           and (p.apellido, p.dni, p.telefono, p.email, p.fecha_nacimiento, p.zona, p.localidad, p.sede_entrevista,
                p.puesto_interes, p.horario, p.curso_manipulacion, p.antecedentes, p.cv_url, p.observaciones, p.estado,
-               p.cuil, p.nacionalidad, p.tel_emergencia, p.sugerido_para)
+               p.cuil, p.nacionalidad, p.tel_emergencia, p.sugerido_para,
+               p.interesado, p.sexo, p.domicilio, p.domicilio_numero, p.codigo_postal, p.provincia, p.pais)
               is distinct from
               (coalesce(p.apellido, x.apellido), coalesce(p.dni, x.dni), coalesce(p.telefono, x.telefono),
                coalesce(p.email, x.email), coalesce(p.fecha_nacimiento, x.fecha_nacimiento), coalesce(p.zona, x.zona),
@@ -131,7 +157,10 @@ begin
                coalesce(p.cv_url, x.cv_url), coalesce(p.observaciones, x.observaciones),
                case when x.estado in ('Bloqueado', 'Descartado') then x.estado else p.estado end,
                coalesce(p.cuil, x.cuil), coalesce(p.nacionalidad, x.nacionalidad),
-               coalesce(p.tel_emergencia, x.tel_emergencia), coalesce(x.sugerido_para, p.sugerido_para));
+               coalesce(p.tel_emergencia, x.tel_emergencia), coalesce(x.sugerido_para, p.sugerido_para),
+               coalesce(p.interesado, x.interesado), coalesce(p.sexo, x.sexo), coalesce(p.domicilio, x.domicilio),
+               coalesce(p.domicilio_numero, x.domicilio_numero), coalesce(p.codigo_postal, x.codigo_postal),
+               coalesce(p.provincia, x.provincia), coalesce(p.pais, x.pais));
         get diagnostics n = row_count;
         if n > 0 then completados := completados + 1; else sin_cambios := sin_cambios + 1; end if;
     end loop;

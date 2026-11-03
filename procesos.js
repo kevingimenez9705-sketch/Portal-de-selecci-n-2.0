@@ -2,8 +2,9 @@
 //  PROCESOS DE TAREAS GRUPALES
 //  · Datos de ingreso (CopiarDatosIngreso.gs): las respuestas del formulario de ingreso
 //    completan los datos de la persona en su vacante, buscándola por email.
-//  · iCheck (pestaña exportacion_icheck): las vacantes en HUELLA se bajan con las
-//    columnas de iCheck; después de subirlas, "Ya los cargué" las saca de la lista.
+//  · iCheck (pestaña exportacion_icheck): las vacantes en HUELLA se bajan en un Excel con el
+//    formato de importación de iCheck (Formato_Importacion_Personas.xlsx: Hoja1, 30 columnas,
+//    todo como texto); después de subirlo, "Ya los cargué" las saca de la lista.
 // ══════════════════════════════════════════════
 
 // ── DATOS DE INGRESO ──
@@ -98,7 +99,8 @@ async function aplicarDatosIngreso() {
 }
 
 // ── ICHECK ──
-const ICHECK_COLUMNAS = ['NOMBRES (*)', 'APELLIDO (*)', 'SEXO (M-F-X)', 'NUMERO DE DNI (*)', 'NUMERO DE CUIL', 'FECHA DE NACIMIENTO', 'MAIL',
+// Encabezados exactos de la plantilla de iCheck (CUIL lleva un espacio al final)
+const ICHECK_COLUMNAS = ['NOMBRES (*)', 'APELLIDO (*)', 'SEXO (M-F)', 'NUMERO DE DNI (*)', 'NUMERO DE CUIL ', 'FECHA DE NACIMIENTO', 'MAIL',
     'LEGAJO', 'SUCURSAL', 'FECHA DE INGRESO', 'DOMICILIO', 'NÚMERO', 'PISO', 'DTO', 'LOCALIDAD', 'PROVINCIA', 'PAIS', 'CODIGO POSTAL',
     'TELEFONO', 'CELULAR', 'RAZON SOCIAL', 'DEPARTAMENTO', 'CATEGORIA', 'TURNO', 'INTERVALO', 'OBSERVACIONES', 'BANCO', 'CBU',
     'NACIONALIDAD', 'OBRA SOCIAL'];
@@ -113,7 +115,8 @@ function pendientesIcheck(incluirCargados = false) {
 }
 
 function filaIcheck(b) {
-    return [b.nombre, b.apellido, b.sexo, b.dni, b.cuil, fechaIcheck(b.fecha_nacimiento), b.email, b.dni, b.local, fechaIcheck(b.ingreso),
+    const sexo = ['M', 'F'].includes(sexoDe(b.sexo)) ? sexoDe(b.sexo) : '';   // iCheck solo acepta M o F
+    return [b.nombre, b.apellido, sexo, b.dni, b.cuil, fechaIcheck(b.fecha_nacimiento), b.email, b.dni, b.local, fechaIcheck(b.ingreso),
         b.domicilio, b.domicilio_numero, '', '', b.localidad, b.provincia, b.pais, b.codigo_postal, b.tel, '',
         (infoLocal(b.local)?.razon_social || '').toUpperCase(), '', categoriaIcheck(b.puesto), 'UNICO', '', '', '', '', b.nacionalidad, '']
         .map(v => v == null ? '' : v);
@@ -153,11 +156,21 @@ function renderIcheck() {
     document.getElementById('btn-icheck-cargados').disabled = !pendientes;
 }
 
-function descargarIcheck() {
+async function descargarIcheck() {
     const lista = pendientesIcheck(document.getElementById('icheck-todos').checked);
     if (!lista.length) return;
-    descargarCSV(`icheck_${today()}.csv`, ICHECK_COLUMNAS, lista.map(filaIcheck));
-    toast(`Archivo de iCheck con ${lista.length} persona${lista.length === 1 ? '' : 's'} ✓`);
+    let XLSX;
+    try { XLSX = await cargarXLSX(); } catch (e) { toast(e.message, true); return; }
+    // Como la plantilla: Hoja1 y todas las celdas como texto (si no, Excel come los ceros del DNI o cambia las fechas)
+    const filas = [ICHECK_COLUMNAS, ...lista.map(b => filaIcheck(b).map(v => String(v)))];
+    const hoja = XLSX.utils.aoa_to_sheet(filas);
+    Object.keys(hoja).filter(k => k[0] !== '!').forEach(k => { hoja[k].t = 's'; hoja[k].z = '@'; });
+    hoja['!cols'] = ICHECK_COLUMNAS.map(c => ({ wch: Math.max(12, c.length + 2) }));
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, 'Hoja1');
+    XLSX.writeFile(libro, `Importacion_Personas_${today()}.xlsx`);
+    const sinSexo = lista.filter(b => !['M', 'F'].includes(sexoDe(b.sexo))).length;
+    toast(`Excel de iCheck con ${lista.length} persona${lista.length === 1 ? '' : 's'} ✓` + (sinSexo ? ` · ${sinSexo} sin sexo M/F` : ''));
 }
 
 let _marcandoIcheck = false;

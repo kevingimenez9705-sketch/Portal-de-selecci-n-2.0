@@ -338,6 +338,9 @@ async function colocarEnVacante(postulanteId, busquedaId) {
         postulante_id: p.id, nombre: p.nombre, apellido: p.apellido || null, email: p.email || null, tel: p.telefono || null,
         fecha_nacimiento: p.fecha_nacimiento || null, dni: p.dni || null, localidad: p.localidad || null,
         cuil: p.cuil || null, nacionalidad: p.nacionalidad || null, tel_emergencia: p.tel_emergencia || null,
+        // Lo que pide la vacante (y iCheck): sexo y domicilio, si la persona lo dejó en Elegí tu vacante
+        sexo: p.sexo || null, domicilio: p.domicilio || null, domicilio_numero: p.domicilio_numero || null,
+        codigo_postal: p.codigo_postal || null, provincia: p.provincia || null, pais: p.pais || null,
         id_postulante: p.id_postulante || null, estado: null, fecha_estado: null, fecha_citacion: null, hora_citacion: null
     };
     Object.keys(update).forEach(k => { update[k] = mayus(k, update[k]); });
@@ -376,7 +379,8 @@ async function liberarVacante(id, sinPreguntar = false) {
 // ══════════════════════════════════════════════
 const CAMPOS_POSTULANTE = ['nombre', 'apellido', 'dni', 'telefono', 'email', 'fecha_nacimiento', 'zona', 'localidad',
     'sede_entrevista', 'fecha_entrevista', 'puesto_interes', 'horario', 'curso_manipulacion', 'antecedentes',
-    'cv_url', 'observaciones', 'estado', 'id_postulante', 'cuil', 'nacionalidad', 'tel_emergencia', 'sugerido_para'];
+    'cv_url', 'observaciones', 'estado', 'id_postulante', 'cuil', 'nacionalidad', 'tel_emergencia', 'sugerido_para',
+    'interesado', 'sexo', 'domicilio', 'domicilio_numero', 'codigo_postal', 'provincia', 'pais'];
 
 async function savePostulante() {
     const id  = +document.getElementById('p-id').value || null;

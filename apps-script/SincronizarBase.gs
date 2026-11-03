@@ -9,7 +9,8 @@
       - Personas nuevas → se agregan.
       - Personas que ya están (mismo DNI o email) → solo se completan datos
         vacíos; lo editado en el portal no se pisa.
-      - Quien figure ACTIVO en BLOQUEADOS llega como "Bloqueado".
+      - Queda "Bloqueado" quien NO está interesado en la propuesta o figura ACTIVO
+        en BLOQUEADOS (los bloqueos por documentación incompleta ya no cuentan).
    3. BLOQUEADOS → portal (la página los usa para no dejar pasar a nadie bloqueado).
    4. Proceso de Ingreso → portal (botón "Datos de ingreso" de Vacantes).
 
@@ -89,8 +90,16 @@ var PortalSync = (function () {
     tel_emergencia:     'tel emergencia',
     horario:            'horario',
     observaciones:      'observaciones',
-    sugerido_para:      'sugerido para'
+    sugerido_para:      'sugerido para',
+    // Lo que lleva la vacante: la página Elegí tu vacante lo pide y estas columnas se crean solas si faltan
+    sexo:               'sexo',
+    domicilio:          'domicilio',
+    domicilio_numero:   'numero domicilio',
+    codigo_postal:      'codigo postal',
+    provincia:          'provincia',
+    pais:               'pais'
   };
+  const COLUMNAS_NUEVAS_BASE = ['SEXO', 'DOMICILIO', 'NUMERO DOMICILIO', 'CODIGO POSTAL', 'PROVINCIA', 'PAIS'];
 
   const COLUMNAS_BLOQUEADOS = {
     fecha: 'fecha', dni: 'dni', cuil: 'cuil', nombre: 'nombre', apellido: 'apellido',
@@ -196,6 +205,7 @@ var PortalSync = (function () {
       llamarPortal_('seleccion_web_en_planilla', { tabla: 'bloqueados', ids: bloq.map(function (b) { return b.id; }) }, codigo);
     }
     if (base.length) {
+      asegurarColumnas_(libro.getSheetByName(SYNC.HOJA_BASE), COLUMNAS_NUEVAS_BASE);
       agregarFilas_(libro, SYNC.HOJA_BASE, COLUMNAS_BASE, base.map(function (x) {
         return {
           nombre: seguro_(x.nombre), apellido: seguro_(x.apellido), email: x.mail || '', telefono: comoTexto_(x.tel),
@@ -203,13 +213,27 @@ var PortalSync = (function () {
           sede_entrevista: x.sede || '', estado: 'EN ESPERA', puesto_interes: x.puesto || '', horario: x.horario || '',
           observaciones: seguro_(x.observaciones), curso_manipulacion: x.manipulacion || '', antecedentes: x.antecedentes || '',
           interesado: x.interesado || '', dni: comoTexto_(x.dni), cuil: comoTexto_(x.cuil),
-          nacionalidad: seguro_(x.nacionalidad), tel_emergencia: comoTexto_(x.tel_emergencia)
+          nacionalidad: seguro_(x.nacionalidad), tel_emergencia: comoTexto_(x.tel_emergencia),
+          sexo: x.sexo || '', domicilio: seguro_(x.domicilio), domicilio_numero: comoTexto_(x.domicilio_numero),
+          codigo_postal: comoTexto_(x.codigo_postal), provincia: x.provincia || '', pais: seguro_(x.pais)
         };
       }));
       SpreadsheetApp.flush();
       llamarPortal_('seleccion_web_en_planilla', { tabla: 'base', ids: base.map(function (x) { return x.id; }) }, codigo);
     }
     return 'Página → planilla: ' + base.length + ' en ' + SYNC.HOJA_BASE + ', ' + bloq.length + ' en ' + SYNC.HOJA_BLOQUEADOS + '.';
+  }
+
+  // Suma al final del encabezado las columnas que falten (como bloquear_ de Codigo.gs)
+  function asegurarColumnas_(hoja, nombres) {
+    if (!hoja) return;
+    const enc = hoja.getRange(1, 1, 1, Math.max(hoja.getLastColumn(), 1)).getValues()[0];
+    const hay = enc.map(normalizar_);
+    const faltan = nombres.filter(function (n) { return hay.indexOf(normalizar_(n)) === -1; });
+    if (!faltan.length) return;
+    let desde = enc.length;
+    while (desde > 0 && String(enc[desde - 1]).trim() === '') desde--;   // pegadas a la última columna con encabezado
+    hoja.getRange(1, desde + 1, 1, faltan.length).setValues([faltan]);
   }
 
   // Agrega filas al final ubicando cada dato por el nombre de su columna (como escribirFilaBase_ de Codigo.gs)
@@ -279,8 +303,9 @@ var PortalSync = (function () {
       const dni = soloDigitos_(dato('dni'));
       const email = texto_(dato('email')).toLowerCase();
       const horarioOriginal = texto_(dato('horario'));
+      const interesado = siNo_(dato('interesado'));
       let estado = estado_(dato('estado'));
-      if ((dni && bloq.dnis[dni]) || (email && bloq.emails[email])) estado = 'Bloqueado';
+      if (interesado === 'No' || (dni && bloq.dnis[dni]) || (email && bloq.emails[email])) estado = 'Bloqueado';
 
       salida.push({
         nombre: nombre,
@@ -304,13 +329,20 @@ var PortalSync = (function () {
         // El horario del formulario trae días y modalidad: queda completo en observaciones
         observaciones: [texto_(dato('observaciones')), horarioOriginal ? 'Disponibilidad: ' + horarioOriginal : '']
           .filter(String).join(' · '),
-        sugerido_para: texto_(dato('sugerido_para'))
+        sugerido_para: texto_(dato('sugerido_para')),
+        interesado: interesado,
+        sexo: sexo_(dato('sexo')),
+        domicilio: texto_(dato('domicilio')),
+        domicilio_numero: telefono_(dato('domicilio_numero')),
+        codigo_postal: telefono_(dato('codigo_postal')),
+        provincia: texto_(dato('provincia')),
+        pais: texto_(dato('pais'))
       });
     }
     return salida;
   }
 
-  // DNIs y mails de la pestaña BLOQUEADOS con ACTIVO = SÍ
+  // DNIs y mails de la pestaña BLOQUEADOS con ACTIVO = SÍ (menos los bloqueos por documentación incompleta)
   function bloqueados_(libro) {
     const res = { dnis: {}, emails: {} };
     const hoja = libro.getSheetByName(SYNC.HOJA_BLOQUEADOS);
@@ -318,10 +350,11 @@ var PortalSync = (function () {
     const valores = hoja.getDataRange().getValues();
     if (valores.length < 2) return res;
     const enc = valores[0].map(normalizar_);
-    const cDni = enc.indexOf('dni'), cMail = enc.indexOf('mail'), cActivo = enc.indexOf('activo');
+    const cDni = enc.indexOf('dni'), cMail = enc.indexOf('mail'), cActivo = enc.indexOf('activo'), cMotivo = enc.indexOf('motivo');
     for (let i = 1; i < valores.length; i++) {
       const v = valores[i];
       if (cActivo !== -1 && normalizar_(v[cActivo]).indexOf('s') !== 0) continue;
+      if (cMotivo !== -1 && normalizar_(v[cMotivo]).indexOf('documentacion incompleta') !== -1) continue;
       const dni = cDni === -1 ? '' : soloDigitos_(v[cDni]);
       const mail = cMail === -1 ? '' : texto_(v[cMail]).toLowerCase();
       if (dni) res.dnis[dni] = true;
@@ -488,6 +521,15 @@ var PortalSync = (function () {
     return '';
   }
 
+  // "F", "Femenino", "M - Masculino", "X" → F / M / X
+  function sexo_(v) {
+    const t = normalizar_(v);
+    if (/^(f|femenino|mujer)\b/.test(t)) return 'F';
+    if (/^(m|masculino|hombre|varon)\b/.test(t)) return 'M';
+    if (/^(x|no binario)\b/.test(t)) return 'X';
+    return '';
+  }
+
   function estado_(v) {
     const t = normalizar_(v);
     if (t.indexOf('bloq') !== -1) return 'Bloqueado';
@@ -549,7 +591,7 @@ var PortalSync = (function () {
     _t: {
       filasDeLaBase_: filasDeLaBase_, filasDeIngreso_: filasDeIngreso_, filasDeBloqueados_: filasDeBloqueados_,
       bloqueados_: bloqueados_, llamarPortal_: llamarPortal_, horario_: horario_, fecha_: fecha_, estado_: estado_,
-      agregarFilas_: agregarFilas_, fechaDeTexto_: fechaDeTexto_, enHorario_: enHorario_
+      agregarFilas_: agregarFilas_, fechaDeTexto_: fechaDeTexto_, enHorario_: enHorario_, sexo_: sexo_
     }
   };
 })();

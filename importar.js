@@ -1,23 +1,28 @@
 // ══════════════════════════════════════════════
 //  CARGA MASIVA desde la hoja "SOLICITUDES DE PERSONAL"
-//  Se copian las filas de la planilla y se pegan acá: por cada local, cada número
+//  Se sube la planilla descargada como Excel (se leen todas las filas) o se copian
+//  las filas y se pegan acá: por cada local, cada número
 //  en PERFILES A SOLICITAR (GT, ET, ENT, FULL, PART) se vuelve esa cantidad de vacantes.
 //  El ESTADO DE NÓMINA del local (excedido / debe completar / completo) queda en cada
 //  vacante, y también se actualiza en las vacantes que ya estaban abiertas de ese local.
 // ══════════════════════════════════════════════
 let importLineas = [];
 let importNomina = [];   // vacantes abiertas cuya nómina cambia: { id, estado_nomina, nomina_detalle }
+let importSalteados = [];   // locales que no generan vacantes y por qué: { local, motivo }
 
 function openImportar() {
     document.getElementById('imp-marca').innerHTML = optionsHtml(MARCAS, marcaActiva || MARCAS[1]);
     document.getElementById('imp-jornada').innerHTML = optionsHtml(JORNADAS, 'ROTATIVO', '— Sin jornada —');
     document.getElementById('imp-inicio').value = today();
     document.getElementById('imp-texto').value = '';
+    document.getElementById('imp-archivo').value = '';
+    document.getElementById('imp-archivo-txt').textContent = 'Subir el Excel de la planilla (.xlsx)';
     document.getElementById('imp-preview').innerHTML = '';
     document.getElementById('imp-resumen').textContent = '';
     document.getElementById('btn-crear-importadas').disabled = true;
     importLineas = [];
     importNomina = [];
+    importSalteados = [];
     openModal('modal-importar');
     setTimeout(() => document.getElementById('imp-texto').focus(), 50);
 }
@@ -81,12 +86,43 @@ function datosPrevios(local, zonal) {
     };
 }
 
-function revisarImportacion() {
-    const rows = parseTSV(document.getElementById('imp-texto').value);
+// Excel descargado de la planilla: se busca la pestaña con LOCAL y OBSERVACION (SOLICITUDES DE PERSONAL)
+async function leerExcelSolicitudes(input) {
+    const archivo = input.files && input.files[0];
+    if (!archivo) return;
+    const txt = document.getElementById('imp-archivo-txt');
+    const resumen = document.getElementById('imp-resumen');
+    txt.textContent = 'Leyendo ' + archivo.name + '…';
+    try {
+        const XLSX = await cargarXLSX();
+        const libro = XLSX.read(await archivo.arrayBuffer(), { type: 'array', cellDates: false });
+        const hojas = libro.SheetNames.map(nombre => ({
+            nombre,
+            filas: XLSX.utils.sheet_to_json(libro.Sheets[nombre], { header: 1, raw: false, defval: '', blankrows: false })
+                .map(r => r.map(c => String(c ?? '')))
+        })).filter(h => columnasSolicitud(h.filas).conEncabezado);
+        if (!hojas.length) {
+            txt.textContent = 'Subir el Excel de la planilla (.xlsx)';
+            resumen.textContent = `En ${archivo.name} no encontré la hoja de SOLICITUDES DE PERSONAL (con las columnas LOCAL y OBSERVACION).`;
+            return;
+        }
+        const hoja = hojas.find(h => normTxt(h.nombre).includes('SOLICITUD')) || hojas[0];
+        txt.textContent = `${archivo.name} · hoja ${hoja.nombre} · ${hoja.filas.length} filas`;
+        document.getElementById('imp-texto').value = '';
+        revisarImportacion(hoja.filas.filter(r => r.some(c => c.trim() !== '')));
+    } catch (e) {
+        txt.textContent = 'Subir el Excel de la planilla (.xlsx)';
+        resumen.textContent = 'No se pudo leer el archivo: ' + (e.message || e);
+    }
+}
+
+function revisarImportacion(filasExcel) {
+    const rows = Array.isArray(filasExcel) ? filasExcel : parseTSV(document.getElementById('imp-texto').value);
     const preview = document.getElementById('imp-preview');
     const resumen = document.getElementById('imp-resumen');
     importLineas = [];
     importNomina = [];
+    importSalteados = [];
     if (!rows.length) { resumen.textContent = 'Pegá primero las filas copiadas de la planilla.'; preview.innerHTML = ''; actualizarBotonImportar(); return; }
     const pos = columnasSolicitud(rows);
     const marcaDefecto = document.getElementById('imp-marca').value;
@@ -105,11 +141,12 @@ function revisarImportacion() {
         if (!local || nLocal === 'LOCAL' || nLocal === 'DATOS DEL LOCAL') return; // encabezados
         if (!pos.conEncabezado && r.length <= pos.perfiles.PART) { cortas++; return; }
         const estadoLocal = normTxt(celda(r, pos.estado));
-        if (estadoLocal && estadoLocal !== 'ACTIVO') { inactivos++; return; }
+        if (estadoLocal && estadoLocal !== 'ACTIVO') { inactivos++; importSalteados.push({ local, motivo: `Local ${celda(r, pos.estado)}` }); return; }
         const gr = celda(r, pos.gr), gz = celda(r, pos.gz), obs = celda(r, pos.obs);
         const nomina = nominaDe(celda(r, pos.nomina));
         if (nomina) nominaLocal.set(nLocal, { estado: nomina, detalle: col => detalleDe(r, col) });
         const previos = datosPrevios(local, gz);
+        if (!PERFILES_SOLICITUD.some(p => (parseInt(celda(r, pos.perfiles[p.col])) || 0) > 0)) importSalteados.push({ local, motivo: 'No pide perfiles' });
         PERFILES_SOLICITUD.forEach(p => {
             const pedidas = parseInt(celda(r, pos.perfiles[p.col])) || 0;
             if (pedidas <= 0) return;
@@ -136,7 +173,7 @@ function revisarImportacion() {
 
     if (!importLineas.length) {
         if (importNomina.length) {
-            preview.innerHTML = '';
+            preview.innerHTML = salteadosHtml();
             actualizarBotonImportar();
             resumen.textContent = `No hay perfiles pedidos. Se puede actualizar la nómina (excedido / debe completar / completo) de ${importNomina.length} vacante${importNomina.length === 1 ? '' : 's'} abierta${importNomina.length === 1 ? '' : 's'}.`;
             return;
@@ -144,12 +181,21 @@ function revisarImportacion() {
         resumen.textContent = cortas
             ? 'Las filas pegadas no llegan hasta la columna PART de "Perfiles a solicitar": copiá las filas completas (de GR a OBSERVACION) o incluí el encabezado.'
             : 'No se encontraron perfiles pedidos (los números de GT, ET, ENT, FULL o PART en "Perfiles a solicitar").';
-        preview.innerHTML = '';
+        preview.innerHTML = salteadosHtml();
         actualizarBotonImportar();
         return;
     }
     renderImportPreview();
     if (inactivos) toast(`${inactivos} local(es) no están ACTIVOS y se salteó`);
+}
+
+// Para que se vea por qué un local de la planilla no generó vacantes
+function salteadosHtml() {
+    const yaAbiertas = importLineas.filter(l => l.pedidas > 0 && l.crear === 0);
+    const items = [...importSalteados, ...yaAbiertas.map(l => ({ local: l.local, motivo: `${l.puesto}: ya hay ${l.abiertas} abierta${l.abiertas === 1 ? '' : 's'} en el portal` }))];
+    if (!items.length) return '';
+    return `<details class="imp-salteados"><summary>${items.length} fila${items.length === 1 ? '' : 's'} de la planilla no crean vacantes (ver por qué)</summary>
+        <ul>${items.map(i => `<li><strong>${esc(i.local)}</strong> — ${esc(i.motivo)}</li>`).join('')}</ul></details>`;
 }
 
 function renderImportPreview() {
@@ -173,7 +219,7 @@ function renderImportPreview() {
                     <td class="imp-obs">${esc(l.notas || '')}</td>
                 </tr>`).join('')}</tbody>
             </table>
-        </div>`;
+        </div>${salteadosHtml()}`;
     actualizarBotonImportar();
 }
 

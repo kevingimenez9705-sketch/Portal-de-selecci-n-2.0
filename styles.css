@@ -400,3 +400,11 @@ button.nomina.activo { box-shadow: 0 0 0 2px currentColor; }
 
 /* ── iCheck ── */
 .icheck-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; margin-left: 4px; padding: 0 5px; border-radius: 999px; background: var(--pink); color: #fff; font-size: 10px; font-weight: 800; }
+
+/* Importar solicitudes: subir el Excel */
+.imp-archivo { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; padding: 12px 14px; border: 1.5px dashed var(--purple-line); border-radius: 12px; color: var(--purple); font-weight: 800; font-size: 13px; cursor: pointer; }
+.imp-archivo:hover { background: var(--purple-soft, rgba(124,58,237,.06)); }
+.imp-archivo input { display: none; }
+.imp-salteados { margin-top: 10px; font-size: 12px; }
+.imp-salteados summary { cursor: pointer; font-weight: 700; color: var(--muted, #6b6560); }
+.imp-salteados ul { margin: 6px 0 0 18px; max-height: 160px; overflow: auto; }
