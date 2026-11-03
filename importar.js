@@ -10,6 +10,7 @@ let importLineas = [];
 let importNomina = [];   // vacantes abiertas cuya nómina cambia: { id, estado_nomina, nomina_detalle }
 let importSalteados = [];   // locales que no generan vacantes y por qué: { local, motivo }
 let importLocales = new Map();   // local → regional, zonal y nómina de la planilla (actualizan el Mapa de equipos)
+const ESTADOS_LOCAL_IMPORTABLES = ['ACTIVO', 'APERTURA'];
 
 function openImportar() {
     document.getElementById('imp-marca').innerHTML = optionsHtml(MARCAS, marcaActiva || MARCAS[1]);
@@ -146,7 +147,8 @@ function revisarImportacion(filasExcel) {
         if (!local || nLocal === 'LOCAL' || nLocal === 'DATOS DEL LOCAL') return; // encabezados
         if (!pos.conEncabezado && r.length <= pos.perfiles.PART) { cortas++; return; }
         const estadoLocal = normTxt(celda(r, pos.estado));
-        if (estadoLocal && estadoLocal !== 'ACTIVO') { inactivos++; importSalteados.push({ local, motivo: `Local ${celda(r, pos.estado)}` }); return; }
+        // La planilla admite ACTIVO y APERTURA: los dos piden gente. Se saltea cualquier otro (cerrado, baja…)
+        if (estadoLocal && !ESTADOS_LOCAL_IMPORTABLES.includes(estadoLocal)) { inactivos++; importSalteados.push({ local, motivo: `Local ${celda(r, pos.estado)}` }); return; }
         const gr = celda(r, pos.gr), gz = celda(r, pos.gz), obs = celda(r, pos.obs);
         const nomina = nominaDe(celda(r, pos.nomina));
         importLocales.set(nLocal, { local, regional: gr, zonal: gz, estado_nomina: nomina || null });
@@ -195,7 +197,7 @@ function revisarImportacion(filasExcel) {
         return;
     }
     renderImportPreview();
-    if (inactivos) toast(`${inactivos} local(es) no están ACTIVOS y se salteó`);
+    if (inactivos) toast(`${inactivos} local(es) no están ACTIVOS ni en APERTURA y se saltearon`);
 }
 
 // Para que se vea por qué un local de la planilla no generó vacantes
