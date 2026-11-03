@@ -408,3 +408,8 @@ button.nomina.activo { box-shadow: 0 0 0 2px currentColor; }
 .imp-salteados { margin-top: 10px; font-size: 12px; }
 .imp-salteados summary { cursor: pointer; font-weight: 700; color: var(--muted, #6b6560); }
 .imp-salteados ul { margin: 6px 0 0 18px; max-height: 160px; overflow: auto; }
+
+/* ENVIADO A ZONAL: estado de la copia a la hoja del regional */
+.zonal-hoja { font-size: 10px; font-weight: 800; color: var(--muted); margin-top: 2px; }
+.zonal-hoja.zonal-ok { color: #15803d; }
+.zonal-hoja.zonal-falta { color: var(--red); }
