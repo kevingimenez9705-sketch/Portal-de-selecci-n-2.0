@@ -18,6 +18,10 @@
       (pestaña HOJAS ZONALES: REGIONAL | LINK). Cuando el zonal pone APROBADO o
       DESAPROBADO, la vacante pasa a APROBADO ZONAL / RECHAZADO ZONAL; si cambió
       PUESTO u HORARIO se copian, y sus OBSERVACIONES quedan en el historial.
+   6. Onboarding (como Onboarding.gs): las citaciones que se piden en el portal
+      (panel "Zonal y onboarding") salen con el mismo mail de bienvenida y el
+      botón "Confirmo asistencia"; la vacante pasa a CITADO. Si algo falta
+      (dirección, primer día…) no sale y el motivo queda en el panel.
 
    Todo queda dentro de PortalSync: se puede pegar como un archivo más del
    proyecto de TAREAS GRUPALES sin chocar con Codigo.gs, Onboarding.gs, etc.
@@ -152,7 +156,8 @@ var PortalSync = (function () {
         baseAlPortal_(libro, codigo),
         bloqueadosAlPortal_(libro, codigo),
         ingresoAlPortal_(libro, codigo),
-        zonalesAlPortal_(libro, codigo)
+        zonalesAlPortal_(libro, codigo),
+        citacionesDelPortal_(codigo)
       ].filter(String).join('\n');
       console.log(resumen);
       return resumen;
@@ -643,6 +648,727 @@ var PortalSync = (function () {
 
 
   /* =========================================================
+     6. ONBOARDING: citaciones pedidas en el portal → mail de bienvenida
+     ========================================================= */
+
+  // Lo mismo que ONBOARDING_CONFIG de Onboarding.gs (vive solo dentro de PortalSync)
+  const ONBOARDING_CONFIG = {
+    marcas: {
+      'Hamburguesas Extremas': { brand: 'EXTREMAS', subject: 'BIENVENIDA E INGRESO: HAMBURGUESAS EXTREMAS', signature: 'Hamburguesas Extremas' },
+      'Sabores Express': { brand: 'SABORES', subject: 'BIENVENIDA E INGRESO: SABORES EXPRESS', signature: 'Sabores Express' }
+    },
+    senderName: 'Equipo de Selección',
+    officeAddress: 'Florida 428, CABA',
+    formUrl: 'https://forms.gle/JYp28JhtcyKu9smt8',
+    scheduleText: 'Los horarios del puesto son rotativos.',
+    firstDaySchedules: { partTime: '15:00 a 20:00 hs', fullTime: '11:00 a 20:00 hs' },
+    // Página del portal que registra el "Confirmo asistencia"
+    confirmarUrl: 'https://kevingimenez9705-sketch.github.io/Portal-de-selecci-n-2.0/confirmar.html',
+    intervaloEntreCorreosMs: 1500,
+    esperaReintentoMs: 2000
+  };
+
+  function citacionesDelPortal_(codigo) {
+    const pendientes = llamarPortal_('seleccion_onb_pendientes', {}, codigo) || [];
+    if (!pendientes.length) return '';
+    let enviados = 0;
+    const errores = [];
+    pendientes.forEach(function (v, i) {
+      let resultado;
+      try {
+        const data = datosCitacion_(v);
+        if (MailApp.getRemainingDailyQuota() < 1) throw new Error('Se terminó el cupo diario de mails de Google: sale mañana.');
+        if (i) Utilities.sleep(ONBOARDING_CONFIG.intervaloEntreCorreosMs);
+        enviarConReintento_({
+          to: v.email, subject: data.subject, body: crearTextoPlanoOnboarding_(data), htmlBody: crearEmailOnboarding_(data),
+          name: ONBOARDING_CONFIG.senderName
+        });
+        resultado = { id: v.id, ok: true };
+        enviados++;
+      } catch (e) {
+        resultado = { id: v.id, ok: false, error: String((e && e.message) || e) };
+        errores.push((v.numero || v.id) + ': ' + resultado.error);
+      }
+      // Uno por uno: si algo corta a mitad de camino, lo ya enviado no se vuelve a mandar
+      llamarPortal_('seleccion_onb_resultado', { filas: [resultado] }, codigo);
+    });
+    return 'Onboarding: ' + enviados + ' citaciones enviadas' + (errores.length ? ', ' + errores.length + ' sin enviar (' + errores.join(' | ') + ')' : '') + '.';
+  }
+
+  // Mismas reglas que procesarFilaOnboarding_ de Onboarding.gs
+  function datosCitacion_(v) {
+    const marca = ONBOARDING_CONFIG.marcas[v.marca];
+    if (!marca) throw new Error('Marca desconocida: ' + v.marca);
+    const tz = SYNC.ZONA_HORARIA;
+    const dia = function (iso) { return iso ? Utilities.parseDate(String(iso).slice(0, 10), tz, 'yyyy-MM-dd') : ''; };
+    const local = String(v.local || '').trim();
+    const trainingLocal = String(v.local_entrenamiento || '').trim();
+    const position = String(v.puesto || '').trim();
+    if (!local) throw new Error('Falta el LOCAL.');
+    if (!position) throw new Error('Falta el PUESTO.');
+    const onboardingDate = formatearFechaOnboarding_(dia(v.fecha_onboarding), tz);
+    if (!onboardingDate) throw new Error('Falta la fecha de onboarding.');
+    const onboardingTime = formatearHoraOnboarding_(v.hora_onboarding, tz);
+    if (!onboardingTime) throw new Error('Falta la hora de onboarding.');
+    const firstDayDate = formatearFechaOnboarding_(dia(v.primer_dia), tz);
+    if (!firstDayDate) throw new Error('Falta el primer día.');
+    if (!emailValidoOnboarding_(v.email)) throw new Error('Email inválido: ' + v.email);
+    const firstDaySchedule = obtenerHorarioPrimerDiaOnboarding_(position);
+    const opening = normalizarTextoOnboarding_(local).includes('APER');
+    const localAddress = opening ? '' : String(v.direccion_local || '').trim();
+    if (!opening && !localAddress) throw new Error('No se encontró dirección para "' + local + '" en la lista de locales.');
+    if (opening && !trainingLocal) throw new Error('El LOCAL contiene APER pero no tiene LOCAL ENTRENAMIENTO.');
+    const showTraining = !!trainingLocal && (opening || normalizarTextoOnboarding_(trainingLocal) !== normalizarTextoOnboarding_(local));
+    const trainingAddress = showTraining ? String(v.direccion_entrenamiento || '').trim() : '';
+    if (showTraining && !trainingAddress) throw new Error('No se encontró dirección para LOCAL ENTRENAMIENTO "' + trainingLocal + '" en la lista de locales.');
+    return {
+      subject: marca.subject, name: String(v.nombre || '').trim(), brand: marca.brand, signature: marca.signature,
+      position: position, scheduleText: ONBOARDING_CONFIG.scheduleText, onboardingDate: onboardingDate, onboardingTime: onboardingTime,
+      firstDayDate: firstDayDate, local: local, localAddress: localAddress, trainingLocal: showTraining ? trainingLocal : '',
+      trainingAddress: trainingAddress, opening: opening, firstDaySchedule: firstDaySchedule,
+      confirmUrl: ONBOARDING_CONFIG.confirmarUrl + '?v=' + encodeURIComponent(v.id) + '&k=' + encodeURIComponent(v.token)
+    };
+  }
+
+  // Un reintento si Gmail falla por algo técnico (como enviarEmailOnboardingConReintento_)
+  function enviarConReintento_(mail) {
+    try { MailApp.sendEmail(mail); }
+    catch (e) { Utilities.sleep(ONBOARDING_CONFIG.esperaReintentoMs); MailApp.sendEmail(mail); }
+  }
+
+  // ── Copiadas tal cual de Onboarding.gs: el mail sale igual que desde la planilla ──
+
+  // (sin cambios ni sangría: el texto de los mails depende de cada espacio y renglón)
+
+function crearEmailOnboarding_(
+  data
+) {
+
+  const greeting =
+    data.name
+      ? '🎉 ¡Hola ' +
+        escaparHtmlOnboarding_(data.name) +
+        '! ¿Cómo estás?'
+      : '🎉 ¡Hola! ¿Cómo estás?';
+
+
+  let localBlock = '';
+
+
+  if (data.opening) {
+
+    localBlock = `
+      <p style="margin-top:26px;">
+
+        📍 <strong>Tu local asignado será:</strong>
+
+        <br><br>
+
+        <strong>
+          ${escaparHtmlOnboarding_(data.brand)}:
+          ${escaparHtmlOnboarding_(data.local)}
+        </strong>
+
+      </p>
+    `;
+
+  } else {
+
+    localBlock = `
+      <p style="margin-top:26px;">
+
+        📍 <strong>Tu local asignado será:</strong>
+
+        <br><br>
+
+        <strong>
+          ${escaparHtmlOnboarding_(data.brand)}:
+          ${escaparHtmlOnboarding_(data.local)}
+        </strong>
+
+        <br>
+
+        Dir:
+        ${escaparHtmlOnboarding_(data.localAddress)}
+
+      </p>
+    `;
+  }
+
+
+  let trainingBlock = '';
+
+
+  if (data.trainingLocal) {
+
+    trainingBlock = `
+      <p style="margin-top:20px;">
+
+        👨‍🍳 <strong>
+          Tu entrenamiento será en:
+        </strong>
+
+        <br><br>
+
+        <strong>
+          ${escaparHtmlOnboarding_(data.trainingLocal)}
+        </strong>
+
+        <br>
+
+        Dir:
+        ${escaparHtmlOnboarding_(data.trainingAddress)}
+
+      </p>
+    `;
+  }
+
+
+  /*
+   * BLOQUE DE CONFIRMACIÓN DE ASISTENCIA
+   * El botón abre la Web App, que registra CONFIRMA ONB
+   * en la columna ALTAS RRHH de la persona.
+   */
+
+  const confirmBlock = `
+    <div style="
+      margin:26px 0;
+      padding:18px;
+      background:#eaf6ec;
+      border:1px solid #b7dfc0;
+      border-radius:8px;
+      text-align:center;
+    ">
+
+      <p style="margin:0 0 14px 0;">
+
+        <strong>
+          Confirmá tu asistencia a la Bienvenida
+        </strong>
+
+      </p>
+
+      <p style="margin:0 0 14px 0;">
+
+        <a
+          href="${escaparHtmlOnboarding_(data.confirmUrl)}"
+          style="
+            display:inline-block;
+            background:#1e8e3e;
+            color:#ffffff;
+            padding:14px 26px;
+            border-radius:6px;
+            text-decoration:none;
+            font-weight:bold;
+            font-size:16px;
+          "
+        >
+          ✅ Confirmo asistencia
+        </a>
+
+      </p>
+
+      <p style="
+        margin:0;
+        font-size:13px;
+        color:#1b5e20;
+      ">
+
+        ⚠️ <strong>Importante:</strong>
+        confirmá tu asistencia únicamente presionando el botón.
+
+      </p>
+
+    </div>
+  `;
+
+
+  return `
+    <div style="
+      max-width:620px;
+      margin:0 auto;
+      font-family:Arial,Helvetica,sans-serif;
+      font-size:15px;
+      line-height:1.6;
+      color:#222222;
+    ">
+
+      <h2 style="
+        margin:0 0 10px 0;
+        font-size:22px;
+      ">
+        ${greeting}
+      </h2>
+
+
+      <p>
+        ¡Tenemos una buena noticia! 🙌
+        Fuiste seleccionado/a para sumarte a nuestro equipo.
+      </p>
+
+
+      <p style="margin-top:22px;">
+
+        👨‍🍳 <strong>PUESTO:</strong>
+        ${escaparHtmlOnboarding_(data.position)}
+
+        <br>
+
+        🕘 <strong>HORARIOS:</strong>
+        ${escaparHtmlOnboarding_(data.scheduleText)}
+
+      </p>
+
+
+      <h3 style="margin-top:28px;">
+        ✅ Próximos pasos
+      </h3>
+
+
+      <p>
+
+        <strong>
+          1️⃣ Completá el formulario de ingreso
+        </strong> 📝
+
+      </p>
+
+
+      <p>
+
+        <a
+          href="${ONBOARDING_CONFIG.formUrl}"
+          style="
+            display:inline-block;
+            background:#d71920;
+            color:#ffffff;
+            padding:12px 20px;
+            border-radius:6px;
+            text-decoration:none;
+            font-weight:bold;
+          "
+        >
+          Completar formulario de Bienvenida
+        </a>
+
+      </p>
+
+
+      <p style="margin-top:28px;">
+
+        <strong>
+          2️⃣ Presentate en nuestra Oficina de Selección
+        </strong>
+
+        para realizar tu Bienvenida e Ingreso.
+
+      </p>
+
+
+      <p>
+
+        📍 <strong>Dirección:</strong>
+        ${ONBOARDING_CONFIG.officeAddress}
+
+        <br>
+
+        📅 <strong>Fecha:</strong>
+        ${escaparHtmlOnboarding_(data.onboardingDate)}
+
+        <br>
+
+        🕘 <strong>Horario:</strong>
+        ${escaparHtmlOnboarding_(data.onboardingTime)}
+
+        <br><br>
+
+        <strong>
+          Presentate 15 minutos antes del horario pactado.
+        </strong>
+
+      </p>
+
+
+      ${confirmBlock}
+
+
+      <p style="margin-top:28px;">
+
+        <strong>
+          3️⃣ Traé la siguiente documentación
+        </strong>
+
+        (obligatoria):
+
+      </p>
+
+
+      <ul>
+
+        <li>
+          DNI formato físico.
+        </li>
+
+        <li>
+          Carnet o constancia del Curso
+          de Manipulación de Alimentos.
+        </li>
+
+        <li>
+          Certificado de Antecedentes Penales.
+        </li>
+
+      </ul>
+
+
+      ${localBlock}
+
+      ${trainingBlock}
+
+
+      <p style="margin-top:26px;">
+
+        🗓️ <strong>
+          Comenzás tu primer día
+        </strong>
+
+        <br><br>
+
+        📅 <strong>Fecha:</strong>
+        ${escaparHtmlOnboarding_(data.firstDayDate)}
+
+        <br>
+
+        🕘 <strong>Hora:</strong>
+        ${escaparHtmlOnboarding_(data.firstDaySchedule)}
+
+      </p>
+
+
+      <p style="margin-top:28px;">
+
+        🚀 <strong>¡Te esperamos!</strong>
+
+      </p>
+
+
+      <p>
+
+        Equipo de Selección
+
+        <br>
+
+        ${escaparHtmlOnboarding_(data.signature)}
+
+      </p>
+
+    </div>
+  `;
+}
+
+function crearTextoPlanoOnboarding_(
+  data
+) {
+
+  let text = '';
+
+
+  if (data.name) {
+
+    text +=
+      '🎉 ¡Hola ' +
+      data.name +
+      '! ¿Cómo estás?\n\n';
+
+  } else {
+
+    text +=
+      '🎉 ¡Hola! ¿Cómo estás?\n\n';
+  }
+
+
+  text +=
+`¡Tenemos una buena noticia! 🙌
+Fuiste seleccionado/a para sumarte a nuestro equipo.
+
+👨‍🍳 PUESTO: ${data.position}
+🕘 HORARIOS: ${data.scheduleText}
+
+✅ Próximos pasos
+
+1️⃣ Completá el formulario de ingreso 📝
+
+${ONBOARDING_CONFIG.formUrl}
+
+2️⃣ Presentate en nuestra Oficina de Selección para realizar tu Bienvenida e Ingreso.
+
+📍 Dirección: ${ONBOARDING_CONFIG.officeAddress}
+📅 Fecha: ${data.onboardingDate}
+🕘 Horario: ${data.onboardingTime}
+
+Presentate 15 minutos antes del horario pactado.
+
+✅ Confirmá tu asistencia a la Bienvenida abriendo este enlace:
+
+${data.confirmUrl}
+
+⚠️ Importante: confirmá tu asistencia únicamente desde ese enlace.
+
+3️⃣ Traé la siguiente documentación (obligatoria):
+
+• DNI formato físico.
+• Carnet o constancia del Curso de Manipulación de Alimentos.
+• Certificado de Antecedentes Penales.
+
+📍 Tu local asignado será:
+
+${data.brand}: ${data.local}`;
+
+
+  if (data.localAddress) {
+
+    text +=
+      '\nDir: ' +
+      data.localAddress;
+  }
+
+
+  if (data.trainingLocal) {
+
+    text +=
+`
+
+👨‍🍳 Tu entrenamiento será en:
+
+${data.trainingLocal}
+Dir: ${data.trainingAddress}`;
+  }
+
+
+  text +=
+`
+
+🗓️ Comenzás tu primer día
+
+📅 Fecha: ${data.firstDayDate}
+🕘 Hora: ${data.firstDaySchedule}
+
+🚀 ¡Te esperamos!
+
+Equipo de Selección
+${data.signature}`;
+
+
+  return text;
+}
+
+function escaparHtmlOnboarding_(
+  text
+) {
+
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatearFechaOnboarding_(
+  value,
+  timeZone
+) {
+
+  if (!value) {
+    return '';
+  }
+
+
+  if (
+    Object.prototype.toString.call(value) ===
+    '[object Date]' &&
+    !isNaN(value)
+  ) {
+
+    const months = [
+      'enero',
+      'febrero',
+      'marzo',
+      'abril',
+      'mayo',
+      'junio',
+      'julio',
+      'agosto',
+      'septiembre',
+      'octubre',
+      'noviembre',
+      'diciembre'
+    ];
+
+
+    const day =
+      Number(
+        Utilities.formatDate(
+          value,
+          timeZone,
+          'd'
+        )
+      );
+
+
+    const month =
+      Number(
+        Utilities.formatDate(
+          value,
+          timeZone,
+          'M'
+        )
+      );
+
+
+    return (
+      day +
+      ' de ' +
+      months[month - 1]
+    );
+  }
+
+
+  return String(value)
+    .trim();
+}
+
+function formatearHoraOnboarding_(
+  value,
+  timeZone
+) {
+
+  if (!value) {
+    return '';
+  }
+
+
+  if (
+    Object.prototype.toString.call(value) ===
+    '[object Date]' &&
+    !isNaN(value)
+  ) {
+
+    return (
+      Utilities.formatDate(
+        value,
+        timeZone,
+        'H:mm'
+      ) +
+      ' hs'
+    );
+  }
+
+
+  return (
+    String(value)
+      .trim()
+      .replace(
+        /\s*hs\.?$/i,
+        ''
+      ) +
+    ' hs'
+  );
+}
+
+function normalizarTextoOnboarding_(
+  value
+) {
+
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(
+      /[\u0300-\u036f]/g,
+      ''
+    );
+}
+
+function compactarTextoOnboarding_(
+  value
+) {
+
+  return normalizarTextoOnboarding_(value)
+    .replace(
+      /[^A-Z0-9]/g,
+      ''
+    );
+}
+
+function emailValidoOnboarding_(
+  email
+) {
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    .test(email);
+}
+
+function normalizarEmailOnboarding_(
+  value
+) {
+
+  return String(value || '')
+    .trim()
+    .toLowerCase();
+}
+
+function buscarDireccionOnboarding_(
+  addresses,
+  local
+) {
+
+  return (
+    addresses[
+      normalizarTextoOnboarding_(local)
+    ] || ''
+  );
+}
+
+function obtenerHorarioPrimerDiaOnboarding_(
+  position
+) {
+
+  /*
+   * Se toleran guiones y espacios dobles:
+   * "PART-TIME", "Part  Time" y "PART TIME" son equivalentes.
+   */
+  const puesto =
+    normalizarTextoOnboarding_(position)
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ');
+
+
+  if (
+    puesto.includes('FULL TIME') ||
+    puesto.includes('ENCARGADO') ||
+    puesto.includes('GERENTE')
+  ) {
+
+    return ONBOARDING_CONFIG.firstDaySchedules.fullTime;
+  }
+
+
+  if (puesto.includes('PART TIME')) {
+
+    return ONBOARDING_CONFIG.firstDaySchedules.partTime;
+  }
+
+
+  throw new Error(
+    'No hay horario de primer día definido para el puesto "' +
+    position +
+    '".'
+  );
+}
+
+
+  /* =========================================================
      LIMPIEZA DE DATOS
      ========================================================= */
 
@@ -778,7 +1504,7 @@ var PortalSync = (function () {
       filasDeLaBase_: filasDeLaBase_, filasDeIngreso_: filasDeIngreso_, filasDeBloqueados_: filasDeBloqueados_,
       bloqueados_: bloqueados_, llamarPortal_: llamarPortal_, horario_: horario_, fecha_: fecha_, estado_: estado_,
       agregarFilas_: agregarFilas_, fechaDeTexto_: fechaDeTexto_, enHorario_: enHorario_, sexo_: sexo_,
-      hojasZonales_: hojasZonales_, indiceZonal_: indiceZonal_
+      hojasZonales_: hojasZonales_, indiceZonal_: indiceZonal_, datosCitacion_: datosCitacion_
     }
   };
 })();
