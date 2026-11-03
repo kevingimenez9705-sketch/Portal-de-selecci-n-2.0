@@ -126,7 +126,8 @@ const ALERTA_ZONAL_LIMITE_HD = 3;
 const COLORES_EQUIPO = ['#6a4c93', '#9b2226', '#ca6702', '#005f73', '#2d6a4f', '#b5a300', '#be185d', '#2b4c86'];
 
 // ── Estado global de la app ──
-let busquedas = [];        // vacantes (cada una con .comentarios)
+let busquedas = [];        // vacantes del tablero (cada una con .comentarios)
+let busquedasArchivadas = [];   // las que sacó "Limpiar semana": no se ven en el tablero pero cuentan en Estadísticas
 let postulantes = [];      // base de postulantes
 let equipo = [];           // seleccion_equipo (lista de selectores)
 let locales = [];          // seleccion_locales: zona, localidad, dirección y razón social de cada local

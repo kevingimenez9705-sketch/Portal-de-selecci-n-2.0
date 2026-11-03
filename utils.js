@@ -121,6 +121,12 @@ function infoLocal(local) {
     const apertura = sinAper !== n;
     return { zona: l.zona, localidad: l.localidad, direccion: apertura ? '' : l.direccion, razon_social: apertura ? '' : l.razon_social, apertura };
 }
+// Registro del local en el Mapa de equipos (selector, regional, zonal y nómina asignados)
+function localDe(local) {
+    if (!_localesIdx) indexarLocales();
+    const n = normTxt(local);
+    return _localesIdx.get(n) || _localesIdx.get(n.replace(/^(APERTURA|APER)\.?\s+/, '')) || null;
+}
 function zonaDeLocalidad(localidad) {
     if (!_zonasIdx) indexarLocales();
     return _zonasIdx.get(normTxt(localidad)) || null;

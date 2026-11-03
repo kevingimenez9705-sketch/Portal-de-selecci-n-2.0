@@ -287,9 +287,9 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
         <fieldset class="full">
           <legend>Puesto que te interesa</legend>
           <div class="pills single" id="puestos"></div>
-          <p class="aviso" id="avisoExp" role="status" hidden>
+          <p class="aviso" id="avisoExp" role="note">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
-            <span>Para avanzar con esta propuesta es obligatorio contar con experiencia en el puesto.</span>
+            <span>¿Tenés experiencia como encargado/a o gerente? Comentalo en el momento de tu entrevista.</span>
           </p>
         </fieldset>
         <fieldset class="full">
@@ -320,7 +320,7 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
       <button type="button" class="ghost" id="back">Volver al inicio</button>
     </section>
   </main>
-  <p class="ver">Versión 2026-11-03.1</p>
+  <p class="ver">Versión 2026-11-04.1</p>
 </div>
 
 <script>
@@ -375,7 +375,6 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
     });
   }
   function msgError(e) { return (e && e.message) ? e.message : 'Hubo un problema. Probá de nuevo.'; }
-  function esJerarquico(puesto) { var p = norm(puesto); return p.indexOf('ENCARGAD') !== -1 || p.indexOf('GERENTE') !== -1; }
   function each(nodes, fn) { Array.prototype.forEach.call(nodes, fn); }
 
   /* ================= Estado ================= */
@@ -675,7 +674,6 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
       each(g.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); });
       $('err').textContent = '';
       $('errDatos').textContent = '';
-      if (g.id === 'puestos') $('avisoExp').hidden = !esJerarquico(b.getAttribute('data-v'));
     });
   });
   ['sexo', 'provincia'].forEach(function (id) {
@@ -695,7 +693,6 @@ fieldset{border:0;margin:0;padding:0;min-width:0}
     ids.forEach(function (id) {
       each($(id).querySelectorAll('button'), function (b) { b.setAttribute('aria-pressed', 'false'); });
     });
-    $('avisoExp').hidden = true;
   }
 
   $('save').addEventListener('submit', function (e) {

@@ -6,8 +6,8 @@ let vistaActual = 'vacantes';
 const TITULOS = {
     vacantes: ['Vacantes', 'Las mismas columnas que la hoja Solicitudes: la persona se completa a medida que avanza el proceso'],
     base:     ['Base de Postulantes', 'Postulantes aprobados en entrevista, listos para colocar en una vacante'],
-    stats:    ['Estadísticas', 'Cumplimiento por marca, zona, regional y selector'],
-    informe:  ['Informe', 'Lo que hay que mover hoy y exportación a CSV']
+    stats:    ['Estadísticas', 'Nivel de cobertura por marca, zona, regional y selector'],
+    equipos:  ['Mapa de equipos', 'Asignaciones de locales: regional, zonal y selector de cada local']
 };
 
 // Opciones de los formularios y encabezado de la grilla (una vez, al entrar)
@@ -36,7 +36,7 @@ function prepararApp() {
 
 function showView(v) {
     vistaActual = v;
-    ['vacantes', 'base', 'stats', 'informe'].forEach(id => document.getElementById('view-' + id).classList.toggle('hidden', id !== v));
+    ['vacantes', 'base', 'stats', 'equipos'].forEach(id => document.getElementById('view-' + id).classList.toggle('hidden', id !== v));
     document.querySelectorAll('.inline-nav-btn[id^="nav-"]').forEach(b => b.classList.toggle('active', b.id === 'nav-' + v));
     document.getElementById('filters-vacantes').classList.toggle('hidden', v !== 'vacantes');
     document.getElementById('filters-base').classList.toggle('hidden', v !== 'base');
@@ -56,7 +56,7 @@ function refreshView() {
     if (vistaActual === 'vacantes') { filteredIds = computeFilteredIds(); renderTable(); }
     else if (vistaActual === 'base') renderBase();
     else if (vistaActual === 'stats') renderStats(statsTab);
-    else if (vistaActual === 'informe') renderInforme();
+    else if (vistaActual === 'equipos') renderEquipos();
 }
 
 // Valores ya cargados como sugerencias de los campos de texto (local, regional, zonal…)
@@ -81,11 +81,8 @@ function renderSelectorChips() {
     const box = document.getElementById('selector-chips');
     box.innerHTML = ['', ...selectores()].map(s => {
         const activo = s === selectorFiltroActivo;
-        const color = s ? colorDe(s) : null;
-        const style = color
-            ? ` style="${activo ? `background:${color};border-color:${color};color:#fff;` : `background:${color}1a;border-color:${color}66;color:${color};`}"`
-            : '';
-        return `<button class="selector-chip${activo ? ' active' : ''}${s ? ' con-avatar' : ''}"${style} data-sel="${esc(s)}" onclick="filtrarPorSelector(this.dataset.sel)">${s ? avatarHtml(s, 'avatar-chip') : ''}${esc(s || 'Todos los selectores')}</button>`;
+        // Chips neutros: el único color del tablero es el estado de cada búsqueda
+        return `<button class="selector-chip${activo ? ' active' : ''}${s ? ' con-avatar' : ''}" data-sel="${esc(s)}" onclick="filtrarPorSelector(this.dataset.sel)">${s ? avatarHtml(s, 'avatar-chip') : ''}${esc(s || 'Todos los selectores')}</button>`;
     }).join('');
 }
 function filtrarPorSelector(nombre) {
@@ -168,6 +165,8 @@ function alertaZonalVencida(b) {
 function fueraDePlazo(b) { return b.status === 'Proceso' && daysDiff(b.inicio) > limiteDe(b); }
 function cubierta(b) { return b.status === 'Cerrada' || b.status === 'Finalizada'; }
 function vacanteAbierta(b) { return b.status === 'Proceso' || b.status === 'Pausada'; }
+// Un local EXCEDIDO no es búsqueda activa: no cuenta en los números ni en las estadísticas
+function cuentaComoActiva(b) { return b.estado_nomina !== 'EXCEDIDO'; }
 function vacantesLibres() { return busquedas.filter(b => vacanteAbierta(b) && !tienePersona(b)); }
 
 // ══════════════════════════════════════════════
@@ -280,7 +279,7 @@ function renderRow(b) {
     const coment = b.comentarios.length;
     const marcaCorta = b.marca === 'Sabores Express' ? 'SAB' : b.marca === 'Hamburguesas Extremas' ? 'EXT' : '';
     return `
-    <tr id="row-${b.id}" class="${cubierta(b) ? 'row-cubierta' : ''} ${b.status === 'Cancelada' ? 'row-locked' : ''} ${alerta ? 'row-alerta' : ''}">
+    <tr id="row-${b.id}" class="${b.estado ? 'fila-' + estadoClass(b.estado) : cubierta(b) ? 'row-cubierta' : ''} ${b.status === 'Cancelada' ? 'row-locked' : ''} ${alerta ? 'row-alerta' : ''}">
         <td class="col-fija ${marcaClass(b.marca)}">
             <div class="num-linea">
                 <button class="link-btn" onclick="openDetalle(${b.id})" title="Ver detalle, historial y demora">${esc(b.numero)}</button>
@@ -304,7 +303,8 @@ function renderRow(b) {
 
 // Los KPI respetan la marca y el selector elegidos, no el resto de los filtros.
 function renderKPIs() {
-    const data = busquedas.filter(b => (!selectorFiltroActivo || b.selector === selectorFiltroActivo) && (!marcaActiva || b.marca === marcaActiva));
+    const todas = busquedas.filter(b => (!selectorFiltroActivo || b.selector === selectorFiltroActivo) && (!marcaActiva || b.marca === marcaActiva));
+    const data = todas.filter(cuentaComoActiva);
     const validas = data.filter(b => b.status !== 'Cancelada');
     const cubiertas = validas.filter(cubierta).length;
     const pct = validas.length ? Math.round(cubiertas / validas.length * 100) : 0;
@@ -317,7 +317,7 @@ function renderKPIs() {
         kpiHtml(cuenta('CITADO') + cuenta('HUELLA'), 'Citados / huella', 'ambar') +
         kpiHtml(cubiertas, 'Cubiertas', 'verde', `${pct}% cumplimiento`) +
         kpiHtml(data.filter(alertaZonalVencida).length, 'Alertas 72hs zonal', 'rosa');
-    renderLeyendaNomina(abiertas);
+    renderLeyendaNomina(todas.filter(vacanteAbierta));
     actualizarBotonIcheck();
     actualizarBotonOnb();
 }
@@ -327,11 +327,14 @@ function renderLeyendaNomina(abiertas) {
     const box = document.getElementById('nomina-leyenda');
     if (!box) return;
     const filtro = document.getElementById('f-alerta').value;
-    box.innerHTML = `<span class="nomina-leyenda-tit">Nómina del local</span>` + ESTADOS_NOMINA.map(e => {
-        const n = abiertas.filter(b => b.estado_nomina === e).length;
-        const activo = filtro === 'nom:' + e;
-        return `<button class="nomina nomina-${NOMINA_INFO[e].clase}${activo ? ' activo' : ''}" data-e="${esc(e)}" onclick="filtrarNomina(this.dataset.e)"
-            title="${activo ? 'Quitar filtro' : 'Ver solo las vacantes abiertas en locales: ' + NOMINA_INFO[e].lbl}"><i></i>${NOMINA_INFO[e].lbl} <strong>${n}</strong></button>`;
+    // Una sola lista para lo que se busca (debe completar + completo) y aparte los excedidos, que no cuentan
+    const grupos = [
+        { e: 'ACTIVAS', clase: 'completar', lbl: 'A completar', n: abiertas.filter(cuentaComoActiva).length, tit: 'locales que deben completar o están completos' },
+        { e: 'EXCEDIDO', clase: 'excedido', lbl: 'Excedido · no cuenta', n: abiertas.filter(b => !cuentaComoActiva(b)).length, tit: 'locales excedidos (no son búsqueda activa)' }];
+    box.innerHTML = `<span class="nomina-leyenda-tit">Nómina del local</span>` + grupos.map(g => {
+        const activo = filtro === 'nom:' + g.e;
+        return `<button class="nomina nomina-${g.clase}${activo ? ' activo' : ''}" data-e="${esc(g.e)}" onclick="filtrarNomina(this.dataset.e)"
+            title="${activo ? 'Quitar filtro' : 'Ver solo las vacantes abiertas en ' + g.tit}"><i></i>${g.lbl} <strong>${g.n}</strong></button>`;
     }).join('');
 }
 function filtrarNomina(e) {
@@ -357,7 +360,8 @@ function computeFilteredIds() {
         if (alerta === '72' && !alertaZonalVencida(b)) return false;
         if (alerta === 'plazo' && !fueraDePlazo(b)) return false;
         if (alerta === 'libres' && !(vacanteAbierta(b) && !tienePersona(b))) return false;
-        if (alerta.startsWith('nom:') && b.estado_nomina !== alerta.slice(4)) return false;
+        if (alerta === 'nom:ACTIVAS' && !cuentaComoActiva(b)) return false;
+        if (alerta.startsWith('nom:') && alerta !== 'nom:ACTIVAS' && b.estado_nomina !== alerta.slice(4)) return false;
         if (search) {
             const hay = [b.numero, b.local, b.local_entrenamiento, b.puesto, b.selector, b.regional, b.zonal, b.nombre, b.apellido, b.dni, b.notas].join(' ').toLowerCase();
             if (!hay.includes(search)) return false;
@@ -458,7 +462,8 @@ function renderDetalle(id) {
 // ══════════════════════════════════════════════
 //  BASE DE POSTULANTES
 // ══════════════════════════════════════════════
-function vacantesDe(pid) { return busquedas.filter(b => b.postulante_id === pid); }
+// También las limpiadas del tablero: quien ingresó sigue figurando como ingresado en la Base
+function vacantesDe(pid) { return todasLasBusquedas().filter(b => b.postulante_id === pid); }
 function vacanteDe(pid) { return busquedas.find(b => b.postulante_id === pid && vacanteAbierta(b)) || null; }
 function disponibilidad(p) {
     const vs = vacantesDe(p.id);

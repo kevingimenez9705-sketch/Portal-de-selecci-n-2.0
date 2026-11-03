@@ -40,6 +40,7 @@
         <div class="topnav-logo">🐢 Portal de <span>Selección</span></div>
         <div class="topnav-right">
             <button class="topnav-btn" onclick="recargarDatos()" title="Volver a traer los datos"><i class="fas fa-sync-alt"></i> Actualizar</button>
+            <button class="topnav-btn" id="btn-limpiar" onclick="limpiarSemana()" title="Saca todas las vacantes del tablero para empezar la semana; siguen contando en Estadísticas"><i class="fas fa-broom"></i> Limpiar semana</button>
             <button class="topnav-btn" id="btn-equipo" onclick="openEquipoModal()" title="Lista de selectores"><i class="fas fa-users-cog"></i> Equipo</button>
             <div class="topnav-sep"></div>
             <button class="topnav-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Salir</button>
@@ -68,7 +69,7 @@
             <button class="inline-nav-btn active" id="nav-vacantes" onclick="showView('vacantes')"><i class="fas fa-table"></i> Vacantes</button>
             <button class="inline-nav-btn" id="nav-base" onclick="showView('base')"><i class="fas fa-database"></i> Base de postulantes</button>
             <button class="inline-nav-btn" id="nav-stats" onclick="showView('stats')"><i class="fas fa-chart-bar"></i> Estadísticas</button>
-            <button class="inline-nav-btn" id="nav-informe" onclick="showView('informe')"><i class="fas fa-file-export"></i> Informe</button>
+            <button class="inline-nav-btn" id="nav-equipos" onclick="showView('equipos')"><i class="fas fa-sitemap"></i> Mapa de equipos</button>
         </div>
 
         <div class="selector-chips" id="selector-chips"></div>
@@ -83,9 +84,8 @@
                 <option value="libres">Solo sin persona</option>
                 <option value="72">Solo alerta 72hs zonal</option>
                 <option value="plazo">Solo fuera de plazo</option>
-                <option value="nom:EXCEDIDO">Solo locales excedidos</option>
-                <option value="nom:DEBE COMPLETAR">Solo locales que deben completar</option>
-                <option value="nom:COMPLETO">Solo locales completos</option>
+                <option value="nom:ACTIVAS">Solo búsquedas activas (sin excedidos)</option>
+                <option value="nom:EXCEDIDO">Solo locales excedidos (no cuentan)</option>
             </select>
             <input class="filter-input" id="f-search" placeholder="Buscar local, N°, nombre, DNI…" oninput="applyFiltersDebounced()">
         </div>
@@ -159,23 +159,24 @@
                 <button class="page-tab active" onclick="switchStatsTab('general',this)">General</button>
                 <button class="page-tab" onclick="switchStatsTab('Hamburguesas Extremas',this)">Hamburguesas Extremas</button>
                 <button class="page-tab" onclick="switchStatsTab('Sabores Express',this)">Sabores Express</button>
+                <div class="stats-csv">
+                    <select class="filter-select" id="stats-csv-selector" title="Selector del CSV"></select>
+                    <button class="btn-secundario" onclick="descargarInformeCSV()" title="Todas las vacantes, también las limpiadas"><i class="fas fa-file-csv"></i> Descargar CSV</button>
+                </div>
             </div>
             <div id="stats-content"></div>
         </div>
 
-        <!-- INFORME -->
-        <div id="view-informe" class="hidden">
-            <div class="chart-card informe-descarga">
-                <div>
-                    <div class="chart-card-title" style="margin:0;padding:0;border:none"><i class="fas fa-file-csv"></i> Descargar todas las vacantes</div>
-                    <p class="tip" style="font-style:normal;margin-top:6px;max-width:560px">CSV con las mismas columnas que la hoja Solicitudes, más estado de la vacante, demoras y alertas.</p>
-                </div>
-                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                    <select class="form-input" id="informe-selector-filter" style="max-width:220px"></select>
-                    <button class="btn-primary" onclick="descargarInformeCSV()"><i class="fas fa-download"></i> Descargar CSV</button>
-                </div>
+        <!-- MAPA DE EQUIPOS -->
+        <div id="view-equipos" class="hidden">
+            <div id="equipos-marcas" class="eq-marcas"></div>
+            <div class="eq-filtros">
+                <input class="filter-select eq-buscar" id="eq-buscar" placeholder="Buscar local, zonal o regional…" oninput="renderEquipos()">
+                <select class="filter-select" id="eq-regional" onchange="renderEquipos()"></select>
+                <select class="filter-select" id="eq-zonal" onchange="renderEquipos()"></select>
             </div>
-            <div id="informe-content"></div>
+            <div id="equipos-selectores" class="eq-selectores"></div>
+            <div id="equipos-arbol"></div>
         </div>
     </main>
 </div>
@@ -394,6 +395,7 @@
 <script src="importar.js"></script>
 <script src="procesos.js"></script>
 <script src="onboarding.js"></script>
+<script src="equipos.js"></script>
 <script>initApp();</script>
 
 </body>
