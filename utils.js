@@ -107,12 +107,14 @@ const normTxt = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g
 // (y como en las hojas de asignaciones: "(PROVINCIA)", GENERAL = GRAL, "FLORES 1" = "FLORES")
 const claveLocal = s => normTxt(s).replace(/\([^)]*\)/g, ' ').replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim()
     .replace(/^SABORES EXPRESS\s+/, 'SABORES ').replace(/^HAMBURGUESAS EXTREMAS\s+/, 'EXTREMAS ')
-    .replace(/\bGENERAL\b/g, 'GRAL').replace(/\bPRESIDENTE\b/g, 'PTE').replace(/\s+1$/, '');
+    .replace(/\bGENERAL\b/g, 'GRAL').replace(/\bPRESIDENTE\b/g, 'PTE').replace(/\bRAMOS MEJIA\b/g, 'RAMOS')
+    .replace(/^(SABORES|EXTREMAS) EL\s+/, '$1 ').replace(/\s+1$/, '');
 
 // ── LOCALES Y ZONAS ──
 let _localesIdx = null, _zonasIdx = null;
 function indexarLocales() {
-    _localesIdx = new Map(locales.map(l => [claveLocal(l.local), l]));
+    // Primero los alias (otros nombres del local en las hojas); el nombre propio tiene prioridad
+    _localesIdx = new Map([...locales.flatMap(l => (l.alias || []).map(a => [claveLocal(a), l])), ...locales.map(l => [claveLocal(l.local), l])]);
     _zonasIdx = new Map(zonasLocalidad.map(z => [normTxt(z.localidad), z]));
 }
 // Zona, localidad, dirección y razón social del local de una vacante. Una apertura
