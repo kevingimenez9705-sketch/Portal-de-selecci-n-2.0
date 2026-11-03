@@ -12,15 +12,17 @@
 -- ══════════════════════════════════════════════════════════════════════════
 
 alter table public.seleccion_locales
-    add column if not exists asignacion_hoja jsonb;   -- último valor leído de la hoja (para no pisar cambios del portal)
+    add column if not exists asignacion_hoja jsonb,   -- último valor leído de la hoja (para no pisar cambios del portal)
+    add column if not exists alias text[];            -- otros nombres del mismo local en las hojas ("SABORES LANUS 3" = "SABORES LANUS 1/3")
 
 -- Mismo local escrito distinto en la hoja y en el portal:
 --   "SABORES EXPRESS ADROGUE" = "SABORES ADROGUE" · "APERTURA EXTREMAS PILAR" = "EXTREMAS PILAR"
 --   "SABORES CORDOBA (PROVINCIA)" = "SABORES CORDOBA" · "GENERAL RODRIGUEZ" = "GRAL. RODRIGUEZ"
 --   "SABORES FLORES 1" = "SABORES FLORES" (el 1 es el primero; el 2 sigue siendo otro local)
+--   "SABORES EL PALOMAR" = "SABORES PALOMAR" · "RAMOS MEJIA" = "RAMOS"
 create or replace function public.seleccion_clave_local_(v text) returns text
 language sql immutable set search_path = public as $$
-    select trim(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(
+    select trim(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(
         seleccion_norm_(v),
         '\([^)]*\)', ' ', 'g'),                       -- (PROVINCIA), (CABA)…
         '[.,]', ' ', 'g'),
@@ -29,7 +31,9 @@ language sql immutable set search_path = public as $$
         '^HAMBURGUESAS EXTREMAS\s+', 'EXTREMAS '),
         '\mGENERAL\M', 'GRAL', 'g'),
         '\mPRESIDENTE\M', 'PTE', 'g'),
-        '\s+1$', ''),
+        '\mRAMOS MEJIA\M', 'RAMOS', 'g'),
+        '^(SABORES|EXTREMAS) EL\s+', '\1 '),
+        '\s+1\s*$', ''),
         '\s+', ' ', 'g'))
 $$;
 
@@ -55,7 +59,8 @@ begin
     end if;
     for r in select * from jsonb_to_recordset(coalesce(filas, '[]')) as x(marca text, selector text, regional text, zonal text, local text, estado text) loop
         select * into l from seleccion_locales s
-         where s.marca = r.marca and seleccion_clave_local_(s.local) = seleccion_clave_local_(r.local)
+         where s.marca = r.marca and (seleccion_clave_local_(s.local) = seleccion_clave_local_(r.local)
+            or seleccion_clave_local_(r.local) in (select seleccion_clave_local_(a) from unnest(coalesce(s.alias, '{}')) a))
          order by s.activo desc nulls last, s.id limit 1;
         if not found then
             if array_length(sin_local, 1) is null or array_length(sin_local, 1) < 40 then sin_local := sin_local || trim(r.local); end if;
