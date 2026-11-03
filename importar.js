@@ -10,6 +10,7 @@ let importLineas = [];
 let importNomina = [];   // vacantes abiertas cuya nómina cambia: { id, estado_nomina, nomina_detalle }
 let importSalteados = [];   // locales que no generan vacantes y por qué: { local, motivo }
 let importLocales = new Map();   // local → regional, zonal y nómina de la planilla (actualizan el Mapa de equipos)
+const ESTADOS_LOCAL_IMPORTABLES = ['ACTIVO', 'APERTURA'];
 
 function openImportar() {
     document.getElementById('imp-marca').innerHTML = optionsHtml(MARCAS, marcaActiva || MARCAS[1]);
@@ -74,7 +75,7 @@ function columnasSolicitud(rows) {
 function marcaDeLocal(local, porDefecto) {
     const n = normTxt(local);
     if (n.includes('EXTREMAS')) return 'Hamburguesas Extremas';
-    if (n.includes('SABORES') || n.includes('EMPANADA')) return 'Sabores Express';
+    if (n.includes('SABORES') || n.includes('EMPANADA') || esMania(local)) return 'Sabores Express';   // Mania va dentro de Sabores
     return porDefecto;
 }
 
@@ -146,7 +147,8 @@ function revisarImportacion(filasExcel) {
         if (!local || nLocal === 'LOCAL' || nLocal === 'DATOS DEL LOCAL') return; // encabezados
         if (!pos.conEncabezado && r.length <= pos.perfiles.PART) { cortas++; return; }
         const estadoLocal = normTxt(celda(r, pos.estado));
-        if (estadoLocal && estadoLocal !== 'ACTIVO') { inactivos++; importSalteados.push({ local, motivo: `Local ${celda(r, pos.estado)}` }); return; }
+        // La planilla admite ACTIVO y APERTURA: los dos piden gente. Se saltea cualquier otro (cerrado, baja…)
+        if (estadoLocal && !ESTADOS_LOCAL_IMPORTABLES.includes(estadoLocal)) { inactivos++; importSalteados.push({ local, motivo: `Local ${celda(r, pos.estado)}` }); return; }
         const gr = celda(r, pos.gr), gz = celda(r, pos.gz), obs = celda(r, pos.obs);
         const nomina = nominaDe(celda(r, pos.nomina));
         importLocales.set(nLocal, { local, regional: gr, zonal: gz, estado_nomina: nomina || null });
@@ -195,7 +197,7 @@ function revisarImportacion(filasExcel) {
         return;
     }
     renderImportPreview();
-    if (inactivos) toast(`${inactivos} local(es) no están ACTIVOS y se salteó`);
+    if (inactivos) toast(`${inactivos} local(es) no están ACTIVOS ni en APERTURA y se saltearon`);
 }
 
 // Para que se vea por qué un local de la planilla no generó vacantes
@@ -212,7 +214,7 @@ function renderImportPreview() {
     const fila = (l, i) => `<tr class="${l.usar && l.crear ? '' : 'row-locked'}">
         <td><input type="checkbox" ${l.usar ? 'checked' : ''} ${l.excedido && !l.faltaCompletar ? 'disabled title="Marcá Falta completar para crearla"' : ''} onchange="importLineas[${i}].usar=this.checked;renderImportPreview()"></td>
         <td><strong>${esc(l.local)}</strong></td>
-        <td><span class="marca-mini ${marcaClass(l.marca)}">${l.marca === 'Sabores Express' ? 'SAB' : 'EXT'}</span></td>
+        <td>${marcaMiniHtml(l.marca, l.local)}</td>
         <td>${l.excedido
             ? `<label class="imp-falta" title="Excepción: el local está excedido pero igual hay que cubrir este puesto"><input type="checkbox" ${l.faltaCompletar ? 'checked' : ''} onchange="marcarFaltaCompletar(${i}, this.checked)"> Falta completar</label>`
             : (nominaHtml(l) || '—')}</td>

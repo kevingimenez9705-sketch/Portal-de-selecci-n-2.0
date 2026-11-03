@@ -281,13 +281,12 @@ function renderRow(b) {
     const dias = daysDiff(b.inicio, b.ingreso || null);
     const alerta = alertaZonalVencida(b);
     const coment = b.comentarios.length;
-    const marcaCorta = b.marca === 'Sabores Express' ? 'SAB' : b.marca === 'Hamburguesas Extremas' ? 'EXT' : '';
     return `
     <tr id="row-${b.id}" class="${b.estado ? 'fila-' + estadoClass(b.estado) : cubierta(b) ? 'row-cubierta' : ''} ${b.status === 'Cancelada' ? 'row-locked' : ''} ${alerta ? 'row-alerta' : ''}">
         <td class="col-fija ${marcaClass(b.marca)}">
             <div class="num-linea">
                 <button class="link-btn" onclick="openDetalle(${b.id})" title="Ver detalle, historial y demora">${esc(b.numero)}</button>
-                ${marcaCorta ? `<span class="marca-mini ${marcaClass(b.marca)}">${marcaCorta}</span>` : ''}
+                ${marcaMiniHtml(b.marca, b.local)}
             </div>
             <div class="num-linea">
                 <span class="tag ${tagClass(b.status)}">${esc(cubierta(b) ? 'Cubierta' : b.status)}</span>

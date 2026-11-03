@@ -747,6 +747,8 @@ var PortalSync = (function () {
       'Hamburguesas Extremas': { brand: 'EXTREMAS', subject: 'BIENVENIDA E INGRESO: HAMBURGUESAS EXTREMAS', signature: 'Hamburguesas Extremas' },
       'Sabores Express': { brand: 'SABORES', subject: 'BIENVENIDA E INGRESO: SABORES EXPRESS', signature: 'Sabores Express' }
     },
+    // Empanada Mania va dentro de Sabores en el portal, pero el mail lleva su propio nombre
+    mania: { brand: 'EMPANADA MANIA', subject: 'BIENVENIDA E INGRESO: EMPANADA MANIA', signature: 'Empanada Mania' },
     senderName: 'Equipo de Selección',
     officeAddress: 'Florida 428, CABA',
     formUrl: 'https://forms.gle/JYp28JhtcyKu9smt8',
@@ -787,7 +789,8 @@ var PortalSync = (function () {
 
   // Mismas reglas que procesarFilaOnboarding_ de Onboarding.gs
   function datosCitacion_(v) {
-    const marca = ONBOARDING_CONFIG.marcas[v.marca];
+    const esMania = v.marca === 'Sabores Express' && /\bMANIA\b/.test(normalizarTextoOnboarding_(v.local));
+    const marca = esMania ? ONBOARDING_CONFIG.mania : ONBOARDING_CONFIG.marcas[v.marca];
     if (!marca) throw new Error('Marca desconocida: ' + v.marca);
     const tz = SYNC.ZONA_HORARIA;
     const dia = function (iso) { return iso ? Utilities.parseDate(String(iso).slice(0, 10), tz, 'yyyy-MM-dd') : ''; };

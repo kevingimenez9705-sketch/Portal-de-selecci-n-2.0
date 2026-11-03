@@ -50,7 +50,7 @@ function renderOnboarding() {
 
     const persona = b => `<strong>${esc(nombreCompleto(b) || '—')}</strong><div class="cand-meta">${esc(b.email || 'sin email')}</div>`;
     const vacante = b => `<button class="link-btn" data-num="${esc(b.numero)}" onclick="closeModal('modal-onb');verEnPipeline(this.dataset.num)">${esc(b.numero)}</button>
-        <span class="marca-mini ${marcaClass(b.marca)}">${b.marca === 'Sabores Express' ? 'SAB' : 'EXT'}</span>`;
+        ${marcaMiniHtml(b.marca, b.local)}`;
 
     document.getElementById('onb-alertas').innerHTML = alertas.length ? `
         <table class="tabla-informe"><thead><tr><th>N°</th><th>Persona</th><th>Local</th><th>Regional</th><th>Sin respuesta</th></tr></thead>

@@ -77,7 +77,7 @@ function renderEquipos() {
                     ${ls.map(l => {
                         const [cls, txt] = NOMINA_PUNTO[l.estado_nomina] || ['nomina-sin', 'Sin dato de nómina'];
                         return `<div class="eq-local"><span class="eq-punto ${cls}" title="${txt}"></span>
-                            <span class="eq-local-nom">${esc(l.local)}${eqMarca ? '' : ` <span class="eq-local-marca">${l.marca === 'Sabores Express' ? 'Sabores' : 'Extremas'}</span>`}</span>
+                            <span class="eq-local-nom">${esc(l.local)}${eqMarca ? '' : ` <span class="eq-local-marca">${l.marca === 'Sabores Express' ? (esMania(l.local) ? 'Mania' : 'Sabores') : 'Extremas'}</span>`}</span>
                             <select class="filter-select eq-asignar" onchange="asignarSelector([${l.id}], this.value, this)">${optionsHtml(sels, l.selector || null, '— Sin asignar —')}</select></div>`;
                     }).join('')}
                 </div>`;

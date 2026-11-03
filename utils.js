@@ -213,6 +213,16 @@ function marcaClass(m) {
     if (m === 'Hamburguesas Extremas') return 'marca-extremas';
     return '';
 }
+// Empanada Mania va dentro de Sabores (misma pestaña, regional y onboarding), con su propia etiqueta
+function esMania(local) { return /\bMANIA\b/.test(normTxt(local)); }
+function marcaCorta(marca, local) {
+    if (marca === 'Sabores Express') return esMania(local) ? 'MAN' : 'SAB';
+    return marca === 'Hamburguesas Extremas' ? 'EXT' : '';
+}
+function marcaMiniHtml(marca, local) {
+    const c = marcaCorta(marca, local);
+    return c ? `<span class="marca-mini ${marcaClass(marca)}${c === 'MAN' ? ' marca-mania' : ''}" title="${c === 'MAN' ? 'Empanada Mania' : esc(marca)}">${c}</span>` : '';
+}
 // Tarjeta de número con barra de color (mismo estilo que el Contador de Vacantes)
 function kpiHtml(num, lbl, tono = 'violeta', sub = '') {
     return `<div class="kpi kpi--${tono}"><div class="kpi-num">${num}</div><div class="kpi-lbl">${lbl}</div>${sub ? `<div class="kpi-sub">${sub}</div>` : ''}</div>`;
