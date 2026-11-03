@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trabajá con nosotros · Gastro Buenos Aires</title>
+<meta name="description" content="Dejá tus datos y tu disponibilidad para trabajar en Hamburguesas Extremas y Sabores Express.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!--
+  "Elegí tu vacante" (antes web app de Apps Script en TAREAS GRUPALES, Index.html + Codigo.gs).
+  Página pública: no lleva el código del equipo. Solo llama a las funciones seleccion_web_* de
+  sql/elegi_tu_vacante.sql, que vuelven a validar todo del lado de la base.
+  Como en la planilla (SOLO_BASE): la persona deja datos y disponibilidad; la vacante la asigna Selección.
+-->
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#eef2f6; --card:#ffffff; --ink:#14202e; --muted:#4a5a6c; --line:#dfe5ec;
+  --field:#f6f8fb; --accent:#0f2a44; --accent-soft:#f1f5fa; --ok:#2f6b47; --ok-soft:#e6f2eb;
+  --warn-bg:#fdf0e6; --warn-fg:#8a3b12; --err:#8f1d1d; --disabled:#9aa6b4;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1720; --card:#16202b; --ink:#e8eef5; --muted:#9fb0c2; --line:#2a3845;
+    --field:#1c2835; --accent:#8fb8e8; --accent-soft:#1d2b3a; --ok:#7fc79d; --ok-soft:#1b2d24;
+    --warn-bg:#3a2616; --warn-fg:#f3c29b; --err:#f2abab; --disabled:#4b5968;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1720; --card:#16202b; --ink:#e8eef5; --muted:#9fb0c2; --line:#2a3845;
+  --field:#1c2835; --accent:#8fb8e8; --accent-soft:#1d2b3a; --ok:#7fc79d; --ok-soft:#1b2d24;
+  --warn-bg:#3a2616; --warn-fg:#f3c29b; --err:#f2abab; --disabled:#4b5968;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Figtree',system-ui,-apple-system,'Segoe UI',sans-serif;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+
+.wrap{max-width:900px;margin:0 auto;padding:32px 16px 48px}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+.brand{font-size:14px;font-weight:600;color:var(--muted);margin:0 0 4px}
+h1{margin:0;font-size:clamp(26px,3.2vw,34px);font-weight:700;color:var(--accent);letter-spacing:-0.01em}
+.steps{display:flex;gap:8px;list-style:none;margin:0;padding:0;font-size:14px;color:var(--muted)}
+.steps li{padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line)}
+.steps li.on{background:var(--accent);border-color:var(--accent);color:var(--card);font-weight:600}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:36px}
+.step{display:none;flex-direction:column;gap:18px;min-width:0}
+.step.show{display:flex}
+.narrow{max-width:760px;display:flex;flex-direction:column;gap:16px}
+.narrow > .section-title{margin-top:6px}
+.section-title{font-size:15px;font-weight:700;color:var(--muted);margin:0}
+.oblig{margin:0;font-size:14px;color:var(--muted)}
+.grid2,.save-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.save-grid{gap:18px}
+.full{grid-column:1/-1}
+label{display:flex;flex-direction:column;gap:7px;font-size:14px;font-weight:600}
+label small{font-weight:400;color:var(--muted)}
+input,select{height:48px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--field);font-size:16px;width:100%}
+select{border:2px solid var(--accent);background:var(--card);cursor:pointer}
+input[type="date"]{color:inherit}
+textarea{width:100%;min-height:84px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--field);font-size:16px;resize:vertical}
+.nac{display:flex;flex-direction:column;gap:8px}
+
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{min-height:44px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);cursor:pointer;font-size:14px;font-weight:600}
+.pill[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--card)}
+.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.days .pill{padding:0;text-align:center}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+.save-grid legend{font-size:14px;font-weight:600;margin:0 0 7px;padding:0}
+
+.docs{border:1px solid var(--line);border-radius:14px;padding:6px 20px 18px;margin:0;display:flex;flex-direction:column;gap:14px;min-width:0}
+.docs legend{padding:0 6px}
+.docs-intro{margin:0;font-size:14px;color:var(--muted)}
+.doc-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--line)}
+.doc-row > span{font-size:15px;font-weight:600}
+
+.intro{margin:0;padding:14px 16px;border-radius:12px;background:var(--accent-soft);color:var(--muted);font-size:15px;line-height:1.5}
+.intro.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.intro strong{display:block;margin-bottom:2px}
+.doc-aviso{padding:22px 24px;font-size:16px}
+.doc-aviso strong{font-size:18px;margin-bottom:6px}
+.aviso{display:flex;gap:10px;align-items:flex-start;margin:12px 0 0;padding:12px 14px;border-radius:10px;background:var(--warn-bg);color:var(--warn-fg);font-size:14px;font-weight:600;line-height:1.4}
+.aviso svg{flex-shrink:0;margin-top:1px}
+.err{margin:0;color:var(--err);font-size:14px;font-weight:600;min-height:20px}
+
+.cta{min-height:52px;padding:0 28px;border-radius:12px;border:0;background:var(--accent);color:var(--card);font-size:16px;font-weight:700;cursor:pointer}
+.cta:disabled{background:var(--disabled);cursor:not-allowed}
+.ghost{min-height:48px;padding:0 22px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-weight:600;cursor:pointer}
+.alt{min-height:44px;padding:0 4px;border:0;background:transparent;color:var(--accent);font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.step-foot,.save-foot{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.save-foot{padding-top:16px;border-top:1px solid var(--line);flex-wrap:wrap}
+.save-foot .cta{margin-left:auto}
+
+.done{display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:48px 16px;min-height:420px}
+.done.show{display:flex}
+.check{width:72px;height:72px;border-radius:50%;background:var(--ok-soft);display:flex;align-items:center;justify-content:center}
+.done h2{margin:0;font-size:28px;color:var(--accent)}
+.done p{margin:0;max-width:460px;font-size:17px;color:var(--muted)}
+.ver{margin:14px 4px 0;font-size:12px;color:var(--muted);text-align:right}
+@media (prefers-reduced-motion:no-preference){
+  .done.show{animation:pop .35s ease-out}
+  @keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+}
+@media (max-width:760px){
+  .grid2,.save-grid{grid-template-columns:1fr}
+  .card{padding:22px}
+  .steps{display:none}
+  .cta{width:100%}
+  .save-foot .ghost{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="brand">Gastro Buenos Aires · Selección</p>
+      <h1 id="titulo">Empecemos con tus datos</h1>
+    </div>
+    <ol class="steps" aria-label="Pasos">
+      <li class="on" id="step1">1. Tus datos</li>
+      <li id="step2">2. Disponibilidad</li>
+      <li id="step3">3. Confirmación</li>
+    </ol>
+  </header>
+
+  <main class="card">
+
+    <!-- ============ PASO 1: DATOS Y DOCUMENTACIÓN ============ -->
+    <section class="step show" id="s-datos" aria-labelledby="t-datos">
+      <div class="narrow">
+        <p class="oblig">Todos los campos son obligatorios.</p>
+        <h2 class="section-title" id="t-datos">Datos personales</h2>
+        <div class="grid2">
+          <label>Nombre/s <small>(como figura en el DNI)</small><input id="nombre" autocomplete="given-name" maxlength="80" aria-required="true"></label>
+          <label>Apellido/s <small>(como figura en el DNI)</small><input id="apellido" autocomplete="family-name" maxlength="80" aria-required="true"></label>
+          <label>DNI <small>(sin puntos)</small><input id="dni" inputmode="numeric" placeholder="Ej: 40123456" maxlength="10" aria-required="true"></label>
+          <label>CUIL<input id="cuil" inputmode="numeric" placeholder="Ej: 20-40123456-7" maxlength="13" aria-required="true"></label>
+          <label>Fecha de nacimiento<input id="fechaNac" type="date" aria-required="true"></label>
+          <div class="nac">
+            <label>Nacionalidad
+              <select id="nacionalidad" aria-required="true">
+                <option value="">Elegí tu nacionalidad</option>
+                <option>Argentina</option>
+                <option>Bolivia</option>
+                <option>Brasil</option>
+                <option>Chile</option>
+                <option>Colombia</option>
+                <option>Paraguay</option>
+                <option>Perú</option>
+                <option>Uruguay</option>
+                <option>Venezuela</option>
+                <option value="Otra">Otra</option>
+              </select>
+            </label>
+            <input id="nacOtra" placeholder="¿Cuál?" maxlength="40" aria-label="Otra nacionalidad" hidden>
+          </div>
+        </div>
+
+        <h2 class="section-title">Contacto</h2>
+        <div class="grid2">
+          <label>Mail<input id="mail" type="email" placeholder="tunombre@mail.com" autocomplete="email" inputmode="email" maxlength="120" aria-required="true"></label>
+          <label>Número de WhatsApp<input id="cel" placeholder="11 1234-5678" inputmode="tel" autocomplete="tel" maxlength="30" aria-required="true"></label>
+          <label>Teléfono de emergencia <small>(de un familiar o conocido)</small><input id="telEmerg" placeholder="11 1234-5678" inputmode="tel" maxlength="30" aria-required="true"></label>
+          <label>¿Dónde vivís?
+            <select id="locDatos" aria-required="true"><option value="">Cargando…</option></select>
+          </label>
+        </div>
+
+        <div class="intro warn" id="cargaError" role="alert" hidden>
+          <strong>No pudimos cargar las localidades.</strong>
+          <span id="cargaMsg"></span>
+          <button type="button" class="alt" id="cargaRetry">Reintentar</button>
+        </div>
+
+        <fieldset class="docs">
+          <legend class="section-title">Documentación</legend>
+          <p class="docs-intro">Para postularte a una vacante necesitás tener estos dos documentos.</p>
+          <div class="doc-row">
+            <span id="l-manip">¿Tenés el Curso de Manipulación de Alimentos?</span>
+            <div class="pills single" id="manipulacion" role="group" aria-labelledby="l-manip">
+              <button type="button" class="pill" data-v="Sí" aria-pressed="false">Sí</button>
+              <button type="button" class="pill" data-v="No" aria-pressed="false">No</button>
+            </div>
+          </div>
+          <div class="doc-row">
+            <span id="l-antec">¿Tenés el Certificado de Antecedentes Penales?</span>
+            <div class="pills single" id="antecedentes" role="group" aria-labelledby="l-antec">
+              <button type="button" class="pill" data-v="Sí" aria-pressed="false">Sí</button>
+              <button type="button" class="pill" data-v="No" aria-pressed="false">No</button>
+            </div>
+          </div>
+        </fieldset>
+
+        <p class="err" id="errDatos" role="alert"></p>
+        <div class="step-foot">
+          <span></span>
+          <button type="button" class="cta" id="continuar">Continuar</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ YA REGISTRADO CON DOCUMENTACIÓN INCOMPLETA: solo aviso ============ -->
+    <section class="step" id="s-doc" role="alert">
+      <div class="narrow">
+        <div class="intro warn doc-aviso">
+          <strong id="docTitulo"></strong>
+          <span id="docTexto"></span>
+        </div>
+        <div class="step-foot">
+          <span></span>
+          <button type="button" class="cta" id="salir">Salir</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PASO 2: DISPONIBILIDAD (Base de postulantes) ============
+         Lo completa quien tiene la documentación completa y también quien no la tiene:
+         nadie queda en la base con datos en S/D. -->
+    <form class="step" id="save" novalidate>
+      <p class="intro" id="saveIntro"></p>
+      <p class="oblig">Todos los campos son obligatorios.</p>
+      <div class="save-grid">
+        <label>¿Dónde vivís?
+          <select id="locBase" aria-required="true"></select>
+        </label>
+        <label>Sede donde tuviste la entrevista
+          <select id="sede" aria-required="true"></select>
+        </label>
+        <label>¿Desde cuándo podés empezar?
+          <select id="inicio" aria-required="true"></select>
+        </label>
+        <fieldset>
+          <legend>Jornada</legend>
+          <div class="pills multi" id="jornada">
+            <button type="button" class="pill" data-v="Part-time" aria-pressed="false">Part-time</button>
+            <button type="button" class="pill" data-v="Full-time" aria-pressed="false">Full-time</button>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Horario</legend>
+          <div class="pills multi" id="franja">
+            <button type="button" class="pill" data-v="Mañana" aria-pressed="false">Mañana</button>
+            <button type="button" class="pill" data-v="Tarde" aria-pressed="false">Tarde</button>
+            <button type="button" class="pill" data-v="Noche" aria-pressed="false">Noche</button>
+          </div>
+        </fieldset>
+        <fieldset class="full">
+          <legend>Días que podés trabajar</legend>
+          <div class="days multi" id="dias">
+            <button type="button" class="pill" data-v="Lun" aria-pressed="false" aria-label="Lunes">L</button>
+            <button type="button" class="pill" data-v="Mar" aria-pressed="false" aria-label="Martes">M</button>
+            <button type="button" class="pill" data-v="Mié" aria-pressed="false" aria-label="Miércoles">M</button>
+            <button type="button" class="pill" data-v="Jue" aria-pressed="false" aria-label="Jueves">J</button>
+            <button type="button" class="pill" data-v="Vie" aria-pressed="false" aria-label="Viernes">V</button>
+            <button type="button" class="pill" data-v="Sáb" aria-pressed="false" aria-label="Sábado">S</button>
+            <button type="button" class="pill" data-v="Dom" aria-pressed="false" aria-label="Domingo">D</button>
+          </div>
+        </fieldset>
+        <fieldset class="full">
+          <legend>Puesto que te interesa</legend>
+          <div class="pills single" id="puestos"></div>
+          <p class="aviso" id="avisoExp" role="status" hidden>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+            <span>Para avanzar con esta propuesta es obligatorio contar con experiencia en el puesto.</span>
+          </p>
+        </fieldset>
+        <fieldset class="full">
+          <legend>¿Estás interesado/a en la propuesta?</legend>
+          <div class="pills single" id="interesado">
+            <button type="button" class="pill" data-v="Sí" aria-pressed="false">Sí</button>
+            <button type="button" class="pill" data-v="No" aria-pressed="false">No</button>
+          </div>
+        </fieldset>
+        <label class="full">Comentarios
+          <textarea id="coment" maxlength="500" placeholder="Ej: estudio a la mañana, puedo viajar hasta Quilmes" aria-required="true"></textarea>
+        </label>
+      </div>
+      <p class="err" id="err" role="alert"></p>
+      <div class="save-foot">
+        <button type="button" class="ghost" id="cancelSave">Atrás</button>
+        <button type="submit" class="cta" id="saveBtn">Guardar mis datos</button>
+      </div>
+    </form>
+
+    <!-- ============ PASO 3: CONFIRMACIÓN ============ -->
+    <section class="done" id="s-done" role="status">
+      <div class="check">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ok)" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+      </div>
+      <h2 id="doneTitle">Listo</h2>
+      <p id="doneText"></p>
+      <button type="button" class="ghost" id="back">Volver al inicio</button>
+    </section>
+  </main>
+  <p class="ver">Versión 2026-10-30.1</p>
+</div>
+
+<script>
+(function () {
+  /* ================= Capa de datos =================
+     Funciones públicas de Supabase (sql/elegi_tu_vacante.sql). La clave publicable es pública por diseño:
+     sin el código del equipo solo se puede llamar a estas funciones. */
+  var SUPABASE_URL = 'https://gkotckcvookkbbtbctyp.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_iu66s54UVbg5AsF-AoekPA_6qKUevVH';
+  var RPC = {
+    getDatos: 'seleccion_web_datos',
+    verificarPostulante: 'seleccion_web_verificar',
+    registrarDocIncompleta: 'seleccion_web_doc_incompleta',
+    guardarEnBase: 'seleccion_web_guardar'
+  };
+
+  // esperaMs (opcional): si el servidor no contesta en ese tiempo, se informa el error.
+  // Solo se usa para lecturas: en las escrituras un corte anticipado podría hacer que se reintente algo ya guardado.
+  function api(fn, arg, esperaMs) {
+    var ctrl = esperaMs && window.AbortController ? new AbortController() : null;
+    var t = ctrl ? setTimeout(function () { ctrl.abort(); }, esperaMs) : 0;
+    return fetch(SUPABASE_URL + '/rest/v1/rpc/' + RPC[fn], {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(arg || {}),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (r) {
+      clearTimeout(t);
+      return r.text().then(function (txt) {
+        var j = null;
+        try { j = txt ? JSON.parse(txt) : null; } catch (e) { j = null; }
+        // Los mensajes para la persona vienen de la base (raise exception → P0001)
+        if (!r.ok) throw new Error(j && j.code === 'P0001' && j.message ? j.message : 'Hubo un problema (' + r.status + '). Probá de nuevo en unos minutos.');
+        return j;
+      });
+    }, function (e) {
+      clearTimeout(t);
+      throw new Error(e && e.name === 'AbortError'
+        ? 'El servidor no respondió. Revisá tu conexión y probá de nuevo.'
+        : 'No hay conexión. Revisá tu internet y probá de nuevo.');
+    });
+  }
+
+  /* ================= Utilidades ================= */
+  var $ = function (id) { return document.getElementById(id); };
+  function norm(v) {
+    return String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  }
+  function esc(t) {
+    return String(t).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function msgError(e) { return (e && e.message) ? e.message : 'Hubo un problema. Probá de nuevo.'; }
+  function esJerarquico(puesto) { var p = norm(puesto); return p.indexOf('ENCARGAD') !== -1 || p.indexOf('GERENTE') !== -1; }
+  function each(nodes, fn) { Array.prototype.forEach.call(nodes, fn); }
+
+  /* ================= Estado ================= */
+  var DATA = null;
+  // origenBase: 'datos' = documentación completa · 'doc' = documentación incompleta (docsBloqueo = lo que respondió)
+  var state = { loc: '', origenBase: 'datos', docsBloqueo: null };
+
+  function localidadActual() {
+    if (!DATA) return null;
+    return DATA.localidades.filter(function (l) { return l.key === state.loc; })[0] || null;
+  }
+
+  /* ================= Pasos ================= */
+  var TITULOS = {
+    datos: 'Empecemos con tus datos',
+    base: 'Contanos tu disponibilidad',
+    doc: 'Postulación en espera',
+    done: 'Listo'
+  };
+  function mostrar(paso) {
+    $('s-datos').classList.toggle('show', paso === 'datos');
+    $('save').classList.toggle('show', paso === 'base');
+    $('s-doc').classList.toggle('show', paso === 'doc');
+    $('s-done').classList.toggle('show', paso === 'done');
+    $('step1').classList.toggle('on', paso === 'datos');
+    $('step2').classList.toggle('on', paso === 'base' || paso === 'doc');
+    $('step3').classList.toggle('on', paso === 'done');
+    $('titulo').textContent = TITULOS[paso];
+    window.scrollTo(0, 0);
+  }
+
+  /* ================= Carga inicial ================= */
+  // Igual que mapaLocalidades_ de Codigo.gs: localidades de los locales, completadas con ZONAS (zona y cercanas)
+  function armarLocalidades(d) {
+    var mapa = {}, orden = [];
+    (d.locales || []).forEach(function (r) {
+      var k = norm(r[0]);
+      if (!k || mapa[k]) return;
+      mapa[k] = { nombre: String(r[0]).trim(), key: k, zona: r[1] || 'Otras', cercanas: [] };
+      orden.push(k);
+    });
+    (d.zonasLocalidad || []).forEach(function (r) {
+      var k = norm(r[0]);
+      if (!k) return;
+      if (!mapa[k]) orden.push(k);
+      mapa[k] = { nombre: String(r[0]).trim(), key: k, zona: r[1] || (mapa[k] && mapa[k].zona) || 'Otras', cercanas: (r[2] || []).map(norm) };
+    });
+    return orden.map(function (k) { return mapa[k]; })
+      .sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es'); });
+  }
+
+  function opcionesLocalidad() {
+    var zonas = (DATA.zonas || []).slice();
+    DATA.localidades.forEach(function (l) { if (zonas.indexOf(l.zona) === -1) zonas.push(l.zona); });
+    return '<option value="">Elegí tu localidad</option>' + zonas.map(function (z) {
+      var ls = DATA.localidades.filter(function (l) { return l.zona === z; });
+      if (!ls.length) return '';
+      return '<optgroup label="' + esc(z === 'Lejanos' ? 'Interior y lejanos' : 'Zona ' + z) + '">' +
+        ls.map(function (l) { return '<option value="' + esc(l.key) + '">' + esc(l.nombre) + '</option>'; }).join('') +
+        '</optgroup>';
+    }).join('');
+  }
+  function opciones(lista, vacio) {
+    return '<option value="">' + esc(vacio) + '</option>' + lista.map(function (s) { return '<option>' + esc(s) + '</option>'; }).join('');
+  }
+
+  var cargado = false;
+  var SELECTS_LOC = ['locBase', 'locDatos'];
+
+  function cargar() {
+    $('cargaError').hidden = true;
+    if (!cargado) SELECTS_LOC.forEach(function (id) { $(id).innerHTML = '<option value="">Cargando…</option>'; });
+    return api('getDatos', undefined, 30000).then(function (d) {
+      if (!d || !d.locales || !d.sedes) throw new Error('El servidor devolvió una respuesta vacía.');
+      DATA = d;
+      DATA.localidades = armarLocalidades(d);
+      var opts = opcionesLocalidad();
+      SELECTS_LOC.forEach(function (id) { $(id).innerHTML = opts; $(id).value = state.loc; });
+      if (!cargado) {
+        $('sede').innerHTML = opciones(DATA.sedes, 'Elegí la sede');
+        $('inicio').innerHTML = opciones(DATA.inicios, 'Elegí una opción');
+        $('puestos').innerHTML = DATA.puestos.map(function (p) { return '<button type="button" class="pill" data-v="' + esc(p) + '" aria-pressed="false">' + esc(p) + '</button>'; }).join('');
+      }
+      cargado = true;
+    }).catch(function (e) {
+      if (window.console) console.error('getDatos', e);
+      if (!cargado) {
+        SELECTS_LOC.forEach(function (id) { $(id).innerHTML = '<option value="">No se pudo cargar</option>'; });
+        $('cargaMsg').textContent = msgError(e);
+        $('cargaError').hidden = false;
+      }
+    });
+  }
+
+  /* ================= Paso 1: datos y documentación ================= */
+  function datosPersonales() {
+    var loc = localidadActual();
+    var nac = $('nacionalidad').value;
+    return {
+      nombre: $('nombre').value.trim(),
+      apellido: $('apellido').value.trim(),
+      dni: $('dni').value.replace(/\D/g, ''),
+      cuil: $('cuil').value.trim(),
+      fechaNac: $('fechaNac').value,
+      nacionalidad: nac === 'Otra' ? $('nacOtra').value.trim() : nac,
+      mail: $('mail').value.trim(),
+      tel: $('cel').value.trim(),
+      telEmergencia: $('telEmerg').value.trim(),
+      localidad: loc ? loc.nombre : ''
+    };
+  }
+  function cuilValido(c) {
+    if (!/^\d{11}$/.test(c) || ['20', '23', '24', '27'].indexOf(c.slice(0, 2)) === -1) return false;
+    var pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2], suma = 0;
+    for (var i = 0; i < 10; i++) suma += Number(c[i]) * pesos[i];
+    var dv = 11 - (suma % 11);
+    if (dv === 11) dv = 0;
+    return dv !== 10 && dv === Number(c[10]);
+  }
+  function edad(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    if (!m) return -1;
+    var hoy = new Date(), e = hoy.getFullYear() - Number(m[1]);
+    var dm = (hoy.getMonth() + 1) - Number(m[2]);
+    if (dm < 0 || (dm === 0 && hoy.getDate() < Number(m[3]))) e--;
+    return e;
+  }
+  function validarPersonales(d) {
+    if (!d.nombre) return { msg: 'Completá tu nombre.', campo: 'nombre' };
+    if (!d.apellido) return { msg: 'Completá tu apellido.', campo: 'apellido' };
+    if (d.dni.length < 7 || d.dni.length > 8) return { msg: 'Completá un DNI válido (7 u 8 números, sin puntos).', campo: 'dni' };
+    var c = d.cuil.replace(/\D/g, '');
+    if (!cuilValido(c)) return { msg: 'Revisá el CUIL: tiene que tener 11 números y ser válido.', campo: 'cuil' };
+    if (c.slice(2, 10) !== ('0' + d.dni).slice(-8)) return { msg: 'El CUIL no coincide con el DNI.', campo: 'cuil' };
+    var e = edad(d.fechaNac);
+    if (e === -1) return { msg: 'Completá tu fecha de nacimiento.', campo: 'fechaNac' };
+    if (e < 16 || e > 99) return { msg: 'Revisá la fecha de nacimiento.', campo: 'fechaNac' };
+    if (!d.nacionalidad) return { msg: 'Completá tu nacionalidad.', campo: $('nacionalidad').value === 'Otra' ? 'nacOtra' : 'nacionalidad' };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.mail)) return { msg: 'Completá un mail válido.', campo: 'mail' };
+    if (d.tel.replace(/\D/g, '').length < 8) return { msg: 'Completá un número de WhatsApp válido.', campo: 'cel' };
+    var te = d.telEmergencia.replace(/\D/g, '');
+    if (te.length < 8) return { msg: 'Completá un teléfono de emergencia válido.', campo: 'telEmerg' };
+    if (te === d.tel.replace(/\D/g, '')) return { msg: 'El teléfono de emergencia tiene que ser de otra persona.', campo: 'telEmerg' };
+    if (!d.localidad) return { msg: 'Elegí dónde vivís.', campo: 'locDatos' };
+    return null;
+  }
+  function docs() {
+    return { manipulacion: elegidos('manipulacion')[0] || '', antecedentes: elegidos('antecedentes')[0] || '' };
+  }
+  function faltantes(dc) {
+    var f = [];
+    if (dc.manipulacion !== 'Sí') f.push('Curso de Manipulación de Alimentos');
+    if (dc.antecedentes !== 'Sí') f.push('Certificado de Antecedentes Penales');
+    return f;
+  }
+
+  $('continuar').addEventListener('click', function () {
+    var d = datosPersonales();
+    var v = validarPersonales(d);
+    if (v) { $('errDatos').textContent = v.msg; $(v.campo).focus(); return; }
+    var dc = docs();
+    if (!dc.manipulacion || !dc.antecedentes) { $('errDatos').textContent = 'Respondé las dos preguntas de documentación.'; return; }
+    $('errDatos').textContent = '';
+
+    ocupado($('continuar'), true, 'Verificando…');
+    api('verificarPostulante', { datos: d }, 30000)
+      .then(function (r) {
+        r = r || {};
+        if (r.bloqueado) {
+          // pendiente: quedó bloqueado por documentación pero todavía no completó el formulario de la base
+          if (r.pendiente && r.docs) abrirBaseDoc(r.docs); else mostrarBloqueado();
+          return;
+        }
+        if (r.postulado) { mostrarYaPostulado(r.postulado); return; }
+        if (!faltantes(dc).length) { abrirBaseSola(d); return; }
+        // Documentación incompleta: queda bloqueado (no puede volver a ingresar) y completa el formulario.
+        return api('registrarDocIncompleta', { datos: d, docs: dc }).then(function (x) {
+          x = x || {};
+          if (x.motivo === 'yaPostulado') { mostrarYaPostulado(x.vacante); return; }
+          if (x.pendiente === false) { mostrarBloqueado(); return; }
+          abrirBaseDoc(dc);
+        });
+      })
+      .then(function () { ocupado($('continuar'), false); })
+      .catch(function (e) { ocupado($('continuar'), false); $('errDatos').textContent = msgError(e); });
+  });
+
+  // Ya completó sus datos con documentación incompleta: no puede volver a ingresar
+  function mostrarBloqueado() {
+    var nombre = $('nombre').value.trim();
+    $('docTitulo').textContent = (nombre ? nombre + ', ' : '') + 'ya tenemos tus datos registrados.';
+    $('docTexto').textContent = 'Tu postulación quedó en espera porque la documentación figuraba incompleta. ' +
+      'Cuando tengas el Curso de Manipulación de Alimentos y el Certificado de Antecedentes Penales, el equipo de Selección se va a comunicar con vos.';
+    mostrar('doc');
+    $('salir').focus();
+  }
+
+  // Ya ocupa una vacante: se le muestra cuál es y no se suma a la base
+  var AVISO_SIN_CAMBIOS = 'Una vez que te postulás, no realizamos cambios de horario, de sucursal ni de marca.';
+  function mostrarYaPostulado(v) {
+    v = v || {};
+    var nombre = $('nombre').value.trim();
+    var conEntrenamiento = v.entrenamiento && norm(v.entrenamiento) !== norm(v.local);
+    confirmar('Ya estás postulado/a' + (nombre ? ', ' + nombre : ''),
+      'Tu postulación' +
+      (v.local ? ' a <strong>' + esc(v.local) + '</strong>' + (v.puesto ? ' (' + esc(v.puesto) + ')' : '') : '') +
+      (conEntrenamiento ? ', con entrenamiento en <strong>' + esc(v.entrenamiento) + '</strong>,' : '') +
+      ' ya está registrada: no hace falta que elijas otra vacante. ' + AVISO_SIN_CAMBIOS +
+      ' Te vamos a contactar por mail para confirmarte la vacante y realizar el proceso de bienvenida.');
+    $('titulo').textContent = 'Postulación registrada';
+  }
+
+  // Documentación incompleta: aviso + formulario obligatorio de la base (sin volver atrás)
+  function abrirBaseDoc(dc) {
+    state.origenBase = 'doc';
+    state.docsBloqueo = dc;
+    var nombre = $('nombre').value.trim();
+    $('saveIntro').className = 'intro warn';
+    $('saveIntro').innerHTML = '<strong>' + esc(nombre) + ', para postularte a una vacante necesitás tener la documentación completa.</strong>' +
+      'Te falta: ' + esc(faltantes(dc).join(' y ')) + '. Completá estos datos para quedar en nuestra base: ' +
+      'cuando tengas la documentación y haya un cupo libre, te vamos a contactar.';
+    $('locBase').value = state.loc;
+    $('cancelSave').hidden = true;
+    $('err').textContent = '';
+    mostrar('base');
+    $('titulo').textContent = 'Documentación incompleta';
+    (state.loc ? $('sede') : $('locBase')).focus();
+  }
+
+  // Documentación completa: directo a la disponibilidad (la vacante la asigna Selección)
+  function abrirBaseSola(d) {
+    state.origenBase = 'datos';
+    state.docsBloqueo = null;
+    $('saveIntro').className = 'intro';
+    $('saveIntro').innerHTML = '<strong>¡Hola, ' + esc(d.nombre) + '!</strong> Tenés la documentación completa. ' +
+      'Completá tu disponibilidad: el equipo de Selección te asigna la vacante en tu zona y te contacta por mail.';
+    $('locBase').value = state.loc;
+    $('cancelSave').hidden = false;
+    $('err').textContent = '';
+    mostrar('base');
+    (state.loc ? $('sede') : $('locBase')).focus();
+  }
+  $('cancelSave').addEventListener('click', function () { mostrar('datos'); });
+  $('cargaRetry').addEventListener('click', function () { cargar(); });
+
+  var CAMPOS_DATOS = ['nombre', 'apellido', 'dni', 'cuil', 'fechaNac', 'nacOtra', 'mail', 'cel', 'telEmerg'];
+  CAMPOS_DATOS.forEach(function (id) {
+    $(id).addEventListener('input', function () { $('errDatos').textContent = ''; });
+  });
+  $('nacionalidad').addEventListener('change', function () {
+    var otra = this.value === 'Otra';
+    $('nacOtra').hidden = !otra;
+    if (otra) $('nacOtra').focus();
+    $('errDatos').textContent = '';
+  });
+  // DNI solo números; CUIL con formato XX-XXXXXXXX-X mientras se escribe
+  $('dni').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 8); });
+  $('cuil').addEventListener('input', function () {
+    var c = this.value.replace(/\D/g, '').slice(0, 11);
+    this.value = c.length > 10 ? c.slice(0, 2) + '-' + c.slice(2, 10) + '-' + c.slice(10)
+      : c.length > 2 ? c.slice(0, 2) + '-' + c.slice(2) : c;
+  });
+
+  function setLoc(key) {
+    state.loc = key;
+    SELECTS_LOC.forEach(function (id) { $(id).value = key; });
+  }
+  $('locBase').addEventListener('change', function (e) { setLoc(e.target.value); $('err').textContent = ''; });
+  $('locDatos').addEventListener('change', function (e) { setLoc(e.target.value); $('errDatos').textContent = ''; });
+
+  function ocupado(btn, on, texto) {
+    btn.disabled = on;
+    if (on) { btn.dataset.txt = btn.textContent; btn.textContent = texto; }
+    else if (btn.dataset.txt) { btn.textContent = btn.dataset.txt; }
+  }
+  function confirmar(tituloTxt, html) {
+    $('doneTitle').textContent = tituloTxt;
+    $('doneText').innerHTML = html;
+    mostrar('done');
+    $('back').focus();
+  }
+
+  /* ================= Paso 2: disponibilidad ================= */
+  document.querySelectorAll('.multi').forEach(function (g) {
+    g.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true'));
+      $('err').textContent = '';
+    });
+  });
+  document.querySelectorAll('.single').forEach(function (g) {
+    g.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      each(g.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      $('err').textContent = '';
+      $('errDatos').textContent = '';
+      if (g.id === 'puestos') $('avisoExp').hidden = !esJerarquico(b.getAttribute('data-v'));
+    });
+  });
+  ['sede', 'inicio'].forEach(function (id) {
+    $(id).addEventListener('change', function () { $('err').textContent = ''; });
+  });
+  $('coment').addEventListener('input', function () { $('err').textContent = ''; });
+
+  function elegidos(id) {
+    return Array.prototype.filter.call($(id).querySelectorAll('button'), function (b) {
+      return b.getAttribute('aria-pressed') === 'true';
+    }).map(function (b) { return b.getAttribute('data-v'); });
+  }
+  function limpiarGrupos(ids) {
+    ids.forEach(function (id) {
+      each($(id).querySelectorAll('button'), function (b) { b.setAttribute('aria-pressed', 'false'); });
+    });
+    $('avisoExp').hidden = true;
+  }
+
+  $('save').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var d = datosPersonales();
+    var v = validarPersonales(d);
+    if (v) { mostrar('datos'); $('errDatos').textContent = v.msg; return; }
+    var porDoc = state.origenBase === 'doc';
+    var dc = porDoc && state.docsBloqueo ? state.docsBloqueo : docs();
+    var extra = {
+      sede: $('sede').value,
+      inicio: $('inicio').value,
+      jornada: elegidos('jornada'),
+      dias: elegidos('dias'),
+      horario: elegidos('franja'),
+      puesto: elegidos('puestos')[0] || '',
+      manipulacion: dc.manipulacion,
+      antecedentes: dc.antecedentes,
+      interesado: elegidos('interesado')[0] || '',
+      comentarios: $('coment').value.trim()
+    };
+    var error = '', foco = '';
+    if (!d.localidad) { error = 'Elegí dónde vivís.'; foco = 'locBase'; }
+    else if (!extra.sede) { error = 'Elegí la sede de la entrevista.'; foco = 'sede'; }
+    else if (!extra.inicio) { error = 'Elegí desde cuándo podés empezar.'; foco = 'inicio'; }
+    else if (!extra.jornada.length) error = 'Elegí part-time, full-time o ambas.';
+    else if (!extra.horario.length) error = 'Elegí al menos un horario.';
+    else if (!extra.dias.length) error = 'Elegí al menos un día.';
+    else if (!extra.puesto) error = 'Elegí un puesto.';
+    else if (!extra.interesado) error = 'Respondé si estás interesado/a en la propuesta.';
+    else if (!extra.comentarios) { error = 'Completá los comentarios.'; foco = 'coment'; }
+    if (error) { $('err').textContent = error; if (foco) $(foco).focus(); return; }
+
+    ocupado($('saveBtn'), true, 'Guardando…');
+    api('guardarEnBase', { datos: d, extra: extra })
+      .then(function (r) {
+        ocupado($('saveBtn'), false);
+        if (r && r.motivo === 'bloqueado') { mostrarBloqueado(); return; }
+        if (r && r.motivo === 'yaPostulado') { mostrarYaPostulado(r.vacante); return; }
+        if (porDoc) {
+          confirmar('Te registramos, ' + d.nombre,
+            'Quedaste en nuestra base de datos. Cuando tengas la documentación completa y haya un cupo libre, te vamos a contactar por mail a <strong>' +
+            esc(d.mail) + '</strong>.');
+          return;
+        }
+        confirmar('¡Te registramos, ' + d.nombre + '!',
+          'Quedaste en la base de Selección. El equipo te va a asignar una vacante en <strong>' + esc(d.localidad) +
+          '</strong> o tu zona según tu disponibilidad, y te vamos a enviar un mail a <strong>' + esc(d.mail) +
+          '</strong> para confirmártela y realizar el proceso de bienvenida.');
+      })
+      .catch(function (e2) { ocupado($('saveBtn'), false); $('err').textContent = msgError(e2); });
+  });
+
+  /* ================= Volver al inicio ================= */
+  function reiniciar() {
+    $('save').reset();
+    CAMPOS_DATOS.forEach(function (id) { $(id).value = ''; });
+    $('nacionalidad').value = '';
+    $('nacOtra').hidden = true;
+    limpiarGrupos(['manipulacion', 'antecedentes', 'jornada', 'dias', 'franja', 'puestos', 'interesado']);
+    state.origenBase = 'datos';
+    state.docsBloqueo = null;
+    $('cancelSave').hidden = false;
+    setLoc('');
+    mostrar('datos');
+    $('nombre').focus();
+  }
+  $('back').addEventListener('click', reiniciar);
+  $('salir').addEventListener('click', reiniciar);
+
+  cargar();
+})();
+</script>
+</body>
+</html>

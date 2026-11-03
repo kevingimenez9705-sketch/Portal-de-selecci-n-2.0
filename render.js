@@ -43,7 +43,7 @@ function showView(v) {
     document.getElementById('selector-chips').classList.toggle('hidden', v !== 'vacantes');
     document.getElementById('btn-nueva-busqueda').classList.toggle('hidden', v !== 'vacantes');
     ['btn-importar', 'btn-datos-ingreso', 'btn-icheck'].forEach(id => document.getElementById(id).classList.toggle('hidden', v !== 'vacantes'));
-    document.getElementById('btn-nuevo-postulante').classList.toggle('hidden', v !== 'base');
+    ['btn-nuevo-postulante', 'btn-elegi-vacante'].forEach(id => document.getElementById(id).classList.toggle('hidden', v !== 'base'));
     document.getElementById('main-title').textContent = TITULOS[v][0];
     document.getElementById('main-sub').textContent = TITULOS[v][1];
     window.scrollTo({ top: 0, behavior: 'smooth' });
