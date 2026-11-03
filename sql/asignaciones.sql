@@ -14,11 +14,23 @@
 alter table public.seleccion_locales
     add column if not exists asignacion_hoja jsonb;   -- último valor leído de la hoja (para no pisar cambios del portal)
 
--- "SABORES EXPRESS ADROGUE", "APERTURA EXTREMAS PILAR" → "SABORES ADROGUE", "EXTREMAS PILAR"
+-- Mismo local escrito distinto en la hoja y en el portal:
+--   "SABORES EXPRESS ADROGUE" = "SABORES ADROGUE" · "APERTURA EXTREMAS PILAR" = "EXTREMAS PILAR"
+--   "SABORES CORDOBA (PROVINCIA)" = "SABORES CORDOBA" · "GENERAL RODRIGUEZ" = "GRAL. RODRIGUEZ"
+--   "SABORES FLORES 1" = "SABORES FLORES" (el 1 es el primero; el 2 sigue siendo otro local)
 create or replace function public.seleccion_clave_local_(v text) returns text
 language sql immutable set search_path = public as $$
-    select regexp_replace(regexp_replace(regexp_replace(seleccion_norm_(v),
-        '^(APERTURA|APER)\.?\s+', ''), '^SABORES EXPRESS\s+', 'SABORES '), '^HAMBURGUESAS EXTREMAS\s+', 'EXTREMAS ')
+    select trim(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(
+        seleccion_norm_(v),
+        '\([^)]*\)', ' ', 'g'),                       -- (PROVINCIA), (CABA)…
+        '[.,]', ' ', 'g'),
+        '^(APERTURA|APER)\s+', ''),
+        '^SABORES EXPRESS\s+', 'SABORES '),
+        '^HAMBURGUESAS EXTREMAS\s+', 'EXTREMAS '),
+        '\mGENERAL\M', 'GRAL', 'g'),
+        '\mPRESIDENTE\M', 'PTE', 'g'),
+        '\s+1$', ''),
+        '\s+', ' ', 'g'))
 $$;
 
 -- Columna V de la hoja → estado de nómina del portal
@@ -46,7 +58,7 @@ begin
          where s.marca = r.marca and seleccion_clave_local_(s.local) = seleccion_clave_local_(r.local)
          order by s.activo desc nulls last, s.id limit 1;
         if not found then
-            if array_length(sin_local, 1) is null or array_length(sin_local, 1) < 15 then sin_local := sin_local || trim(r.local); end if;
+            if array_length(sin_local, 1) is null or array_length(sin_local, 1) < 40 then sin_local := sin_local || trim(r.local); end if;
             continue;
         end if;
         -- El selector de la hoja ("AGUSTINA", "Agustina Castillo") → nombre del equipo en el portal
