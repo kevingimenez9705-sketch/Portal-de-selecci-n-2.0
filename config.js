@@ -4,6 +4,9 @@
 // Proyecto Supabase: ats-gastronomico (tablas seleccion_*, ver sql/portal_seleccion.sql)
 const SUPABASE_URL = 'https://gkotckcvookkbbtbctyp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_iu66s54UVbg5AsF-AoekPA_6qKUevVH';
+// Apps Script publicado como Aplicación web (termina en /exec): el botón Actualizar sincroniza con Drive
+// en el momento (planilla, zonales, onboarding, asignaciones). Vacío = solo recarga los datos del portal.
+let SYNC_DRIVE_URL = '';
 
 // Si el script de Supabase no cargó (red lenta, bloqueador, CDN caído) la página
 // quedaba muerta sin aviso: mejor mostrar el motivo y frenar acá.
@@ -21,8 +24,9 @@ if (!window.supabase) {
 // No hay usuarios: cada consulta lleva el código del equipo y la base solo responde
 // si es el correcto (ver sql/codigo_equipo.sql). El cliente se arma al ingresarlo.
 const CODIGO_KEY = 'portalSeleccion.codigoEquipo';
-let sb = null;
+let sb = null, codigoEquipo = '';
 function crearCliente(codigo) {
+    codigoEquipo = codigo;
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
         global: { headers: { 'x-codigo-equipo': codigo } },
         auth: { persistSession: false, autoRefreshToken: false }
