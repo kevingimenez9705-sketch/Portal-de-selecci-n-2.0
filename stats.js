@@ -119,9 +119,8 @@ function renderStats(tab) {
 }
 
 // Mismas columnas que la hoja Solicitudes (para pegar en la planilla) + datos del portal
-function descargarInformeCSV() {
-    const selector = document.getElementById('stats-csv-selector').value;
-    const base = todasLasBusquedas().filter(b => !selector || b.selector === selector);
+// Columnas de la hoja Solicitudes + datos del portal (CSV de Estadísticas y Excel de "Limpiar semana")
+function tablaVacantes(base) {
     const headers = ['N°', 'Marca', ...COLUMNAS.map(c => c.t.toUpperCase()), 'Zona', 'Motivo', 'Estado de la vacante', 'Apertura',
         'Enviado al zonal', 'Aprobado por el zonal', 'Fecha de baja', 'Tramo Selección (hd)', 'Tramo Zonal (hd)', 'Espera inicio (hd)', 'Total (hd)',
         'Alerta 72hs zonal', 'Fuera de plazo', 'Reapertura de', 'Nómina del local', 'Detalle de nómina'];
@@ -131,8 +130,24 @@ function descargarInformeCSV() {
             b.enviado_zonal, b.decision_zonal, b.fecha_baja, t.t1, t.t2NA ? '' : t.t2, t.t3NA ? '' : t.t3, t.total,
             alertaZonalVencida(b) ? 'Sí' : 'No', fueraDePlazo(b) ? 'Sí' : 'No', b.reopened_from, b.estado_nomina, b.nomina_detalle];
     });
+    return { headers, rows };
+}
+function descargarInformeCSV() {
+    const selector = document.getElementById('stats-csv-selector').value;
+    const { headers, rows } = tablaVacantes(todasLasBusquedas().filter(b => !selector || b.selector === selector));
     descargarCSV(`vacantes${selector ? '_' + selector.toLowerCase().replace(/\s+/g, '-') : ''}_${today()}.csv`, headers, rows);
     toast('CSV descargado ✓');
+}
+
+// Copia en Excel de lo que se limpia: una hoja con todas y una por marca
+async function descargarExcelSemana(lista) {
+    const XLSX = await cargarXLSX();
+    const libro = XLSX.utils.book_new();
+    const hoja = l => { const { headers, rows } = tablaVacantes(l); const h = XLSX.utils.aoa_to_sheet([headers, ...rows.map(r => r.map(v => v ?? ''))]);
+        h['!cols'] = headers.map(t => ({ wch: Math.min(Math.max(String(t).length + 2, 10), 34) })); return h; };
+    XLSX.utils.book_append_sheet(libro, hoja(lista), 'Todas');
+    MARCAS.forEach(m => { const l = lista.filter(b => b.marca === m); if (l.length) XLSX.utils.book_append_sheet(libro, hoja(l), m.slice(0, 31)); });
+    XLSX.writeFile(libro, `vacantes_semana_${today()}.xlsx`);
 }
 
 function descargarBaseCSV() {
