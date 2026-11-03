@@ -13,6 +13,11 @@
         en BLOQUEADOS (los bloqueos por documentación incompleta ya no cuentan).
    3. BLOQUEADOS → portal (la página los usa para no dejar pasar a nadie bloqueado).
    4. Proceso de Ingreso → portal (botón "Datos de ingreso" de Vacantes).
+   5. Zonales (como Zonales.gs): las vacantes de Extremas que en el portal están en
+      ENVIADO A ZONAL se agregan a "Base de Candidatos" de la hoja del regional
+      (pestaña HOJAS ZONALES: REGIONAL | LINK). Cuando el zonal pone APROBADO o
+      DESAPROBADO, la vacante pasa a APROBADO ZONAL / RECHAZADO ZONAL; si cambió
+      PUESTO u HORARIO se copian, y sus OBSERVACIONES quedan en el historial.
 
    Todo queda dentro de PortalSync: se puede pegar como un archivo más del
    proyecto de TAREAS GRUPALES sin chocar con Codigo.gs, Onboarding.gs, etc.
@@ -146,7 +151,8 @@ var PortalSync = (function () {
         paginaAPlanilla_(libro, codigo),     // primero: así lo nuevo ya viaja en los pasos siguientes
         baseAlPortal_(libro, codigo),
         bloqueadosAlPortal_(libro, codigo),
-        ingresoAlPortal_(libro, codigo)
+        ingresoAlPortal_(libro, codigo),
+        zonalesAlPortal_(libro, codigo)
       ].filter(String).join('\n');
       console.log(resumen);
       return resumen;
@@ -457,6 +463,186 @@ var PortalSync = (function () {
 
 
   /* =========================================================
+     5. ZONALES: hoja de cada regional ⇄ portal
+     ========================================================= */
+
+  const ZONALES = {
+    pestanaConfig: 'HOJAS ZONALES',          // REGIONAL | LINK (la misma que usa Zonales.gs)
+    pestanaZonal: 'Base de Candidatos',
+    columnaId: 'ID POSTULANTE',
+    // Columna de la hoja del zonal ← dato de la vacante del portal
+    ida: [
+      ['Solo Nombre', 'nombre'], ['Solo Apellido', 'apellido'], ['E-mail de contacto', 'email'],
+      ['Número de WhatsApp', 'tel'], ['Fecha de nacimiento', 'fecha_nacimiento'], ['Zona de Residencia', 'zona'],
+      ['Localidad de Residencia', 'localidad'], ['Vacante para la que fue considerado', 'local'],
+      ['PUESTO', 'puesto'], ['HORARIO', 'jornada']
+    ]
+  };
+
+  function zonalesAlPortal_(libro, codigo) {
+    const vacantes = llamarPortal_('seleccion_zonal_pendientes', {}, codigo) || [];
+    if (!vacantes.length) return '';
+    const hojas = hojasZonales_(libro);
+    const res = { enviados: 0, vinculados: 0, sinHoja: {}, errores: [] };
+    const marcar = [], respuestas = [];
+
+    const porRegional = {};
+    vacantes.forEach(function (v) { (porRegional[normalizar_(v.regional)] = porRegional[normalizar_(v.regional)] || []).push(v); });
+
+    Object.keys(porRegional).forEach(function (regional) {
+      const grupo = porRegional[regional];
+      const id = hojas[regional];
+      if (!id) { res.sinHoja[grupo[0].regional || '(sin regional)'] = true; return; }
+      try {
+        const libroZonal = SpreadsheetApp.openById(id);
+        const indice = indiceZonal_(libroZonal);
+        // VUELTA primero: respuestas de los que ya estaban en su hoja
+        grupo.forEach(function (v) {
+          const r = indice.respPorId[v.id_postulante] || (v.email && indice.respPorEmail[v.email]);
+          if (!r) return;
+          const est = normalizar_(r.estado);
+          if (est === 'aprobado' || est === 'desaprobado') {
+            respuestas.push({ id: v.id, resultado: est.toUpperCase(), puesto: r.puesto, horario: r.horario, obs: r.obs });
+          }
+        });
+        // IDA: los que todavía no se copiaron
+        const nuevas = [];
+        grupo.filter(function (v) { return !v.copiado; }).forEach(function (v) {
+          if (indice.porId[v.id_postulante]) { marcar.push({ id: v.id, id_postulante: v.id_postulante }); return; }
+          const donde = v.email && indice.porEmail[v.email];
+          if (donde) {                                    // estaba copiada a mano: solo se completa el Id
+            const col = donde.hoja.getSheetId() === indice.base.getSheetId() ? columnaIdZonal_(indice) : donde.idCol;
+            if (col !== -1) donde.hoja.getRange(donde.fila, col + 1).setValue(v.id_postulante);
+            marcar.push({ id: v.id, id_postulante: v.id_postulante });
+            res.vinculados++;
+            return;
+          }
+          nuevas.push(v);
+        });
+        if (nuevas.length) {
+          const base = indice.base;
+          const tz = libroZonal.getSpreadsheetTimeZone();
+          const mapa = ZONALES.ida.map(function (m) { return { col: columnaZonal_(indice.encabezados, m[0]), campo: m[1] }; })
+            .filter(function (m) { return m.col !== -1; });
+          if (!mapa.length) throw new Error('"' + ZONALES.pestanaZonal + '" no tiene las columnas de siempre (Solo Nombre, E-mail…)');
+          const colId = columnaIdZonal_(indice);
+          const desde = Math.min.apply(null, mapa.map(function (m) { return m.col; }));
+          const hasta = Math.max.apply(null, mapa.map(function (m) { return m.col; }));
+          const destino = Math.max(base.getLastRow(), 1) + 1;
+          const filas = nuevas.map(function (v) {
+            const fila = new Array(hasta - desde + 1).fill('');
+            mapa.forEach(function (m) { fila[m.col - desde] = valorParaZonal_(v, m.campo, tz); });
+            return fila;
+          });
+          base.getRange(destino, desde + 1, filas.length, filas[0].length).setValues(filas);
+          base.getRange(destino, colId + 1, nuevas.length, 1).setValues(nuevas.map(function (v) { return [v.id_postulante]; }));
+          nuevas.forEach(function (v) { marcar.push({ id: v.id, id_postulante: v.id_postulante }); });
+          res.enviados += nuevas.length;
+        }
+      } catch (err) {
+        const msg = String((err && err.message) || err);
+        res.errores.push(grupo[0].regional + ': ' + (/proteg/i.test(msg)
+          ? 'su hoja tiene celdas protegidas y la cuenta que corre el script no puede editarlas.' : msg.slice(0, 120)));
+      }
+    });
+
+    if (marcar.length) { SpreadsheetApp.flush(); llamarPortal_('seleccion_zonal_marcar', { filas: marcar }, codigo); }
+    const r = respuestas.length ? llamarPortal_('seleccion_zonal_respuestas', { filas: respuestas }, codigo) || {} : {};
+    let txt = 'Zonales: ' + res.enviados + ' enviados' + (res.vinculados ? ' (+' + res.vinculados + ' que ya estaban)' : '') +
+      ', ' + (r.aprobados || 0) + ' aprobados, ' + (r.rechazados || 0) + ' rechazados.';
+    if (Object.keys(res.sinHoja).length) txt += ' Sin hoja en ' + ZONALES.pestanaConfig + ': ' + Object.keys(res.sinHoja).join(', ') + '.';
+    if (res.errores.length) txt += ' Avisos: ' + res.errores.join(' | ');
+    return txt;
+  }
+
+  // { REGIONAL normalizado: id de su hoja } desde la pestaña HOJAS ZONALES de TAREAS GRUPALES
+  function hojasZonales_(libro) {
+    const hoja = libro.getSheetByName(ZONALES.pestanaConfig);
+    const mapa = {};
+    if (!hoja || hoja.getLastRow() < 2) return mapa;
+    hoja.getRange(2, 1, hoja.getLastRow() - 1, 2).getDisplayValues().forEach(function (f) {
+      const m = String(f[1] || '').trim().match(/\/d\/([-\w]{25,})/) || String(f[1] || '').trim().match(/^([-\w]{25,})$/);
+      if (normalizar_(f[0]) && m) mapa[normalizar_(f[0])] = m[1];
+    });
+    return mapa;
+  }
+
+  // Columna del zonal: igual al nombre o que empiece con él (sin tildes ni signos)
+  function columnaZonal_(encabezados, nombre) {
+    const enc = encabezados.map(normalizar_), n = normalizar_(nombre);
+    let i = enc.indexOf(n);
+    if (i === -1) i = enc.findIndex(function (h) { return h && h.indexOf(n) === 0; });
+    return i;
+  }
+
+  // Columnas de una pestaña del zonal (0-based)
+  function columnasDeZonal_(enc) {
+    const c = function (n) { return columnaZonal_(enc, n); };
+    const email = [c('E-mail de contacto'), c('Email'), c('Mail')].filter(function (i) { return i !== -1; })[0];
+    return { email: email === undefined ? -1 : email, estado: c('ESTADO'), puesto: c('PUESTO'), horario: c('HORARIO'),
+      obs: c('OBSERVACIONES'), id: c(ZONALES.columnaId) };
+  }
+
+  // ID POSTULANTE en "Base de Candidatos": si no existe la columna, se crea al final
+  function columnaIdZonal_(indice) {
+    if (indice.cols.id !== -1) return indice.cols.id;
+    const base = indice.base, enc = indice.encabezados;
+    let ultima = enc.length;
+    while (ultima > 0 && !String(enc[ultima - 1]).trim()) ultima--;
+    if (ultima >= base.getMaxColumns()) base.insertColumnAfter(ultima);
+    base.getRange(1, ultima + 1).setValue(ZONALES.columnaId);
+    enc[ultima] = ZONALES.columnaId;
+    indice.cols.id = ultima;
+    return ultima;
+  }
+
+  // Dónde está cada persona y qué respondió el zonal, en "Base de Candidatos" y en las demás pestañas
+  function indiceZonal_(libroZonal) {
+    const base = libroZonal.getSheetByName(ZONALES.pestanaZonal);
+    if (!base) throw new Error('su hoja no tiene la pestaña "' + ZONALES.pestanaZonal + '"');
+    const encabezados = base.getRange(1, 1, 1, Math.max(base.getLastColumn(), 1)).getDisplayValues()[0];
+    const indice = { base: base, encabezados: encabezados, cols: columnasDeZonal_(encabezados), porId: {}, porEmail: {}, respPorId: {}, respPorEmail: {} };
+    const pestanas = [base].concat(libroZonal.getSheets().filter(function (s) { return s.getSheetId() !== base.getSheetId(); }));
+    pestanas.forEach(function (pestana) {
+      if (pestana.getLastRow() < 2 || pestana.getLastColumn() < 3) return;
+      const datos = pestana.getRange(1, 1, pestana.getLastRow(), pestana.getLastColumn()).getDisplayValues();
+      const c = pestana.getSheetId() === base.getSheetId() ? indice.cols : columnasDeZonal_(datos[0]);
+      if (c.email === -1 && c.id === -1) return;
+      for (let k = 1; k < datos.length; k++) {
+        const f = datos[k];
+        const email = c.email !== -1 ? String(f[c.email] || '').trim().toLowerCase() : '';
+        const id = c.id !== -1 ? String(f[c.id] || '').trim() : '';
+        if (!email && !id) continue;
+        const donde = { hoja: pestana, fila: k + 1, idCol: c.id };
+        if (id && !indice.porId[id]) indice.porId[id] = donde;
+        if (email && !indice.porEmail[email]) indice.porEmail[email] = donde;
+        const resp = {
+          estado: c.estado !== -1 ? String(f[c.estado] || '').trim() : '',
+          puesto: c.puesto !== -1 ? String(f[c.puesto] || '').trim() : '',
+          horario: c.horario !== -1 ? String(f[c.horario] || '').trim() : '',
+          obs: c.obs !== -1 ? String(f[c.obs] || '').trim() : ''
+        };
+        if (!resp.estado) continue;
+        // Gana la primera respuesta (Base de Candidatos y después las demás pestañas)
+        if (id && !indice.respPorId[id]) indice.respPorId[id] = resp;
+        if (email && !indice.respPorEmail[email]) indice.respPorEmail[email] = resp;
+      }
+    });
+    return indice;
+  }
+
+  function valorParaZonal_(v, campo, tz) {
+    if (campo === 'puesto') {                       // "PART TIME (5HS)" → "PART TIME": el zonal lo ve y puede cambiarlo
+      const n = normalizar_(v.puesto);
+      return n.indexOf('part') !== -1 ? 'PART TIME' : n.indexOf('full') !== -1 ? 'FULL TIME' : (v.puesto || '');
+    }
+    if (campo === 'fecha_nacimiento') return fechaDeTexto_(v.fecha_nacimiento, tz);
+    if (campo === 'tel') return comoTexto_(v.tel);
+    return seguro_(v[campo] == null ? '' : v[campo]);
+  }
+
+
+  /* =========================================================
      LIMPIEZA DE DATOS
      ========================================================= */
 
@@ -591,7 +777,8 @@ var PortalSync = (function () {
     _t: {
       filasDeLaBase_: filasDeLaBase_, filasDeIngreso_: filasDeIngreso_, filasDeBloqueados_: filasDeBloqueados_,
       bloqueados_: bloqueados_, llamarPortal_: llamarPortal_, horario_: horario_, fecha_: fecha_, estado_: estado_,
-      agregarFilas_: agregarFilas_, fechaDeTexto_: fechaDeTexto_, enHorario_: enHorario_, sexo_: sexo_
+      agregarFilas_: agregarFilas_, fechaDeTexto_: fechaDeTexto_, enHorario_: enHorario_, sexo_: sexo_,
+      hojasZonales_: hojasZonales_, indiceZonal_: indiceZonal_
     }
   };
 })();
