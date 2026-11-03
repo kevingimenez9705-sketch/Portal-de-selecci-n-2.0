@@ -409,6 +409,8 @@ function renderDetalle(id) {
                     <div class="form-group"><label>Fecha de apertura</label>${fecha('inicio')}</div>
                     <div class="form-group"><label>Enviado al zonal</label>${fecha('enviado_zonal')}</div>
                     <div class="form-group"><label>Aprobado por el zonal</label>${fecha('decision_zonal')}</div>
+                    ${b.marca === 'Hamburguesas Extremas' && (b.estado === 'ENVIADO A ZONAL' || b.zonal_copiado || b.zonal_obs) ? `<div class="form-group form-full"><label>Hoja del regional <span class="tip">(la completa sola el Apps Script de TAREAS GRUPALES)</span></label>
+                        <div class="tip" style="font-style:normal">${b.zonal_copiado ? `✓ Copiada a "Base de Candidatos" de ${esc(b.regional || 'su regional')} el ${fmtFecha(String(b.zonal_copiado).slice(0, 10))}` : b.estado === 'ENVIADO A ZONAL' ? (b.regional ? `Se copia a la hoja de ${esc(b.regional)} en los próximos 10 minutos` : 'Falta el REGIONAL para mandarla') : ''}${b.zonal_obs ? ` · Observación del zonal: <strong>${esc(b.zonal_obs)}</strong>` : ''}</div></div>` : ''}
                     <div class="form-group"><label>Fecha de baja <span class="tip">(si dejó la empresa)</span></label>${fecha('fecha_baja')}</div>
                     <div class="form-group"><label>Nómina del local <span class="tip">(SOLICITUDES DE PERSONAL)</span></label>${sel('estado_nomina', ESTADOS_NOMINA, '— Sin dato —')}</div>
                     <div class="form-group"><label>Detalle de nómina</label><input class="form-input" value="${esc(b.nomina_detalle || '')}" placeholder="Ej: PART: ideal 6 · real 5" onchange="updateField(${b.id},'nomina_detalle',this.value)"></div>
