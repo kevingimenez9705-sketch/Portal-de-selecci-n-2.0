@@ -111,10 +111,12 @@ const claveLocal = s => normTxt(s).replace(/\([^)]*\)/g, ' ').replace(/[.,]/g, '
     .replace(/^(SABORES|EXTREMAS) EL\s+/, '$1 ').replace(/\s+1$/, '');
 
 // ── LOCALES Y ZONAS ──
-let _localesIdx = null, _zonasIdx = null;
+let _localesIdx = null, _zonasIdx = null, _localesExacto = null;
 function indexarLocales() {
     // Primero los alias (otros nombres del local en las hojas); el nombre propio tiene prioridad
     _localesIdx = new Map([...locales.flatMap(l => (l.alias || []).map(a => [claveLocal(a), l])), ...locales.map(l => [claveLocal(l.local), l])]);
+    // Nombre exacto primero: "SANTA FE 1" y "SANTA FE (PROVINCIA)" comparten clave
+    _localesExacto = new Map([...locales.flatMap(l => (l.alias || []).map(a => [normTxt(a), l])), ...locales.map(l => [normTxt(l.local), l])]);
     _zonasIdx = new Map(zonasLocalidad.map(z => [normTxt(z.localidad), z]));
 }
 // Zona, localidad, dirección y razón social del local de una vacante. Una apertura
@@ -123,7 +125,7 @@ function infoLocal(local) {
     if (!_localesIdx) indexarLocales();
     const n = claveLocal(local);
     const sinAper = claveLocal(n.replace(/^(APERTURA|APER)\.?\s+/, ''));
-    const l = _localesIdx.get(n) || _localesIdx.get(sinAper);
+    const l = _localesExacto.get(normTxt(local)) || _localesIdx.get(n) || _localesIdx.get(sinAper);
     if (!l) return null;
     const apertura = sinAper !== n;
     return { zona: l.zona, localidad: l.localidad, direccion: apertura ? '' : l.direccion, razon_social: apertura ? '' : l.razon_social, apertura };
@@ -132,7 +134,7 @@ function infoLocal(local) {
 function localDe(local) {
     if (!_localesIdx) indexarLocales();
     const n = claveLocal(local);
-    return _localesIdx.get(n) || _localesIdx.get(claveLocal(n.replace(/^(APERTURA|APER)\.?\s+/, ''))) || null;
+    return _localesExacto.get(normTxt(local)) || _localesIdx.get(n) || _localesIdx.get(claveLocal(n.replace(/^(APERTURA|APER)\.?\s+/, ''))) || null;
 }
 function zonaDeLocalidad(localidad) {
     if (!_zonasIdx) indexarLocales();
