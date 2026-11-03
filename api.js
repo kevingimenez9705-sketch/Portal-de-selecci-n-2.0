@@ -83,6 +83,7 @@ async function loadData() {
     const opcional = p => p.catch(e => { console.warn('Sin locales/zonas:', msgError(e)); return []; });
     const [bs, ps, ls, zs] = await Promise.all([fetchTodo('seleccion_busquedas', BUSQUEDA_SELECT), fetchTodo('seleccion_postulantes'),
         opcional(fetchTodo('seleccion_locales')), opcional(fetchTodo('seleccion_zonas', '*', 'localidad'))]);
+    _firmaDatos = JSON.stringify([bs, ps]);   // para la actualización sola: qué es lo que ya se ve
     busquedas = bs.map(mapBusqueda);
     postulantes = ps;
     locales = ls.filter(l => l.activo !== false);
@@ -117,6 +118,7 @@ async function arrancar() {
         prepararApp();
         mostrarPantalla('app');
         showView('vacantes');
+        iniciarActualizacionSola();
     } catch (e) {
         console.error('Error al arrancar:', e);
         document.getElementById('loading-txt').innerHTML = `No se pudieron cargar los datos: <strong>${esc(msgError(e))}</strong><br><br>
@@ -148,6 +150,33 @@ async function recargarDatos() {
         refreshView();
         toast('Datos actualizados ✓');
     } catch (e) { toast('Error al actualizar: ' + msgError(e), true); }
+}
+
+// Lo que cambia sin que nadie toque el portal (respuestas de los zonales, altas de Elegí tu vacante,
+// lo que carga el resto del equipo) aparece solo: cada minuto, con la pestaña a la vista y sin nada a medio editar.
+const ACTUALIZAR_CADA_MS = 60 * 1000;
+let _actualizacionSola = null, _firmaDatos = '';
+function iniciarActualizacionSola() {
+    if (_actualizacionSola) return;
+    _actualizacionSola = setInterval(actualizarSolo, ACTUALIZAR_CADA_MS);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) actualizarSolo(); });
+}
+async function actualizarSolo() {
+    if (document.hidden || !sb || !datosCargados) return;
+    if (document.querySelector('.modal-bg:not(.hidden), [role="dialog"]')) return;     // hay algo abierto
+    const foco = document.activeElement;
+    if (foco && /^(INPUT|SELECT|TEXTAREA)$/.test(foco.tagName)) return;                // está escribiendo
+    try {
+        const [bs, ps] = await Promise.all([fetchTodo('seleccion_busquedas', BUSQUEDA_SELECT), fetchTodo('seleccion_postulantes')]);
+        const firma = JSON.stringify([bs, ps]);
+        if (firma === _firmaDatos) return;
+        if (document.querySelector('.modal-bg:not(.hidden), [role="dialog"]') || /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) return;
+        _firmaDatos = firma;
+        busquedas = bs.map(mapBusqueda);
+        postulantes = ps;
+        indexarPostulantes();
+        refreshView();
+    } catch (e) { console.warn('Actualización automática:', msgError(e)); }
 }
 
 // Cerrada + 90 días hábiles trabajados (hasta la baja, si la hubo) → Finalizada
