@@ -75,7 +75,7 @@ function columnasSolicitud(rows) {
 function marcaDeLocal(local, porDefecto) {
     const n = normTxt(local);
     if (n.includes('EXTREMAS')) return 'Hamburguesas Extremas';
-    if (n.includes('SABORES') || n.includes('EMPANADA')) return 'Sabores Express';
+    if (n.includes('SABORES') || n.includes('EMPANADA') || esMania(local)) return 'Sabores Express';   // Mania va dentro de Sabores
     return porDefecto;
 }
 
@@ -214,7 +214,7 @@ function renderImportPreview() {
     const fila = (l, i) => `<tr class="${l.usar && l.crear ? '' : 'row-locked'}">
         <td><input type="checkbox" ${l.usar ? 'checked' : ''} ${l.excedido && !l.faltaCompletar ? 'disabled title="Marcá Falta completar para crearla"' : ''} onchange="importLineas[${i}].usar=this.checked;renderImportPreview()"></td>
         <td><strong>${esc(l.local)}</strong></td>
-        <td><span class="marca-mini ${marcaClass(l.marca)}">${l.marca === 'Sabores Express' ? 'SAB' : 'EXT'}</span></td>
+        <td>${marcaMiniHtml(l.marca, l.local)}</td>
         <td>${l.excedido
             ? `<label class="imp-falta" title="Excepción: el local está excedido pero igual hay que cubrir este puesto"><input type="checkbox" ${l.faltaCompletar ? 'checked' : ''} onchange="marcarFaltaCompletar(${i}, this.checked)"> Falta completar</label>`
             : (nominaHtml(l) || '—')}</td>

@@ -11,6 +11,7 @@
     --green: #16a34a; --red: #e11d48; --orange: #d97706; --blue: #0369a1; --slate: #94a3b8;
     --sabores: #b45309; --sabores-soft: #fff7ed; --sabores-line: #fed7aa;
     --extremas: #dc2626; --extremas-soft: #fff1f2; --extremas-line: #fecdd3;
+    --mania: #0f766e; --mania-soft: #f0fdfa;
     --ok: #dcfce7; --ok-text: #15803d;
     --warn: #fef3c7; --warn-text: #92400e;
     --danger: #ffe4e6; --danger-text: #be123c;
@@ -279,6 +280,7 @@ select.celda { cursor: pointer; }
 .marca-mini { font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 4px; letter-spacing: .04em; }
 .marca-mini.marca-sabores { background: var(--sabores-soft); color: var(--sabores); border: none; }
 .marca-mini.marca-extremas { background: var(--extremas-soft); color: var(--extremas); border: none; }
+.marca-mini.marca-mania { background: var(--mania-soft); color: var(--mania); }
 .alerta-72 { font-size: 10px; font-weight: 800; color: var(--red); }
 .col-acciones { white-space: nowrap; padding: 4px 8px !important; }
 .col-acciones .btn-sm { padding: 4px 8px; }
@@ -437,6 +439,7 @@ button.nomina.activo { box-shadow: 0 0 0 2px currentColor; }
     --rose: #f8edef; --rose-ink: #9b3048;
     --sabores: #8a6d4b; --extremas: #8a4f58; --sabores-soft: #f6f2ed; --extremas-soft: #f7eff0;
     --sabores-line: #e4d9cc; --extremas-line: #e8d5d8;
+    --mania: #4f7a72; --mania-soft: #eef4f2;
 }
 /* Tarjetas de números: todas iguales */
 .kpi, .kpi--verde, .kpi--ambar, .kpi--rosa, .kpi--azul, .kpi--gris, .kpi--violeta {
