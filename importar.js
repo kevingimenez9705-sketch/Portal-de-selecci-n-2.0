@@ -9,6 +9,7 @@
 let importLineas = [];
 let importNomina = [];   // vacantes abiertas cuya nómina cambia: { id, estado_nomina, nomina_detalle }
 let importSalteados = [];   // locales que no generan vacantes y por qué: { local, motivo }
+let importLocales = new Map();   // local → regional, zonal y nómina de la planilla (actualizan el Mapa de equipos)
 
 function openImportar() {
     document.getElementById('imp-marca').innerHTML = optionsHtml(MARCAS, marcaActiva || MARCAS[1]);
@@ -23,6 +24,7 @@ function openImportar() {
     importLineas = [];
     importNomina = [];
     importSalteados = [];
+    importLocales = new Map();
     openModal('modal-importar');
     setTimeout(() => document.getElementById('imp-texto').focus(), 50);
 }
@@ -76,12 +78,14 @@ function marcaDeLocal(local, porDefecto) {
     return porDefecto;
 }
 
-// Selector y zona: los de la última vacante del mismo local o, si no hay, del mismo zonal
+// Selector y zona: el selector asignado al local en el Mapa de equipos; si no tiene, el de la última
+// vacante del mismo local o, si no hay, del mismo zonal
 function datosPrevios(local, zonal) {
+    const asignado = localDe(local)?.selector;
     const mismoLocal = busquedas.filter(b => normTxt(b.local) === normTxt(local)).sort((a, b) => b.id - a.id);
     const mismoZonal = busquedas.filter(b => zonal && normTxt(b.zonal) === normTxt(zonal)).sort((a, b) => b.id - a.id);
     return {
-        selector: mismoLocal.find(b => b.selector)?.selector || mismoZonal.find(b => b.selector)?.selector || '',
+        selector: asignado || mismoLocal.find(b => b.selector)?.selector || mismoZonal.find(b => b.selector)?.selector || '',
         zona: mismoLocal.find(b => b.zona)?.zona || ''
     };
 }
@@ -123,6 +127,7 @@ function revisarImportacion(filasExcel) {
     importLineas = [];
     importNomina = [];
     importSalteados = [];
+    importLocales = new Map();
     if (!rows.length) { resumen.textContent = 'Pegá primero las filas copiadas de la planilla.'; preview.innerHTML = ''; actualizarBotonImportar(); return; }
     const pos = columnasSolicitud(rows);
     const marcaDefecto = document.getElementById('imp-marca').value;
@@ -144,6 +149,7 @@ function revisarImportacion(filasExcel) {
         if (estadoLocal && estadoLocal !== 'ACTIVO') { inactivos++; importSalteados.push({ local, motivo: `Local ${celda(r, pos.estado)}` }); return; }
         const gr = celda(r, pos.gr), gz = celda(r, pos.gz), obs = celda(r, pos.obs);
         const nomina = nominaDe(celda(r, pos.nomina));
+        importLocales.set(nLocal, { local, regional: gr, zonal: gz, estado_nomina: nomina || null });
         if (nomina) nominaLocal.set(nLocal, { estado: nomina, detalle: col => detalleDe(r, col) });
         const previos = datosPrevios(local, gz);
         if (!PERFILES_SOLICITUD.some(p => (parseInt(celda(r, pos.perfiles[p.col])) || 0) > 0)) importSalteados.push({ local, motivo: 'No pide perfiles' });
@@ -151,12 +157,15 @@ function revisarImportacion(filasExcel) {
             const pedidas = parseInt(celda(r, pos.perfiles[p.col])) || 0;
             if (pedidas <= 0) return;
             const abiertas = busquedas.filter(b => vacanteAbierta(b) && normTxt(b.local) === nLocal && b.puesto === p.puesto).length;
+            // EXCEDIDO: no se crea salvo que se marque a mano "Falta completar" (excepciones)
+            const excedido = nomina === 'EXCEDIDO';
             importLineas.push({
-                usar: true, local, regional: gr, zonal: gz, notas: obs, puesto: p.puesto, perfil: p.col,
+                usar: !excedido, excedido, faltaCompletar: false, local, regional: gr, zonal: gz, notas: obs, puesto: p.puesto, perfil: p.col,
                 marca: marcaDeLocal(local, marcaDefecto), selector: previos.selector, zona: previos.zona || infoLocal(local)?.zona || '',
                 estado_nomina: nomina || null, nomina_detalle: nomina ? detalleDe(r, p.col) || null : null,
                 pedidas, abiertas, crear: Math.max(0, pedidas - abiertas)
             });
+            importLineas[importLineas.length - 1].nomina_detalle_orig = importLineas[importLineas.length - 1].nomina_detalle;
         });
     });
 
@@ -200,39 +209,83 @@ function salteadosHtml() {
 
 function renderImportPreview() {
     const sels = selectores();
-    document.getElementById('imp-preview').innerHTML = `
-        <div class="table-wrap" style="margin-top:12px;max-height:46vh">
+    const fila = (l, i) => `<tr class="${l.usar && l.crear ? '' : 'row-locked'}">
+        <td><input type="checkbox" ${l.usar ? 'checked' : ''} ${l.excedido && !l.faltaCompletar ? 'disabled title="Marcá Falta completar para crearla"' : ''} onchange="importLineas[${i}].usar=this.checked;renderImportPreview()"></td>
+        <td><strong>${esc(l.local)}</strong></td>
+        <td><span class="marca-mini ${marcaClass(l.marca)}">${l.marca === 'Sabores Express' ? 'SAB' : 'EXT'}</span></td>
+        <td>${l.excedido
+            ? `<label class="imp-falta" title="Excepción: el local está excedido pero igual hay que cubrir este puesto"><input type="checkbox" ${l.faltaCompletar ? 'checked' : ''} onchange="marcarFaltaCompletar(${i}, this.checked)"> Falta completar</label>`
+            : (nominaHtml(l) || '—')}</td>
+        <td>${esc(l.puesto)}</td>
+        <td class="mono">${l.pedidas}</td>
+        <td class="mono" title="Vacantes abiertas de este puesto en el local">${l.abiertas || '—'}</td>
+        <td><input type="number" min="0" max="20" class="inline-input inline-input-box" style="width:56px" value="${l.crear}" onchange="importLineas[${i}].crear=Math.max(0,Math.min(20,parseInt(this.value)||0));renderImportPreview()"></td>
+        <td>${esc(l.regional || '—')}</td>
+        <td>${esc(l.zonal || '—')}</td>
+        <td><select class="inline-select" onchange="importLineas[${i}].selector=this.value">${optionsHtml(sels, l.selector, '—')}</select></td>
+        <td class="imp-obs">${esc(l.notas || '')}</td>
+    </tr>`;
+    const tabla = (titulo, idx, nota = '') => idx.length ? `
+        <h4 class="imp-subtitulo">${titulo}</h4>${nota}
+        <div class="table-wrap" style="margin-top:6px;max-height:38vh">
             <table class="tabla-informe imp-tabla">
                 <thead><tr><th></th><th>Local</th><th>Marca</th><th>Nómina</th><th>Puesto</th><th>Pedidas</th><th>Ya abiertas</th><th>A crear</th><th>Regional</th><th>Zonal</th><th>Selector</th><th>Observación</th></tr></thead>
-                <tbody>${importLineas.map((l, i) => `<tr class="${l.usar && l.crear ? '' : 'row-locked'}">
-                    <td><input type="checkbox" ${l.usar ? 'checked' : ''} onchange="importLineas[${i}].usar=this.checked;renderImportPreview()"></td>
-                    <td><strong>${esc(l.local)}</strong></td>
-                    <td><span class="marca-mini ${marcaClass(l.marca)}">${l.marca === 'Sabores Express' ? 'SAB' : 'EXT'}</span></td>
-                    <td>${nominaHtml(l) || '—'}</td>
-                    <td>${esc(l.puesto)}</td>
-                    <td class="mono">${l.pedidas}</td>
-                    <td class="mono" title="Vacantes abiertas de este puesto en el local">${l.abiertas || '—'}</td>
-                    <td><input type="number" min="0" max="20" class="inline-input inline-input-box" style="width:56px" value="${l.crear}" onchange="importLineas[${i}].crear=Math.max(0,Math.min(20,parseInt(this.value)||0));renderImportPreview()"></td>
-                    <td>${esc(l.regional || '—')}</td>
-                    <td>${esc(l.zonal || '—')}</td>
-                    <td><select class="inline-select" onchange="importLineas[${i}].selector=this.value">${optionsHtml(sels, l.selector, '—')}</select></td>
-                    <td class="imp-obs">${esc(l.notas || '')}</td>
-                </tr>`).join('')}</tbody>
+                <tbody>${idx.map(i => fila(importLineas[i], i)).join('')}</tbody>
             </table>
-        </div>${salteadosHtml()}`;
+        </div>` : '';
+    const comunes = importLineas.map((l, i) => i).filter(i => !importLineas[i].excedido);
+    const excedidos = importLineas.map((l, i) => i).filter(i => importLineas[i].excedido);
+    document.getElementById('imp-preview').innerHTML =
+        tabla(`Para completar · ${comunes.length}`, comunes) +
+        tabla(`Excedidos · ${excedidos.length} (no se crean ni cuentan como búsqueda activa)`, excedidos,
+            '<p class="tip" style="font-style:normal">Si en un local excedido igual hay que cubrir el puesto, marcá <strong>Falta completar</strong>: se crea y cuenta como búsqueda activa.</p>') +
+        salteadosHtml();
     actualizarBotonImportar();
+}
+
+// Excepción a mano: el local está excedido pero falta completar este puesto
+// Con una excepción marcada, las vacantes abiertas de ese local tampoco pasan a "Excedido"
+function nominaAActualizar() {
+    const excepcion = new Set(importLineas.filter(l => l.faltaCompletar).map(l => normTxt(l.local)));
+    return importNomina.filter(u => !(u.estado_nomina === 'EXCEDIDO' && excepcion.has(normTxt(busquedas.find(b => b.id === u.id)?.local))));
+}
+function marcarFaltaCompletar(i, si) {
+    const l = importLineas[i];
+    l.faltaCompletar = si;
+    l.usar = si;
+    l.estado_nomina = si ? 'DEBE COMPLETAR' : 'EXCEDIDO';
+    l.nomina_detalle = si ? 'Excepción: local excedido' : l.nomina_detalle_orig;
+    renderImportPreview();
 }
 
 function actualizarBotonImportar() {
     const total = importLineas.filter(l => l.usar).reduce((a, l) => a + l.crear, 0);
     const locales = new Set(importLineas.filter(l => l.usar && l.crear).map(l => normTxt(l.local))).size;
-    const act = importNomina.length;
+    const act = nominaAActualizar().length;
     const btn = document.getElementById('btn-crear-importadas');
     btn.disabled = total === 0 && act === 0;
     btn.innerHTML = `<i class="fas fa-check"></i> ` + (total && act ? `Crear ${total} y actualizar ${act}`
         : act && !total ? `Actualizar nómina de ${act}` : `Crear ${total} vacante${total === 1 ? '' : 's'}`);
     if (importLineas.length) document.getElementById('imp-resumen').textContent = `${total} vacante${total === 1 ? '' : 's'} en ${locales} local${locales === 1 ? '' : 'es'}. "Ya abiertas" cuenta las que siguen abiertas en el portal para ese local y puesto, y se descuentan de "A crear".`
         + (act ? ` Además se actualiza la nómina de ${act} vacante${act === 1 ? '' : 's'} abierta${act === 1 ? '' : 's'}.` : '');
+}
+
+// El Mapa de equipos toma de la planilla el regional, el zonal y la nómina de cada local
+async function actualizarMapaDesdeImport() {
+    const cambios = [];
+    importLocales.forEach(x => {
+        const l = localDe(x.local);
+        if (!l) return;
+        const upd = {};
+        if (x.regional && x.regional !== l.regional) upd.regional = x.regional;
+        if (x.zonal && x.zonal !== l.zonal) upd.zonal = x.zonal;
+        if (x.estado_nomina && x.estado_nomina !== l.estado_nomina) upd.estado_nomina = x.estado_nomina;
+        if (Object.keys(upd).length) cambios.push({ l, upd });
+    });
+    for (let i = 0; i < cambios.length; i += 10) {
+        const res = await Promise.all(cambios.slice(i, i + 10).map(c => sb.from('seleccion_locales').update(c.upd).eq('id', c.l.id).select()));
+        res.forEach((r, k) => { if (!r.error && r.data?.[0]) Object.assign(cambios[i + k].l, r.data[0]); });
+    }
 }
 
 let _importando = false;
@@ -249,7 +302,7 @@ async function crearImportadas() {
             estado_nomina: l.estado_nomina, nomina_detalle: l.nomina_detalle
         });
     });
-    const act = importNomina.length;
+    const act = nominaAActualizar().length;
     if (!filas.length && !act) return;
     const partes = [filas.length ? `crear ${filas.length} vacante${filas.length === 1 ? '' : 's'}` : '', act ? `actualizar la nómina de ${act} abierta${act === 1 ? '' : 's'}` : ''];
     if (!(await confirmar(`Se va a ${partes.filter(Boolean).join(' y ')}. ¿Seguimos?`))) return;
@@ -267,7 +320,7 @@ async function crearImportadas() {
         busquedas = [...creadas.map(mapBusqueda).reverse(), ...busquedas];
         // Una sola actualización por cada combinación de estado y detalle
         const grupos = new Map();
-        importNomina.forEach(u => {
+        nominaAActualizar().forEach(u => {
             const k = JSON.stringify([u.estado_nomina, u.nomina_detalle]);
             if (!grupos.has(k)) grupos.set(k, { cambios: { estado_nomina: u.estado_nomina, nomina_detalle: u.nomina_detalle }, ids: [] });
             grupos.get(k).ids.push(u.id);
@@ -279,6 +332,7 @@ async function crearImportadas() {
             error = r.error;
             (r.data || []).forEach(row => { aplicarCambiosBusqueda(row); actualizadas++; });
         }
+        await actualizarMapaDesdeImport();
         if (creadas.length || actualizadas) refreshView();
         const hecho = [creadas.length ? `${creadas.length} vacantes creadas` : '', actualizadas ? `nómina actualizada en ${actualizadas}` : ''].filter(Boolean).join(' · ');
         if (error) { toast(`Error: ${msgError(error)}${hecho ? ' (' + hecho + ')' : ''}`, true); return; }

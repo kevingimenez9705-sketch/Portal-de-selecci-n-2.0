@@ -103,7 +103,7 @@ language sql immutable set search_path = public as $$
     select jsonb_build_object(
         'zonas',    jsonb_build_array('Sur', 'CABA', 'Oeste', 'Norte', 'Lejanos', 'Otras'),
         'sedes',    jsonb_build_array('Florida', 'Merlo', 'Adrogué'),
-        'puestos',  jsonb_build_array('Empleado polivalente', 'Encargado/a', 'Gerente'),
+        'puestos',  jsonb_build_array('Empleado polivalente part-time', 'Empleado polivalente full-time'),
         'inicios',  jsonb_build_array('Inmediata', 'En 15 días', 'En 1 mes', 'Más adelante'),
         'jornadas', jsonb_build_array('Part-time', 'Full-time'),
         'franjas',  jsonb_build_array('Mañana', 'Tarde', 'Noche'),

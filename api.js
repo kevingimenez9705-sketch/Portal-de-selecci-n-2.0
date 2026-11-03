@@ -84,12 +84,41 @@ async function loadData() {
     const [bs, ps, ls, zs] = await Promise.all([fetchTodo('seleccion_busquedas', BUSQUEDA_SELECT), fetchTodo('seleccion_postulantes'),
         opcional(fetchTodo('seleccion_locales')), opcional(fetchTodo('seleccion_zonas', '*', 'localidad'))]);
     _firmaDatos = JSON.stringify([bs, ps]);   // para la actualización sola: qué es lo que ya se ve
-    busquedas = bs.map(mapBusqueda);
+    repartirBusquedas(bs);
     postulantes = ps;
     locales = ls.filter(l => l.activo !== false);
     zonasLocalidad = zs;
     indexarPostulantes();
     indexarLocales();
+}
+
+// Tablero = las que no se archivaron con "Limpiar semana"; las archivadas quedan para Estadísticas
+function repartirBusquedas(bs) {
+    const todas = bs.map(mapBusqueda);
+    busquedas = todas.filter(b => !b.archivada);
+    busquedasArchivadas = todas.filter(b => b.archivada);
+}
+function todasLasBusquedas() { return busquedas.concat(busquedasArchivadas); }
+
+// "Limpiar semana": todas las vacantes del tablero pasan a archivadas (no se borra nada)
+async function limpiarSemana() {
+    const n = busquedas.length;
+    if (!n) { toast('El tablero ya está vacío'); return; }
+    const enProceso = busquedas.filter(b => vacanteAbierta(b) && tienePersona(b)).length;
+    if (!(await confirmar(`¿Limpiar el tablero? Se sacan las ${n} vacantes${enProceso ? ` (${enProceso} con una persona en proceso)` : ''}. No se borran: siguen contando en Estadísticas.`, 'Limpiar semana'))) return;
+    // De a tandas: muchos ids juntos no entran en un solo pedido
+    const cuando = new Date().toISOString(), todosIds = busquedas.map(b => b.id), data = [];
+    let error = null;
+    for (let i = 0; i < todosIds.length && !error; i += 150) {
+        const r = await sb.from('seleccion_busquedas').update({ archivada: cuando }).in('id', todosIds.slice(i, i + 150)).select('id, archivada');
+        error = r.error; data.push(...(r.data || []));
+    }
+    if (error && !data.length) { toast('Error al limpiar: ' + msgError(error), true); return; }
+    const ids = new Set((data || []).map(r => r.id));
+    busquedas.filter(b => ids.has(b.id)).forEach(b => { b.archivada = data.find(r => r.id === b.id).archivada; busquedasArchivadas.push(b); });
+    busquedas = busquedas.filter(b => !ids.has(b.id));
+    refreshView();
+    toast(`Tablero limpio ✓ ${ids.size} vacante${ids.size === 1 ? '' : 's'} pasaron al historial de Estadísticas`);
 }
 
 // Después de guardar algo de UNA vacante (o sus comentarios) se vuelve a pedir solo esa, no todo.
@@ -172,7 +201,7 @@ async function actualizarSolo() {
         if (firma === _firmaDatos) return;
         if (document.querySelector('.modal-bg:not(.hidden), [role="dialog"]') || /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) return;
         _firmaDatos = firma;
-        busquedas = bs.map(mapBusqueda);
+        repartirBusquedas(bs);
         postulantes = ps;
         indexarPostulantes();
         refreshView();
