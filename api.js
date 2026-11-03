@@ -224,7 +224,11 @@ async function cambiarEstado(b, estado) {
     if (!row) return;
     if (estado === 'COMUNICADO') await checkAndFinalizeSearches();
     refreshView();
-    toast('Estado: ' + (estado || 'sin estado') + ' ✓');
+    // ENVIADO A ZONAL (Extremas): el Apps Script de TAREAS GRUPALES la copia a la hoja del regional
+    if (estado === 'ENVIADO A ZONAL' && row.marca === 'Hamburguesas Extremas') {
+        if (row.regional) toast(`Enviado ✓ En los próximos 10 minutos aparece en "Base de Candidatos" de ${row.regional}. Cuando el zonal responda, el estado cambia solo.`);
+        else toast('Falta el REGIONAL de la vacante: completalo para que se copie a su hoja', true);
+    } else toast('Estado: ' + (estado || 'sin estado') + ' ✓');
 
     // Rechazado por el zonal: ofrecer liberar la vacante para colocar a otro
     if (estado === 'RECHAZADO ZONAL' && tienePersona(row)

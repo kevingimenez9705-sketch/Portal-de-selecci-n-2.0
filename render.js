@@ -265,6 +265,15 @@ function sugeridosHtml(b) {
 }
 const titulo_ = s => String(s || '').toLowerCase().replace(/(^|[\s\/(-])(\p{L})/gu, (m, a, c) => a + c.toUpperCase());
 
+// ENVIADO A ZONAL: ¿ya está en la hoja del regional? (la copia el Apps Script cada 10 minutos)
+function zonalHojaHtml(b) {
+    if (b.estado !== 'ENVIADO A ZONAL' || b.marca !== 'Hamburguesas Extremas' || !vacanteAbierta(b)) return '';
+    if (!b.regional) return '<div class="zonal-hoja zonal-falta" title="Sin REGIONAL no se puede copiar a su hoja">⚠ Falta el regional</div>';
+    return b.zonal_copiado
+        ? `<div class="zonal-hoja zonal-ok" title="Copiada a Base de Candidatos el ${esc(fmtFecha(String(b.zonal_copiado).slice(0, 10)))}">✓ En la hoja de ${esc(titulo_(b.regional))}</div>`
+        : `<div class="zonal-hoja" title="El Apps Script la copia en los próximos 10 minutos">⏳ Va a la hoja de ${esc(titulo_(b.regional))}</div>`;
+}
+
 function renderRow(b) {
     const dias = daysDiff(b.inicio, b.ingreso || null);
     const alerta = alertaZonalVencida(b);
@@ -282,6 +291,7 @@ function renderRow(b) {
                 ${vacanteAbierta(b) ? `<span class="demora-badge ${demoraClass(dias, limiteDe(b))}" title="Días hábiles abierta · límite ${limiteDe(b)}hd">${dias}hd</span>` : ''}
             </div>
             ${b.estado_nomina ? `<div class="num-linea">${nominaHtml(b)}</div>` : ''}
+            ${zonalHojaHtml(b)}
             ${alerta ? `<div class="alerta-72" title="En ENVIADO A ZONAL hace ${daysDiff(b.fecha_estado)} días hábiles">⚠ ${daysDiff(b.fecha_estado)}hd sin respuesta</div>` : ''}
         </td>
         ${COLUMNAS.map(c => `<td class="col-${c.g.toLowerCase()}">${celda(b, c)}</td>`).join('')}
