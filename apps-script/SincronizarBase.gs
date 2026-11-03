@@ -517,7 +517,7 @@ var PortalSync = (function () {
       total.sin_selector = total.sin_selector.concat(r.sin_selector || []);
     }
     if (total.actualizados) lineas.push('Asignaciones → portal: ' + total.actualizados + ' locales actualizados.');
-    if (total.sin_local.length) lineas.push('Asignaciones: ' + total.sin_local.length + ' locales de la hoja no están en el portal (' + total.sin_local.slice(0, 5).join(', ') + ').');
+    if (total.sin_local.length) lineas.push('Asignaciones: ' + total.sin_local.length + ' locales de la hoja no están en el portal: ' + total.sin_local.join(', ') + '.');
     if (total.sin_selector.length) lineas.push('Asignaciones: selector sin coincidencia en Equipo: ' + total.sin_selector.slice(0, 5).join(', ') + '.');
     return lineas.join('\n');
   }

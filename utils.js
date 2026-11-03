@@ -104,7 +104,10 @@ function iniciales(nombre) {
 }
 const normTxt = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ');
 // Mismo local con otro nombre: "SABORES EXPRESS ADROGUE" = "SABORES ADROGUE", "HAMBURGUESAS EXTREMAS X" = "EXTREMAS X"
-const claveLocal = s => normTxt(s).replace(/^SABORES EXPRESS\s+/, 'SABORES ').replace(/^HAMBURGUESAS EXTREMAS\s+/, 'EXTREMAS ');
+// (y como en las hojas de asignaciones: "(PROVINCIA)", GENERAL = GRAL, "FLORES 1" = "FLORES")
+const claveLocal = s => normTxt(s).replace(/\([^)]*\)/g, ' ').replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/^SABORES EXPRESS\s+/, 'SABORES ').replace(/^HAMBURGUESAS EXTREMAS\s+/, 'EXTREMAS ')
+    .replace(/\bGENERAL\b/g, 'GRAL').replace(/\bPRESIDENTE\b/g, 'PTE').replace(/\s+1$/, '');
 
 // ── LOCALES Y ZONAS ──
 let _localesIdx = null, _zonasIdx = null;
