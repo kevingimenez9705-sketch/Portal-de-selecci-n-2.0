@@ -174,13 +174,45 @@ async function initApp() {
 }
 
 // Botón "Actualizar": vuelve a traer todo.
-async function recargarDatos() {
+// Botón Actualizar: primero el Apps Script cruza Drive ↔ portal (si está publicado), después se recargan los datos
+let _sincronizando = false;
+async function actualizarTodo() {
+    if (!SYNC_DRIVE_URL) return recargarDatos();
+    if (_sincronizando) return;
+    _sincronizando = true;
+    const btn = document.getElementById('btn-actualizar');
+    const html = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Sincronizando con Drive…';
+    let aviso = '';
+    try {
+        const ctl = new AbortController();
+        const corte = setTimeout(() => ctl.abort(), 150 * 1000);
+        // text/plain: pedido simple, sin preflight (Apps Script no responde OPTIONS)
+        const r = await fetch(SYNC_DRIVE_URL, { method: 'POST', body: JSON.stringify({ codigo: codigoEquipo, accion: 'sincronizar' }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, signal: ctl.signal });
+        clearTimeout(corte);
+        const res = await r.json();
+        if (!res.ok) aviso = 'Drive: ' + (res.error || 'no se pudo sincronizar');
+        else console.log('Sincronización con Drive:\n' + (res.resumen || 'sin novedades'));
+    } catch (e) {
+        aviso = e.name === 'AbortError' ? 'Drive tardó demasiado: se recargó solo el portal' : 'No se pudo conectar con Drive: se recargó solo el portal';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = html;
+        _sincronizando = false;
+    }
+    await recargarDatos(aviso ? '' : 'Sincronizado con Drive ✓');
+    if (aviso) toast(aviso, true);
+}
+
+async function recargarDatos(mensaje = 'Datos actualizados ✓') {
     try {
         await Promise.all([loadEquipo(), loadData()]);
         await checkAndFinalizeSearches();
         renderSelectorChips();
         refreshView();
-        toast('Datos actualizados ✓');
+        if (mensaje) toast(mensaje);
     } catch (e) { toast('Error al actualizar: ' + msgError(e), true); }
 }
 

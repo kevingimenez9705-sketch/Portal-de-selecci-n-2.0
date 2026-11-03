@@ -40,6 +40,11 @@
       línea (dejar '') y Guardar: ya quedó guardado aparte, sin estar a la vista.
    3. Elegir activarSincronizacionPortal → Ejecutar.
    Listo. Para frenarla: desactivarSincronizacionPortal. A mano: sincronizarPortal.
+   4. (Botón Actualizar del portal) Implementar → Gestionar implementaciones → la
+      Aplicación web que ya existe → editar (lápiz) → Versión: Nueva versión →
+      Ejecutar como: Yo · Acceso: Cualquier usuario → Implementar. Si no hay
+      ninguna: Implementar → Nueva implementación → Aplicación web. El link
+      (termina en /exec) va en SYNC_DRIVE_URL de config.js del portal.
    ========================================================= */
 
 function sincronizarPortal() { return PortalSync.sincronizar(true); }
@@ -47,6 +52,11 @@ function sincronizarPortalProgramado_() { return PortalSync.sincronizar(false); 
 function activarSincronizacionPortal() { return PortalSync.activar(); }
 function desactivarSincronizacionPortal() { return PortalSync.desactivar(); }
 function probarConexionPortal() { return PortalSync.probarConexion(); }
+
+// Botón "Actualizar" del portal: sincroniza con Drive en el momento, sin entrar al Apps Script.
+// Necesita que el proyecto esté implementado como Aplicación web (Ejecutar como: yo · Acceso: cualquier usuario).
+// Usa doPost: el doGet de Codigo.gs (Elegí tu vacante / confirmación de onboarding) sigue igual.
+function doPost(e) { return PortalSync.desdeElPortal(e); }
 
 // PASO 2 de INSTALAR: el código va acá solo un momento. Después de ejecutar guardarCodigoPortal, dejalo vacío ('').
 var CODIGO_PORTAL_PARA_GUARDAR = '';
@@ -173,6 +183,28 @@ var PortalSync = (function () {
       return resumen;
     } finally {
       lock.releaseLock();
+    }
+  }
+
+  // Pedido del botón Actualizar: solo con el código del equipo; si corrió hace menos de un minuto, no repite
+  function desdeElPortal(e) {
+    const salida = function (o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); };
+    let pedido = {};
+    try { pedido = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) { /* cuerpo inválido */ }
+    const guardado = PropertiesService.getScriptProperties().getProperty('CODIGO_EQUIPO');
+    if (!guardado || String(pedido.codigo || '').trim() !== guardado.trim()) {
+      Utilities.sleep(1500);   // frena a quien pruebe códigos
+      return salida({ ok: false, error: 'Código del equipo incorrecto.' });
+    }
+    const cache = CacheService.getScriptCache();
+    const reciente = cache.get('portal_sync_resumen');
+    if (reciente != null) return salida({ ok: true, reciente: true, resumen: reciente });
+    try {
+      const resumen = sincronizar(true);
+      cache.put('portal_sync_resumen', String(resumen || ''), 60);
+      return salida({ ok: true, resumen: resumen });
+    } catch (err) {
+      return salida({ ok: false, error: err.message });
     }
   }
 
@@ -1556,7 +1588,7 @@ function obtenerHorarioPrimerDiaOnboarding_(
   }
 
   return {
-    sincronizar: sincronizar, activar: activar, desactivar: desactivar, probarConexion: probarConexion,
+    sincronizar: sincronizar, activar: activar, desactivar: desactivar, probarConexion: probarConexion, desdeElPortal: desdeElPortal,
     // Para las pruebas
     _t: {
       filasDeLaBase_: filasDeLaBase_, filasDeIngreso_: filasDeIngreso_, filasDeBloqueados_: filasDeBloqueados_,
