@@ -6,6 +6,19 @@ let eqMarca = '', eqSelector = null;   // eqSelector: null = todos, '' = sin asi
 
 const NOMINA_PUNTO = { 'DEBE COMPLETAR': ['nomina-completar', 'Debe completar'], 'EXCEDIDO': ['nomina-excedido', 'Excedido'], 'COMPLETO': ['nomina-completo', 'Completo'] };
 
+// Fotos de regionales y zonales: mismas que usa el Contador de Vacantes (repo de fotos, por nombre)
+const FOTOS_BASE = 'https://raw.githubusercontent.com/kevingimenez9705-sketch/ascensos-/main/assets/photos/';
+const slugPersona = n => String(n || '').split('·')[0].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+function fotoPersonaHtml(nombre, marca, chica = false) {
+    const slug = slugPersona(nombre);
+    const ini = esc(iniciales(String(nombre || '').split('·')[0]));
+    if (!slug || /^sin-/.test(slug)) return `<span class="eq-foto ${chica ? 'eq-foto-chica' : ''}">${ini}</span>`;
+    // Extremas: hex-nombre.png o .jpg · Sabores: sabores-nombre.jpg
+    const [url, otra] = marca === 'Hamburguesas Extremas' ? [`${FOTOS_BASE}hex-${slug}.png`, `${FOTOS_BASE}hex-${slug}.jpg`] : [`${FOTOS_BASE}sabores-${slug}.jpg`, ''];
+    return `<span class="eq-foto ${chica ? 'eq-foto-chica' : ''}">${ini}<img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer"
+        onerror="${otra ? `if(!this.dataset.otra){this.dataset.otra=1;this.src='${esc(otra)}'}else ` : ''}this.remove()"></span>`;
+}
+
 function eqLocalesMarca() { return locales.filter(l => !eqMarca || l.marca === eqMarca); }
 const distintos = (lista, f) => [...new Set(lista.map(f).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
@@ -35,7 +48,7 @@ function renderEquipos() {
     document.getElementById('equipos-selectores').innerHTML = [...sels, ''].map(s => {
         const n = cuenta(s);
         if (!s && !n) return '';
-        return `<button class="eq-sel ${eqSelector === s ? 'activa' : ''}" data-s="${esc(s)}" onclick="eqElegirSelector(this.dataset.s)">
+        return `<button class="eq-sel ${eqSelector === s ? 'activa' : ''}" ${s ? `style="--team:${colorDe(s)}"` : ''} data-s="${esc(s)}" onclick="eqElegirSelector(this.dataset.s)">
             ${s ? avatarHtml(s, 'avatar-eq') : '<span class="avatar avatar-eq eq-sin"><i class="fas fa-question"></i></span>'}
             <span><span class="eq-sel-nom">${s ? esc(s) : 'Sin asignar'}</span><span class="eq-sel-num">${n} local${n === 1 ? '' : 'es'}</span></span></button>`;
     }).join('');
@@ -52,13 +65,13 @@ function renderEquipos() {
     box.innerHTML = Object.keys(porReg).sort((a, b) => a.localeCompare(b)).map(r => {
         const porZon = agrupar(porReg[r], l => l.zonal || 'Sin zonal');
         return `<div class="eq-regional">
-            <div class="eq-regional-tit"><i class="fas fa-user-tie"></i> ${esc(r)} <span>${porReg[r].length} locales · ${Object.keys(porZon).length} zonales</span></div>
+            <div class="eq-regional-tit">${fotoPersonaHtml(r, porReg[r][0].marca)}<span class="eq-regional-nom">Regional · ${esc(r)}</span><span>${porReg[r].length} locales · ${Object.keys(porZon).length} zonales</span></div>
             <div class="eq-zonales">${Object.keys(porZon).sort((a, b) => a.localeCompare(b)).map(z => {
                 const ls = porZon[z].sort((a, b) => a.local.localeCompare(b.local));
                 const ids = ls.map(l => l.id).join(',');
                 const unico = distintos(ls, l => l.selector || '-');
                 return `<div class="eq-zonal">
-                    <div class="eq-zonal-tit"><span><i class="fas fa-user"></i> ${esc(z)}</span>
+                    <div class="eq-zonal-tit"><span>${fotoPersonaHtml(z, ls[0].marca, true)}${esc(z)}</span>
                         <select class="filter-select eq-asignar" title="Asignar un selector a todos los locales del zonal" onchange="asignarSelector([${ids}], this.value, this)">
                             ${optionsHtml(sels, unico.length === 1 && unico[0] !== '-' ? unico[0] : null, unico.length > 1 ? 'Varios selectores…' : '— Sin asignar —')}</select></div>
                     ${ls.map(l => {

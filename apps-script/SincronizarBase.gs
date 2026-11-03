@@ -22,6 +22,10 @@
       (panel "Zonal y onboarding") salen con el mismo mail de bienvenida y el
       botón "Confirmo asistencia"; la vacante pasa a CITADO. Si algo falta
       (dirección, primer día…) no sale y el motivo queda en el panel.
+   7. Asignaciones (como el Contador de Vacantes): las hojas de asignaciones de
+      cada marca (A selector, B regional, C zonal, D local, V estado del local)
+      cargan el Mapa de equipos del portal. Un dato se actualiza solo cuando
+      cambia en la hoja: lo reasignado a mano en el portal se respeta.
 
    Todo queda dentro de PortalSync: se puede pegar como un archivo más del
    proyecto de TAREAS GRUPALES sin chocar con Codigo.gs, Onboarding.gs, etc.
@@ -73,7 +77,12 @@ var PortalSync = (function () {
     HORA_HASTA: 23,
     LOTE: 200,
     ZONA_HORARIA: 'America/Argentina/Buenos_Aires',
-    FUNCION_ACTIVADOR: 'sincronizarPortalProgramado_'
+    FUNCION_ACTIVADOR: 'sincronizarPortalProgramado_',
+    // Hojas de asignaciones (pestaña por gid, así no importa si le cambian el nombre)
+    ASIGNACIONES: [
+      { marca: 'Sabores Express', id: '1z8_8ijE9A7ADztRwqmGnFKOubnX8a9wzWK05aC-yv-w', gid: 1681270762 },
+      { marca: 'Hamburguesas Extremas', id: '1OWN-mp67qcvq3l7DgufHlvXnuPfl2zmtZk6EEHAydos', gid: 69709546 }
+    ]
   };
 
   // Campo del portal → cómo empieza el encabezado en BASE DE DATOS (sin tildes ni signos).
@@ -157,7 +166,8 @@ var PortalSync = (function () {
         bloqueadosAlPortal_(libro, codigo),
         ingresoAlPortal_(libro, codigo),
         zonalesAlPortal_(libro, codigo),
-        citacionesDelPortal_(codigo)
+        citacionesDelPortal_(codigo),
+        asignacionesAlPortal_(codigo)
       ].filter(String).join('\n');
       console.log(resumen);
       return resumen;
@@ -483,6 +493,54 @@ var PortalSync = (function () {
       ['PUESTO', 'puesto'], ['HORARIO', 'jornada']
     ]
   };
+
+  /* =========================================================
+     7. ASIGNACIONES → MAPA DE EQUIPOS
+     ========================================================= */
+
+  function asignacionesAlPortal_(codigo) {
+    const lineas = [];
+    let filas = [];
+    SYNC.ASIGNACIONES.forEach(function (fuente) {
+      try {
+        filas = filas.concat(filasDeAsignaciones_(fuente));
+      } catch (e) {
+        lineas.push('Asignaciones ' + fuente.marca + ': no se pudo leer la hoja (' + e.message + ').');
+      }
+    });
+    if (!filas.length) return lineas.join('\n');
+    const total = { actualizados: 0, sin_local: [], sin_selector: [] };
+    for (let i = 0; i < filas.length; i += SYNC.LOTE) {
+      const r = llamarPortal_('seleccion_asignaciones_sync', { filas: filas.slice(i, i + SYNC.LOTE) }, codigo) || {};
+      total.actualizados += r.actualizados || 0;
+      total.sin_local = total.sin_local.concat(r.sin_local || []);
+      total.sin_selector = total.sin_selector.concat(r.sin_selector || []);
+    }
+    if (total.actualizados) lineas.push('Asignaciones → portal: ' + total.actualizados + ' locales actualizados.');
+    if (total.sin_local.length) lineas.push('Asignaciones: ' + total.sin_local.length + ' locales de la hoja no están en el portal (' + total.sin_local.slice(0, 5).join(', ') + ').');
+    if (total.sin_selector.length) lineas.push('Asignaciones: selector sin coincidencia en Equipo: ' + total.sin_selector.slice(0, 5).join(', ') + '.');
+    return lineas.join('\n');
+  }
+
+  function filasDeAsignaciones_(fuente) {
+    const libro = SpreadsheetApp.openById(fuente.id);
+    const hoja = libro.getSheets().filter(function (h) { return h.getSheetId() === Number(fuente.gid); })[0];
+    if (!hoja) throw new Error('no está la pestaña gid ' + fuente.gid);
+    const ultima = hoja.getLastRow();
+    if (!ultima) return [];
+    const valores = hoja.getRange(1, 1, ultima, Math.min(22, Math.max(4, hoja.getLastColumn()))).getDisplayValues();
+    const vistos = {};
+    return valores.map(function (f) {
+      return { marca: fuente.marca, selector: texto_(f[0]), regional: texto_(f[1]), zonal: texto_(f[2]), local: texto_(f[3]), estado: texto_(f[21]) };
+    }).filter(function (a) {
+      if (!a.local || (!a.selector && !a.regional && !a.zonal)) return false;
+      const n = normalizar_(a.local);
+      if (n === 'local' || (normalizar_(a.selector).indexOf('selector') !== -1 && n.indexOf('local') !== -1)) return false;   // encabezado
+      if (vistos[n]) return false;
+      vistos[n] = true;
+      return true;
+    });
+  }
 
   function zonalesAlPortal_(libro, codigo) {
     const vacantes = llamarPortal_('seleccion_zonal_pendientes', {}, codigo) || [];
@@ -1504,7 +1562,8 @@ function obtenerHorarioPrimerDiaOnboarding_(
       filasDeLaBase_: filasDeLaBase_, filasDeIngreso_: filasDeIngreso_, filasDeBloqueados_: filasDeBloqueados_,
       bloqueados_: bloqueados_, llamarPortal_: llamarPortal_, horario_: horario_, fecha_: fecha_, estado_: estado_,
       agregarFilas_: agregarFilas_, fechaDeTexto_: fechaDeTexto_, enHorario_: enHorario_, sexo_: sexo_,
-      hojasZonales_: hojasZonales_, indiceZonal_: indiceZonal_, datosCitacion_: datosCitacion_
+      hojasZonales_: hojasZonales_, indiceZonal_: indiceZonal_, datosCitacion_: datosCitacion_,
+      filasDeAsignaciones_: filasDeAsignaciones_, asignacionesAlPortal_: asignacionesAlPortal_
     }
   };
 })();

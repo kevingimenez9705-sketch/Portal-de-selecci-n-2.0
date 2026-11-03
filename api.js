@@ -105,7 +105,10 @@ async function limpiarSemana() {
     const n = busquedas.length;
     if (!n) { toast('El tablero ya está vacío'); return; }
     const enProceso = busquedas.filter(b => vacanteAbierta(b) && tienePersona(b)).length;
-    if (!(await confirmar(`¿Limpiar el tablero? Se sacan las ${n} vacantes${enProceso ? ` (${enProceso} con una persona en proceso)` : ''}. No se borran: siguen contando en Estadísticas.`, 'Limpiar semana'))) return;
+    if (!(await confirmar(`¿Limpiar el tablero? Se sacan las ${n} vacantes${enProceso ? ` (${enProceso} con una persona en proceso)` : ''} y se descarga una copia en Excel. No se borran: siguen contando en Estadísticas.`, 'Limpiar semana'))) return;
+    // Primero la copia en Excel: si no se puede bajar, no se limpia nada
+    try { await descargarExcelSemana(busquedas.slice()); }
+    catch (e) { toast('No se pudo generar el Excel: ' + (e.message || e) + '. No se limpió nada.', true); return; }
     // De a tandas: muchos ids juntos no entran en un solo pedido
     const cuando = new Date().toISOString(), todosIds = busquedas.map(b => b.id), data = [];
     let error = null;
@@ -118,7 +121,7 @@ async function limpiarSemana() {
     busquedas.filter(b => ids.has(b.id)).forEach(b => { b.archivada = data.find(r => r.id === b.id).archivada; busquedasArchivadas.push(b); });
     busquedas = busquedas.filter(b => !ids.has(b.id));
     refreshView();
-    toast(`Tablero limpio ✓ ${ids.size} vacante${ids.size === 1 ? '' : 's'} pasaron al historial de Estadísticas`);
+    toast(`Tablero limpio ✓ ${ids.size} vacante${ids.size === 1 ? '' : 's'} en el Excel descargado y en Estadísticas`);
 }
 
 // Después de guardar algo de UNA vacante (o sus comentarios) se vuelve a pedir solo esa, no todo.

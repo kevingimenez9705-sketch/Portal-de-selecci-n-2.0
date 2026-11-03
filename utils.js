@@ -103,19 +103,21 @@ function iniciales(nombre) {
     return String(nombre || '?').trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase();
 }
 const normTxt = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ');
+// Mismo local con otro nombre: "SABORES EXPRESS ADROGUE" = "SABORES ADROGUE", "HAMBURGUESAS EXTREMAS X" = "EXTREMAS X"
+const claveLocal = s => normTxt(s).replace(/^SABORES EXPRESS\s+/, 'SABORES ').replace(/^HAMBURGUESAS EXTREMAS\s+/, 'EXTREMAS ');
 
 // ── LOCALES Y ZONAS ──
 let _localesIdx = null, _zonasIdx = null;
 function indexarLocales() {
-    _localesIdx = new Map(locales.map(l => [normTxt(l.local), l]));
+    _localesIdx = new Map(locales.map(l => [claveLocal(l.local), l]));
     _zonasIdx = new Map(zonasLocalidad.map(z => [normTxt(z.localidad), z]));
 }
 // Zona, localidad, dirección y razón social del local de una vacante. Una apertura
 // ("APERTURA EXTREMAS QUILMES") toma zona y localidad del local, pero no dirección ni razón social.
 function infoLocal(local) {
     if (!_localesIdx) indexarLocales();
-    const n = normTxt(local);
-    const sinAper = n.replace(/^(APERTURA|APER)\.?\s+/, '');
+    const n = claveLocal(local);
+    const sinAper = claveLocal(n.replace(/^(APERTURA|APER)\.?\s+/, ''));
     const l = _localesIdx.get(n) || _localesIdx.get(sinAper);
     if (!l) return null;
     const apertura = sinAper !== n;
@@ -124,8 +126,8 @@ function infoLocal(local) {
 // Registro del local en el Mapa de equipos (selector, regional, zonal y nómina asignados)
 function localDe(local) {
     if (!_localesIdx) indexarLocales();
-    const n = normTxt(local);
-    return _localesIdx.get(n) || _localesIdx.get(n.replace(/^(APERTURA|APER)\.?\s+/, '')) || null;
+    const n = claveLocal(local);
+    return _localesIdx.get(n) || _localesIdx.get(claveLocal(n.replace(/^(APERTURA|APER)\.?\s+/, ''))) || null;
 }
 function zonaDeLocalidad(localidad) {
     if (!_zonasIdx) indexarLocales();
