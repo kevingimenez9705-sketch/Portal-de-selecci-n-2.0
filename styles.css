@@ -413,3 +413,11 @@ button.nomina.activo { box-shadow: 0 0 0 2px currentColor; }
 .zonal-hoja { font-size: 10px; font-weight: 800; color: var(--muted); margin-top: 2px; }
 .zonal-hoja.zonal-ok { color: #15803d; }
 .zonal-hoja.zonal-falta { color: var(--red); }
+
+/* Zonal y onboarding */
+.onb-seccion { margin: 14px 0 6px; font-size: 13px; font-weight: 800; color: var(--purple); }
+.onb-caja { max-height: 30vh; }
+.onb-masivo { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin: 0 0 8px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.onb-masivo label { display: flex; flex-direction: column; gap: 3px; }
+.onb-masivo .form-input { min-height: 34px; padding: 4px 8px; }
+.onb-tabla td { vertical-align: top; }

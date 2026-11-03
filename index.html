@@ -56,6 +56,7 @@
             <div class="top-bar-acciones">
                 <button class="btn-secundario" id="btn-importar" onclick="openImportar()"><i class="fas fa-file-import"></i> Importar solicitudes</button>
                 <button class="btn-secundario" id="btn-datos-ingreso" onclick="openDatosIngreso()" title="Copiar a cada vacante los datos del formulario de ingreso (por email)"><i class="fas fa-id-card"></i> Datos de ingreso</button>
+                <button class="btn-secundario" id="btn-onb" onclick="openOnboarding()" title="Alertas del zonal y citación a onboarding"><i class="fas fa-envelope-open-text"></i> Zonal y onboarding <span class="icheck-count hidden" id="onb-count"></span></button>
                 <button class="btn-secundario" id="btn-icheck" onclick="openIcheck()" title="Bajar las vacantes en HUELLA para cargar en iCheck"><i class="fas fa-fingerprint"></i> iCheck <span class="icheck-count hidden" id="icheck-count"></span></button>
                 <button class="btn-primary" id="btn-nueva-busqueda" onclick="openNuevaBusqueda()"><i class="fas fa-plus"></i> Nueva vacante</button>
                 <a class="btn-secundario hidden" id="btn-elegi-vacante" href="elegi-tu-vacante.html" target="_blank" rel="noopener" title="Página pública donde cada persona deja sus datos y su disponibilidad (llegan solos a la Base)"><i class="fas fa-up-right-from-square"></i> Elegí tu vacante</a>
@@ -245,6 +246,31 @@
     </div>
 </div>
 
+<!-- ══ MODAL: ZONAL Y ONBOARDING ══ -->
+<div id="modal-onb" class="modal-bg hidden">
+    <div class="modal-box" style="max-width:1180px">
+        <div class="modal-title"><i class="fas fa-envelope-open-text" style="font-size:13px;opacity:.5;margin-right:6px"></i> Zonal y onboarding <span class="tip" id="onb-resumen" style="margin-left:8px"></span></div>
+        <h4 class="onb-seccion">⚠ Sin respuesta del zonal (3 días hábiles o más)</h4>
+        <div id="onb-alertas" class="table-wrap onb-caja"></div>
+        <h4 class="onb-seccion">✉️ Para citar a onboarding</h4>
+        <div class="onb-masivo">
+            <span>Para los marcados:</span>
+            <label>Onboarding <input type="date" class="form-input" id="onb-fecha"></label>
+            <label>Hora <select class="form-input" id="onb-hora"></select></label>
+            <label>Primer día <input type="date" class="form-input" id="onb-primer-dia"></label>
+            <button class="btn-sm" onclick="aplicarDatosOnb()"><i class="fas fa-check"></i> Aplicar</button>
+        </div>
+        <div id="onb-listos" class="table-wrap onb-caja"></div>
+        <h4 class="onb-seccion">📬 Citaciones enviadas</h4>
+        <div id="onb-cola" class="table-wrap onb-caja"></div>
+        <div class="modal-footer">
+            <span class="tip" style="margin-right:auto">El mail lo manda el Apps Script de TAREAS GRUPALES (cada 10 minutos), con el mismo texto de siempre y el botón "Confirmo asistencia".</span>
+            <button class="btn-cancel" onclick="closeModal('modal-onb')">Cerrar</button>
+            <button class="btn-primary" id="btn-onb-citar" onclick="citarOnb()" disabled><i class="fas fa-paper-plane"></i> Citar</button>
+        </div>
+    </div>
+</div>
+
 <!-- ══ MODAL: ICHECK ══ -->
 <div id="modal-icheck" class="modal-bg hidden">
     <div class="modal-box" style="max-width:980px">
@@ -367,6 +393,7 @@
 <script src="stats.js"></script>
 <script src="importar.js"></script>
 <script src="procesos.js"></script>
+<script src="onboarding.js"></script>
 <script>initApp();</script>
 
 </body>
