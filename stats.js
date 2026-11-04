@@ -64,19 +64,45 @@ function partesBateria(lista) {
 }
 const pctDe = (n, t) => t ? Math.round(n / t * 100) : 0;
 
+// Batería viva: se llena de abajo hacia arriba (cubiertas, en onboarding, apertura), con ola y burbujas.
+// Menos del 20% cubierto = carga baja (roja); con gente en onboarding aparece el rayo.
+const EMOJI_MARCA = { 'Hamburguesas Extremas': '🍔', 'Sabores Express': '🥟' };
+const BURBUJAS = [[14, 8, 0], [34, 5, 1.1], [52, 10, 2.2], [68, 6, .6], [82, 8, 1.7], [24, 4, 2.9]];
+function estadoBateria(r) {
+    if (!r.total) return ['Sin vacantes en el período', 'bat-chip-carga'];
+    if (r.pct === 100) return ['✅ Completa', 'bat-chip-ok'];
+    if (r.pct >= 80) return ['🔋 Casi llena', 'bat-chip-ok'];
+    if (r.pct < 20) return [`🪫 Carga baja: faltan ${r.total - r.completadas}`, 'bat-chip-baja'];
+    return ['🔋 Cargando', 'bat-chip-carga'];
+}
 function bateriaHtml(marca, lista) {
     const r = partesBateria(lista);
+    const p = k => pctDe(r[k], r.total);
+    const [estado, claseEstado] = estadoBateria(r);
+    const baja = r.total && r.pct < 20;
+    // Cada capa arranca donde termina la de abajo (con un respiro entre capas)
+    const capa = (k, clase, base, extra = '') => r[k] ? `<div class="bat-capa ${clase}" data-alto="${p(k)}" data-base="${base}" style="height:0;bottom:0">${extra}</div>` : '';
+    const ola = '<svg class="bat-ola" viewBox="0 0 320 12" preserveAspectRatio="none" aria-hidden="true"><path d="M0 6 Q20 0 40 6 T80 6 T120 6 T160 6 T200 6 T240 6 T280 6 T320 6 V12 H0 Z"></path></svg>';
+    const burbujas = BURBUJAS.map(([x, t, d]) => `<span class="bat-burbuja" style="left:${x}%;width:${t}px;height:${t}px;animation-delay:${d}s"></span>`).join('');
+    const baseIng = r.completadas ? `calc(${p('completadas')}% + 8px)` : '0px';
+    const baseApe = `calc(${p('completadas') + p('ingresar')}% + ${(r.completadas ? 8 : 0) + (r.ingresar ? 4 : 0)}px)`;
     return `<div class="bat-card">
-        <div class="bat-card-titulo">${esc(marca)}</div>
-        <div class="bateria" role="img" aria-label="${esc(marca)}: ${r.completadas} de ${r.total} completadas">
-            <div class="bateria-cuerpo">${SEGMENTOS_BATERIA.filter(s => r[s.k]).map(s =>
-                `<div class="bat-seg ${s.clase}" data-ancho="${pctDe(r[s.k], r.total)}" style="width:0" title="${s.lbl}: ${r[s.k]}"></div>`).join('')}
-                <div class="bateria-brillo"></div></div>
-            <div class="bateria-polo"></div>
+        <div class="bat-viva ${baja ? 'bat-baja' : ''}" role="img" aria-label="${esc(marca)}: ${r.pct}% cubierto, ${r.completadas} de ${r.total} vacantes">
+            <div class="bat-viva-polo"></div>
+            <div class="bat-viva-cuerpo"><div class="bat-viva-interior">
+                ${capa('apertura', 'bat-capa-apertura', baseApe)}
+                ${capa('ingresar', 'bat-capa-ingresar', baseIng)}
+                ${capa('completadas', 'bat-capa-ok', '0px', ola + `<div class="bat-burbujas">${burbujas}</div>`)}
+            </div>${r.ingresar ? '<div class="bat-rayo" aria-hidden="true">⚡</div>' : ''}</div>
         </div>
-        <div class="bat-ref">${SEGMENTOS_BATERIA.map(s => `<div class="bat-ref-fila"><span><i class="bat-punto ${s.clase}"></i>${s.lbl}</span>
-            <strong>${r[s.k]} · ${pctDe(r[s.k], r.total)}%</strong></div>`).join('')}</div>
-        <div class="bat-pie"><strong>${r.completadas} / ${r.total}</strong> vacantes completadas</div>
+        <div class="bat-info">
+            <div class="bat-card-titulo"><span class="bat-emoji" aria-hidden="true">${EMOJI_MARCA[marca] || '🍽️'}</span>${esc(marca)}</div>
+            <div><div class="bat-num" data-pct="${r.pct}">${r.pct}%</div>
+                <div class="bat-sub">${r.completadas} de ${r.total} vacantes cubiertas</div></div>
+            <div class="bat-chips"><span class="bat-chip ${claseEstado}">${estado}</span>${r.ingresar ? `<span class="bat-chip bat-chip-rayo">⚡ ${r.ingresar} en onboarding</span>` : ''}</div>
+            <div class="bat-ref ${baja ? 'bat-baja' : ''}">${SEGMENTOS_BATERIA.map(s => `<div class="bat-ref-fila"><span><i class="bat-punto ${s.clase}"></i>${s.lbl}</span>
+                <strong>${r[s.k]} · ${p(s.k)}%</strong></div>`).join('')}</div>
+        </div>
     </div>`;
 }
 
@@ -97,10 +123,31 @@ function tablaSemanas(subset, semanas, marcas, elegida) {
         <tfoot>${fila('total', 'Total', subset)}</tfoot></table></div></div>`;
 }
 
-// Las barras "cargan" de cero hasta su valor
-function cargarBaterias(box) {
-    requestAnimationFrame(() => requestAnimationFrame(() =>
-        box.querySelectorAll('.bat-seg').forEach(s => { s.style.width = s.dataset.ancho + '%'; })));
+// La batería se llena y el número cuenta hasta su valor al entrar o al cambiar de marca o semana;
+// si solo se refrescaron los datos, queda directo en su lugar (sin volver a animar).
+let _ultimaBateria = '';
+function cargarBaterias(box, clave) {
+    const animar = clave !== _ultimaBateria && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    _ultimaBateria = clave;
+    const capas = box.querySelectorAll('.bat-capa');
+    const llenar = () => capas.forEach(c => { c.style.height = c.dataset.alto + '%'; c.style.bottom = c.dataset.base; });
+    if (!animar) {
+        capas.forEach(c => { c.style.transition = 'none'; });
+        llenar();
+        void box.offsetHeight;
+        capas.forEach(c => { c.style.transition = ''; });
+        return;
+    }
+    const nums = [...box.querySelectorAll('.bat-num')];
+    nums.forEach(n => { n.textContent = '0%'; });
+    requestAnimationFrame(() => requestAnimationFrame(llenar));
+    const t0 = performance.now(), DURA = 1600;
+    const paso = ahora => {
+        const k = Math.min(1, (ahora - t0) / DURA), e = 1 - Math.pow(1 - k, 3);
+        nums.forEach(n => { n.textContent = Math.round(n.dataset.pct * e) + '%'; });
+        if (k < 1) requestAnimationFrame(paso);
+    };
+    requestAnimationFrame(paso);
 }
 
 function renderStats(tab) {
@@ -155,7 +202,7 @@ function renderStats(tab) {
                 ${porLocal.length ? porLocal.map(x => `<div class="rank-row"><span class="rank-name">${esc(x.k)} <span style="font-size:11px;color:var(--muted)">· ${esc(x.marca)}</span></span><span class="rank-stat">${x.pendientes} pend.</span><span style="font-size:11px;color:var(--muted);margin-left:6px">${x.pct}%</span></div>`).join('') : '<span class="tip">Sin vacantes pendientes</span>'}
             </div>
         </div>`;
-    cargarBaterias(box);
+    cargarBaterias(box, tab + '|' + sem);
 }
 
 // Mismas columnas que la hoja Solicitudes (para pegar en la planilla) + datos del portal
