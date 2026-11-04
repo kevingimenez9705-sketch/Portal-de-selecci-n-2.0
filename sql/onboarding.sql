@@ -12,7 +12,8 @@
 --  Citables: Extremas con APROBADO ZONAL; Sabores con ESTADO vacío (no pasa por zonal).
 --  Una vez pedida, la citación sale aunque alguien ya haya puesto CITADO a mano. Si
 --  antes del envío la vacante pasó a otro ESTADO (HUELLA, COMUNICADO…) o se cerró,
---  no sale y queda el motivo en el panel (antes se descartaba sin aviso).
+--  no sale: el panel la marca "No enviado · se modificó la vacante" y queda la nota
+--  en el historial (antes se descartaba sin aviso).
 --
 --  CÓMO EJECUTAR: Supabase → ats-gastronomico → SQL Editor → pegar todo → Run.
 --  Se puede volver a correr sin problema.
@@ -48,16 +49,24 @@ begin
     if not (seleccion_codigo_ok() or current_user = 'service_role') then
         raise exception 'Código del equipo inválido' using errcode = '42501';
     end if;
-    -- Pedidas que ya no corresponde mandar (la vacante cambió antes del envío): no salen y queda el motivo
-    update seleccion_busquedas b
-       set onb_pedido = null,
-           onb_error = 'No salió: antes del envío la vacante pasó a '
-               || case when b.status in ('Proceso', 'Pausada') then coalesce(nullif(trim(b.estado), ''), 'ESTADO vacío')
-                       else b.status || coalesce(' (' || nullif(trim(b.estado), '') || ')', '') end
-               || '. Si corresponde, volvé a citar.'
-     where b.onb_pedido is not null
-       and (b.onb_enviado is null or b.onb_enviado < b.onb_pedido)
-       and not seleccion_onb_citable_(b.marca, b.estado, b.status);
+    -- Pedidas que ya no corresponde mandar (la vacante se modificó antes del envío): no salen,
+    -- queda el motivo en el panel y una nota en el historial de la vacante
+    with modificadas as (
+        update seleccion_busquedas b
+           set onb_pedido = null,
+               onb_error = 'Se modificó la vacante antes del envío ('
+                   || case when b.status = 'Cancelada' then 'se canceló'
+                           when nullif(trim(b.estado), '') is not null then 'pasó a ' || trim(b.estado)
+                           when b.status in ('Proceso', 'Pausada') then 'quedó sin ESTADO'
+                           else 'se cerró' end
+                   || '). Si corresponde, volvé a citar.'
+         where b.onb_pedido is not null
+           and (b.onb_enviado is null or b.onb_enviado < b.onb_pedido)
+           and not seleccion_onb_citable_(b.marca, b.estado, b.status)
+        returning b.id, b.onb_error)
+    insert into seleccion_comentarios (busqueda_id, texto, fecha, autor)
+    select id, 'Citación a onboarding NO enviada: ' || onb_error, (now() at time zone 'America/Argentina/Buenos_Aires')::date, 'Onboarding'
+      from modificadas;
     -- Cada citación lleva su clave para el botón "Confirmo asistencia"
     update seleccion_busquedas set onb_token = replace(gen_random_uuid()::text, '-', '')
      where onb_pedido is not null and onb_token is null;

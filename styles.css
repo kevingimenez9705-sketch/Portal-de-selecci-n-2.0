@@ -156,6 +156,7 @@ details summary::-webkit-details-marker { display: none; }
 .tag-cerrada { background: var(--ok); color: var(--ok-text); }
 .tag-pausada { background: #e2e8f0; color: #334155; }
 .tag-finalizada { background: var(--warn); color: var(--warn-text); }
+.tag-error { background: var(--danger-text); color: #fff; }
 .tag-cancelada { background: #f1f5f9; color: var(--muted); text-decoration: line-through; }
 .tag-reabierta { background: var(--pink); color: #fff; display: inline-flex; align-items: center; gap: 4px; }
 .motivo-chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 800; background: #f1f5f9; display: inline-block; }
