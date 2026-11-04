@@ -520,8 +520,6 @@ table.grilla tbody tr:hover td { filter: brightness(.985); }
     background-image: linear-gradient(135deg, rgba(255, 255, 255, .4) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .4) 50%, rgba(255, 255, 255, .4) 75%, transparent 75%); }
 .bat-capa-ingresar { background-size: 20px 20px; animation: bat-rayas .8s linear infinite; }
 .seg-ingresar { background-size: 6px 6px; }
-.bat-capa-apertura, .seg-apertura { background-color: #cdbfee; background-image: radial-gradient(rgba(36, 16, 70, .28) 1.4px, transparent 1.6px); background-size: 9px 9px; }
-.seg-apertura { background-size: 4px 4px; }
 .bat-rayo { position: absolute; top: 50%; left: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; display: flex; align-items: center; justify-content: center;
     font-size: 36px; pointer-events: none; filter: drop-shadow(0 2px 8px rgba(238, 96, 185, .7)); animation: bat-rayo 1.3s ease-in-out infinite; }
 .bat-info { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
