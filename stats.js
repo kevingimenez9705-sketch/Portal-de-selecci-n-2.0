@@ -2,10 +2,24 @@
 //  ESTADÍSTICAS
 // ══════════════════════════════════════════════
 let statsTab = 'general';
+let statsSemana = '';   // lunes de la semana elegida (YYYY-MM-DD), 'total' o '' = la última con vacantes
 function switchStatsTab(tab, btn) {
     statsTab = tab;
     document.querySelectorAll('#view-stats .page-tab').forEach(b => b.classList.toggle('active', b === btn));
     renderStats(tab);
+}
+function elegirSemanaStats(sem) { statsSemana = sem; renderStats(statsTab); }
+
+// Semana de una vacante = lunes a domingo en que se cargó en el portal
+function semanaDe(b) {
+    const d = b.creado ? new Date(b.creado) : b.inicio ? new Date(b.inicio + 'T12:00:00') : null;
+    if (!d || isNaN(d)) return '';
+    const lunes = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay() + 6) % 7);
+    return fechaLocalISO(lunes);
+}
+function etiquetaSemana(lunes) {
+    const [y, m, d] = lunes.split('-').map(Number);
+    return `${fmtFechaCorta(lunes)} al ${fmtFechaCorta(fechaLocalISO(new Date(y, m - 1, d + 6)))}`;
 }
 
 // Cumplimiento = cubiertas (Cerrada/Finalizada) sobre el total, sin contar las Canceladas
@@ -66,6 +80,23 @@ function bateriaHtml(marca, lista) {
     </div>`;
 }
 
+// Cumplimiento de cada semana por marca, con la fila Total al final
+const SEMANAS_EN_TABLA = 12;
+function celdaSemana(lista) {
+    const r = partesBateria(lista);
+    return r.total ? `<div class="sem-celda"><span>${r.completadas}/${r.total} · <strong>${r.pct}%</strong></span>
+        <div class="bar-track"><div class="bar-fill" style="width:${r.pct}%"></div></div></div>` : '<span class="tip">—</span>';
+}
+function tablaSemanas(subset, semanas, marcas, elegida) {
+    const fila = (clave, titulo, lista) => `<tr class="${elegida === clave ? 'sem-fila-activa' : ''}" onclick="elegirSemanaStats('${clave}')">
+        <td><strong>${titulo}</strong></td>${marcas.length > 1 ? marcas.map(m => `<td>${celdaSemana(lista.filter(b => b.marca === m))}</td>`).join('') : ''}
+        <td>${celdaSemana(lista)}</td></tr>`;
+    return `<div class="sem-tabla"><div class="sem-tabla-tit">Cumplimiento por semana</div>
+        <div class="table-wrap"><table class="tabla-informe"><thead><tr><th>Semana</th>${marcas.length > 1 ? marcas.map(m => `<th>${esc(m)}</th>`).join('') : ''}<th>${marcas.length > 1 ? 'Total' : 'Cubiertas'}</th></tr></thead>
+        <tbody>${semanas.slice(0, SEMANAS_EN_TABLA).map(w => fila(w, etiquetaSemana(w), subset.filter(b => semanaDe(b) === w))).join('')}</tbody>
+        <tfoot>${fila('total', 'Total', subset)}</tfoot></table></div></div>`;
+}
+
 // Las barras "cargan" de cero hasta su valor
 function cargarBaterias(box) {
     requestAnimationFrame(() => requestAnimationFrame(() =>
@@ -78,8 +109,12 @@ function renderStats(tab) {
     // Incluye lo que sacó "Limpiar semana": las estadísticas cuentan todo
     const todas = todasLasBusquedas();
     const subset = tab === 'general' ? todas : todas.filter(b => b.marca === tab);
-    const r = partesBateria(subset);
     const marcas = tab === 'general' ? MARCAS : [tab];
+    // Batería: la semana elegida (por defecto, la última con vacantes) o el Total
+    const semanas = [...new Set(subset.filter(b => b.status !== 'Cancelada' && cuentaComoActiva(b)).map(semanaDe).filter(Boolean))].sort().reverse();
+    const sem = statsSemana === 'total' || semanas.includes(statsSemana) ? statsSemana : (semanas[0] || 'total');
+    const periodo = sem === 'total' ? subset : subset.filter(b => semanaDe(b) === sem);
+    const r = partesBateria(periodo);
     const ahora = new Date();
     const corte = `${String(ahora.getDate()).padStart(2, '0')}/${String(ahora.getMonth() + 1).padStart(2, '0')}/${ahora.getFullYear()} ${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
 
@@ -91,16 +126,21 @@ function renderStats(tab) {
     box.innerHTML = `
         <div class="cob-card">
             <div class="cob-titulo">Nivel de cobertura</div>
-            <div class="cob-sub">Cada batería representa el total de vacantes de la marca (sin locales excedidos).</div>
+            <div class="cob-sub">Cada batería representa las vacantes de la marca cargadas en la semana elegida (sin locales excedidos). Total suma todas las semanas.</div>
+            <div class="sem-chips" role="group" aria-label="Semana">
+                ${semanas.slice(0, SEMANAS_EN_TABLA).map(w => `<button class="sem-chip ${sem === w ? 'active' : ''}" onclick="elegirSemanaStats('${w}')">Semana ${etiquetaSemana(w)}</button>`).join('')}
+                <button class="sem-chip ${sem === 'total' ? 'active' : ''}" onclick="elegirSemanaStats('total')">Total</button>
+            </div>
             <div class="cob-kpis">
                 ${kpiHtml(r.total, 'Total', 'violeta', 'Vacantes activas')}
                 ${kpiHtml(r.completadas, 'Cubiertas', 'violeta', `${r.pct}% de cobertura`)}
                 ${kpiHtml(r.ingresar, 'Onboarding', 'violeta', 'Ingresos en curso')}
                 ${kpiHtml(r.apertura + r.pendientes, 'Pendientes', 'violeta', 'Requieren acción')}
             </div>
-            <div class="bat-grid ${marcas.length === 1 ? 'bat-grid-una' : ''}">${marcas.map(m => bateriaHtml(m, subset.filter(b => b.marca === m))).join('')}</div>
+            <div class="bat-grid ${marcas.length === 1 ? 'bat-grid-una' : ''}">${marcas.map(m => bateriaHtml(m, periodo.filter(b => b.marca === m))).join('')}</div>
+            ${semanas.length ? tablaSemanas(subset, semanas, marcas, sem) : ''}
             <div class="cob-resumen">
-                <div><div class="cob-resumen-tag">Resumen semanal · ${marcas.length === 1 ? esc(marcas[0]) : 'Sabores + Extremas'}</div>
+                <div><div class="cob-resumen-tag">${sem === 'total' ? 'Resumen total' : 'Resumen semanal · ' + etiquetaSemana(sem)} · ${marcas.length === 1 ? esc(marcas[0]) : 'Sabores + Extremas'}</div>
                     <div class="cob-resumen-tit">Estado consolidado del equipo</div>
                     <div class="tip" style="font-style:normal">Corte actualizado: ${corte}</div></div>
                 <div class="cob-resumen-num"><strong>${r.completadas} / ${r.total}</strong><span>${r.pct}% de cobertura</span></div>

@@ -529,6 +529,18 @@ table.grilla tbody tr:hover td { filter: brightness(.985); }
 .cob-resumen-num { text-align: right; }
 .cob-resumen-num strong { display: block; font-size: 30px; letter-spacing: -.04em; color: var(--calm-ink); line-height: 1.1; }
 .cob-resumen-num span { font-size: 12px; color: var(--muted); }
+.sem-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: -4px 0 16px; }
+.sem-chip { min-height: 34px; padding: 6px 12px; font-size: 12px; font-weight: 750; background: var(--card); border: 1px solid var(--calm-line); border-radius: 999px; cursor: pointer; color: #475569; white-space: nowrap; }
+.sem-chip:hover { border-color: var(--calm-accent); color: var(--calm-accent); }
+.sem-chip.active { background: var(--calm-accent); border-color: var(--calm-accent); color: #fff; }
+.sem-tabla { margin-top: 16px; }
+.sem-tabla-tit { font-size: 13px; font-weight: 800; color: var(--calm-ink); margin-bottom: 8px; }
+.sem-tabla tbody tr, .sem-tabla tfoot tr { cursor: pointer; }
+.sem-tabla tfoot td { border-top: 2px solid var(--calm-line); background: #f8fafc; }
+.sem-tabla tr.sem-fila-activa td { background: var(--calm-accent-soft); }
+.sem-tabla td:first-child { white-space: nowrap; }
+.sem-celda { display: grid; gap: 4px; min-width: 110px; font-size: 12px; }
+.sem-celda .bar-track { height: 6px; }
 @media (prefers-reduced-motion: reduce) { .bat-seg { transition: none; } .bateria-brillo { animation: none; display: none; } }
 
 /* ── Mapa de equipos ── */

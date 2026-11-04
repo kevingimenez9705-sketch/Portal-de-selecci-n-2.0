@@ -10,6 +10,9 @@
 --     CONFIRMA ONB (si estaba vacía).
 --
 --  Citables: Extremas con APROBADO ZONAL; Sabores con ESTADO vacío (no pasa por zonal).
+--  Una vez pedida, la citación sale aunque alguien ya haya puesto CITADO a mano. Si
+--  antes del envío la vacante pasó a otro ESTADO (HUELLA, COMUNICADO…) o se cerró,
+--  no sale y queda el motivo en el panel (antes se descartaba sin aviso).
 --
 --  CÓMO EJECUTAR: Supabase → ats-gastronomico → SQL Editor → pegar todo → Run.
 --  Se puede volver a correr sin problema.
@@ -30,6 +33,14 @@ language sql stable security definer set search_path = public as $$
      order by (l.marca = p_marca) desc, l.id limit 1
 $$;
 
+-- ¿La citación pedida todavía puede salir? (mismas reglas que saleElMailOnb de onboarding.js)
+create or replace function public.seleccion_onb_citable_(p_marca text, p_estado text, p_status text) returns boolean
+language sql immutable set search_path = public as $$
+    select coalesce(p_status in ('Proceso', 'Pausada')
+       and ((p_marca = 'Hamburguesas Extremas' and p_estado in ('APROBADO ZONAL', 'CITADO'))
+         or (p_marca = 'Sabores Express' and coalesce(trim(p_estado), '') in ('', 'CITADO'))), false)
+$$;
+
 -- Citaciones pedidas que todavía no salieron, con todo lo que lleva el mail
 create or replace function public.seleccion_onb_pendientes() returns jsonb
 language plpgsql volatile security invoker set search_path = public as $$
@@ -37,6 +48,16 @@ begin
     if not (seleccion_codigo_ok() or current_user = 'service_role') then
         raise exception 'Código del equipo inválido' using errcode = '42501';
     end if;
+    -- Pedidas que ya no corresponde mandar (la vacante cambió antes del envío): no salen y queda el motivo
+    update seleccion_busquedas b
+       set onb_pedido = null,
+           onb_error = 'No salió: antes del envío la vacante pasó a '
+               || case when b.status in ('Proceso', 'Pausada') then coalesce(nullif(trim(b.estado), ''), 'ESTADO vacío')
+                       else b.status || coalesce(' (' || nullif(trim(b.estado), '') || ')', '') end
+               || '. Si corresponde, volvé a citar.'
+     where b.onb_pedido is not null
+       and (b.onb_enviado is null or b.onb_enviado < b.onb_pedido)
+       and not seleccion_onb_citable_(b.marca, b.estado, b.status);
     -- Cada citación lleva su clave para el botón "Confirmo asistencia"
     update seleccion_busquedas set onb_token = replace(gen_random_uuid()::text, '-', '')
      where onb_pedido is not null and onb_token is null;
@@ -53,9 +74,7 @@ begin
           from seleccion_busquedas b
          where b.onb_pedido is not null
            and (b.onb_enviado is null or b.onb_enviado < b.onb_pedido)
-           and b.status in ('Proceso', 'Pausada')
-           and ((b.marca = 'Hamburguesas Extremas' and b.estado = 'APROBADO ZONAL')
-             or (b.marca = 'Sabores Express' and coalesce(b.estado, '') = ''))), '[]'::jsonb);
+           and seleccion_onb_citable_(b.marca, b.estado, b.status)), '[]'::jsonb);
 end;
 $$;
 
@@ -73,7 +92,11 @@ begin
     end if;
     for r in select * from jsonb_to_recordset(coalesce(filas, '[]'::jsonb)) as x(id bigint, ok boolean, error text) loop
         if r.ok then
-            update seleccion_busquedas set estado = 'CITADO', fecha_estado = v_hoy, onb_enviado = now(), onb_error = null
+            -- Si en estos segundos alguien la adelantó (HUELLA, COMUNICADO), no se la vuelve atrás
+            update seleccion_busquedas
+               set estado = case when estado in ('HUELLA', 'COMUNICADO') then estado else 'CITADO' end,
+                   fecha_estado = case when estado in ('HUELLA', 'COMUNICADO') then fecha_estado else v_hoy end,
+                   onb_enviado = now(), onb_error = null
              where id = r.id;
             if found then
                 enviados := enviados + 1;
