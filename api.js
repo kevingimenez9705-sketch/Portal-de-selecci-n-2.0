@@ -300,6 +300,8 @@ async function cambiarEstado(b, estado) {
     const hoy = today();
     const update = { estado, fecha_estado: estado ? hoy : null };
     if (estado && !tienePersona(b) && !(await confirmar(`La vacante ${b.numero} todavía no tiene a nadie cargado. ¿Poner "${estado}" igual?`))) { refreshBusqueda(b.id); return; }
+    // La citación a onboarding pedida todavía no salió: con otro ESTADO el mail no se manda
+    if (enColaOnb(b) && !saleElMailOnb({ ...b, estado }) && !(await confirmar(`El mail de onboarding de ${nombreCompleto(b) || b.numero} todavía no salió. Si la pasás a "${estado || 'sin estado'}", no se manda. ¿Cambiar igual?`, 'Cambiar igual'))) { refreshBusqueda(b.id); return; }
     if (['ENVIADO A ZONAL', 'APROBADO ZONAL', 'RECHAZADO ZONAL'].includes(estado) && !b.enviado_zonal) update.enviado_zonal = hoy;
     if (estado === 'APROBADO ZONAL' && !b.decision_zonal) update.decision_zonal = hoy;
 

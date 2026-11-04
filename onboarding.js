@@ -6,11 +6,20 @@
 //    o para todos los marcados) y "Citar" las deja en cola: el Apps Script de TAREAS
 //    GRUPALES manda el mail de bienvenida de siempre y la vacante pasa a CITADO.
 //    Cuando la persona toca "Confirmo asistencia", ALTAS RRHH = CONFIRMA ONB.
+//    Si antes del envío la vacante pasa a otro ESTADO (HUELLA, COMUNICADO…), el mail no
+//    sale y el motivo queda en el panel (por eso cambiarEstado avisa antes).
 // ══════════════════════════════════════════════
 
 let onbMarcados = new Set();
 
 const enColaOnb = b => !!b.onb_pedido && (!b.onb_enviado || String(b.onb_enviado) < String(b.onb_pedido));
+
+// Con una citación pedida, el mail sale solo si la vacante sigue así (= seleccion_onb_citable_ de sql/onboarding.sql)
+function saleElMailOnb(b) {
+    if (!vacanteAbierta(b)) return false;
+    if (b.marca === 'Hamburguesas Extremas') return ['APROBADO ZONAL', 'CITADO'].includes(b.estado);
+    return b.marca === 'Sabores Express' && (!b.estado || b.estado === 'CITADO');
+}
 
 function citableOnb(b) {
     if (!vacanteAbierta(b) || !tienePersona(b) || enColaOnb(b)) return false;
@@ -44,7 +53,10 @@ function renderOnboarding() {
     const alertas = busquedas.filter(alertaZonalVencida).sort((a, b) => String(a.fecha_estado).localeCompare(String(b.fecha_estado)));
     const listos = busquedas.filter(citableOnb).sort((a, b) => (a.marca || '').localeCompare(b.marca || '') || String(a.numero).localeCompare(String(b.numero)));
     const cola = busquedas.filter(b => enColaOnb(b) && vacanteAbierta(b));
-    const citados = busquedas.filter(b => b.estado === 'CITADO' && b.onb_enviado && vacanteAbierta(b))
+    // No salieron y ya no se pueden citar desde la lista (la vacante cambió antes del envío)
+    const noSalieron = busquedas.filter(b => b.onb_error && !enColaOnb(b) && !citableOnb(b));
+    // Ya enviados (aunque después hayan pasado a HUELLA o COMUNICADO)
+    const citados = busquedas.filter(b => b.onb_enviado && !enColaOnb(b))
         .sort((a, b) => String(b.onb_enviado).localeCompare(String(a.onb_enviado))).slice(0, 30);
     onbMarcados.forEach(id => { if (!listos.some(b => b.id === id)) onbMarcados.delete(id); });
 
@@ -72,24 +84,31 @@ function renderOnboarding() {
                 <td><select class="inline-select" onchange="guardarDatoOnb(${b.id}, 'hora_citacion', this.value)">${optionsHtml(HORAS_CITACION, b.hora_citacion || '', '—')}</select></td>
                 <td><input type="date" class="inline-input inline-input-box" value="${esc(b.ingreso || '')}" onchange="guardarDatoOnb(${b.id}, 'ingreso', this.value)"></td>
                 <td>${falta.length ? `<span class="tip" style="color:var(--red);font-style:normal">Falta: ${esc(falta.join(', '))}</span>` : ''}
-                    ${b.onb_error ? `<div class="tip" style="color:var(--red);font-style:normal">No salió: ${esc(b.onb_error)}</div>` : ''}</td>
+                    ${b.onb_error ? `<div><span class="tag tag-error">✕ No enviado</span> <span class="cand-meta">${esc(b.onb_error)}</span></div>` : ''}</td>
             </tr>`;
         }).join('')}</tbody></table>`
         : '<span class="tip">No hay nadie para citar: Extremas necesita APROBADO ZONAL; Sabores, la persona cargada y el ESTADO vacío.</span>';
 
-    document.getElementById('onb-cola').innerHTML = (cola.length || citados.length) ? `
-        <table class="tabla-informe"><thead><tr><th>N°</th><th>Persona</th><th>Onboarding</th><th>Estado</th></tr></thead>
-        <tbody>${cola.map(b => `<tr><td>${vacante(b)}</td><td>${persona(b)}</td><td class="mono">${fmtFecha(b.fecha_citacion)} ${esc(b.hora_citacion || '')}</td>
-                <td><span class="tip" style="font-style:normal">⏳ El mail sale en los próximos 10 minutos</span></td></tr>`).join('')}
-            ${citados.map(b => `<tr><td>${vacante(b)}</td><td>${persona(b)}</td><td class="mono">${fmtFecha(b.fecha_citacion)} ${esc(b.hora_citacion || '')}</td>
-                <td>${b.onb_confirmado || normTxt(b.altas_rrhh) === 'CONFIRMA ONB' ? '<span class="tag tag-cerrada">✓ Confirmó asistencia</span>' : '<span class="tag tag-proceso">Citado · sin confirmar</span>'}</td></tr>`).join('')}</tbody></table>`
+    // Primero el resultado del mail: enviado, en cola o no enviado (con el motivo)
+    const fila = (b, envio, clase = '') => `<tr class="${clase}"><td>${envio}</td><td>${vacante(b)}</td><td>${persona(b)}</td>
+        <td class="mono">${fmtFecha(b.fecha_citacion)} ${esc(b.hora_citacion || '')}</td></tr>`;
+    const sello = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    document.getElementById('onb-cola').innerHTML = (cola.length || citados.length || noSalieron.length) ? `
+        <table class="tabla-informe"><thead><tr><th>Mail</th><th>N°</th><th>Persona</th><th>Onboarding</th></tr></thead>
+        <tbody>${noSalieron.map(b => fila(b, `<span class="tag tag-error">✕ No enviado</span>
+                    <div class="cand-meta">${esc(b.onb_error)}</div>
+                    <button class="link-btn" onclick="guardarDatoOnb(${b.id}, 'onb_error', '')">Ocultar</button>`, 'fila-alerta')).join('')}
+            ${cola.map(b => fila(b, `<span class="tag tag-proceso">⏳ En cola</span><div class="cand-meta">Sale en los próximos 10 minutos</div>`)).join('')}
+            ${citados.map(b => fila(b, `<span class="tag tag-cerrada">✓ Enviado</span> <span class="cand-meta">${sello(b.onb_enviado)}</span>
+                    <div class="cand-meta">${b.onb_confirmado || normTxt(b.altas_rrhh) === 'CONFIRMA ONB' ? '✓ Confirmó asistencia' : 'Sin confirmar asistencia'}</div>`)).join('')}</tbody></table>`
         : '<span class="tip">Todavía no se citó a nadie desde el portal.</span>';
 
     const n = listos.filter(b => onbMarcados.has(b.id)).length;
     const btn = document.getElementById('btn-onb-citar');
     btn.disabled = !n;
     btn.innerHTML = `<i class="fas fa-paper-plane"></i> Citar ${n} marcado${n === 1 ? '' : 's'}`;
-    document.getElementById('onb-resumen').textContent = `${alertas.length} sin respuesta del zonal · ${listos.length} para citar · ${cola.length} en camino`;
+    document.getElementById('onb-resumen').textContent = `${alertas.length} sin respuesta del zonal · ${listos.length} para citar · ${cola.length} en cola`
+        + (citados.length ? ` · ${citados.length} enviado${citados.length === 1 ? '' : 's'}` : '') + (noSalieron.length ? ` · ${noSalieron.length} no enviado${noSalieron.length === 1 ? '' : 's'}` : '');
 }
 
 function marcarOnb(id, si) { if (si) onbMarcados.add(id); else onbMarcados.delete(id); renderOnboarding(); }
@@ -134,7 +153,9 @@ async function citarOnb() {
         onbMarcados.clear();
         refreshView();
         renderOnboarding();
-        toast(`${data.length} citación${data.length === 1 ? '' : 'es'} en camino ✓ Los mails salen en los próximos 10 minutos.`);
+        // Con el Apps Script publicado como Aplicación web, el mail sale en el momento (sin esperar los 10 minutos)
+        if (SYNC_DRIVE_URL) { toast(`${data.length} citación${data.length === 1 ? '' : 'es'} en camino: mandando los mails…`); actualizarTodo().then(renderOnboarding); }
+        else toast(`${data.length} citación${data.length === 1 ? '' : 'es'} en camino ✓ Los mails salen en los próximos 10 minutos. No cambies el ESTADO hasta que figure CITADO.`);
     } finally { _citandoOnb = false; }
 }
 

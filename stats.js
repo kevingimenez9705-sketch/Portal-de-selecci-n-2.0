@@ -2,10 +2,24 @@
 //  ESTADÍSTICAS
 // ══════════════════════════════════════════════
 let statsTab = 'general';
+let statsSemana = '';   // lunes de la semana elegida (YYYY-MM-DD), 'total' o '' = la última con vacantes
 function switchStatsTab(tab, btn) {
     statsTab = tab;
     document.querySelectorAll('#view-stats .page-tab').forEach(b => b.classList.toggle('active', b === btn));
     renderStats(tab);
+}
+function elegirSemanaStats(sem) { statsSemana = sem; renderStats(statsTab); }
+
+// Semana de una vacante = lunes a domingo en que se cargó en el portal
+function semanaDe(b) {
+    const d = b.creado ? new Date(b.creado) : b.inicio ? new Date(b.inicio + 'T12:00:00') : null;
+    if (!d || isNaN(d)) return '';
+    const lunes = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay() + 6) % 7);
+    return fechaLocalISO(lunes);
+}
+function etiquetaSemana(lunes) {
+    const [y, m, d] = lunes.split('-').map(Number);
+    return `${fmtFechaCorta(lunes)} al ${fmtFechaCorta(fechaLocalISO(new Date(y, m - 1, d + 6)))}`;
 }
 
 // Cumplimiento = cubiertas (Cerrada/Finalizada) sobre el total, sin contar las Canceladas
@@ -50,26 +64,90 @@ function partesBateria(lista) {
 }
 const pctDe = (n, t) => t ? Math.round(n / t * 100) : 0;
 
+// Batería viva: se llena de abajo hacia arriba (cubiertas, en onboarding, apertura), con ola y burbujas.
+// Menos del 20% cubierto = carga baja (roja); con gente en onboarding aparece el rayo.
+const EMOJI_MARCA = { 'Hamburguesas Extremas': '🍔', 'Sabores Express': '🥟' };
+const BURBUJAS = [[14, 8, 0], [34, 5, 1.1], [52, 10, 2.2], [68, 6, .6], [82, 8, 1.7], [24, 4, 2.9]];
+function estadoBateria(r) {
+    if (!r.total) return ['Sin vacantes en el período', 'bat-chip-carga'];
+    if (r.pct === 100) return ['✅ Completa', 'bat-chip-ok'];
+    if (r.pct >= 80) return ['🔋 Casi llena', 'bat-chip-ok'];
+    if (r.pct < 20) return [`🪫 Carga baja: faltan ${r.total - r.completadas}`, 'bat-chip-baja'];
+    return ['🔋 Cargando', 'bat-chip-carga'];
+}
 function bateriaHtml(marca, lista) {
     const r = partesBateria(lista);
+    const p = k => pctDe(r[k], r.total);
+    const [estado, claseEstado] = estadoBateria(r);
+    const baja = r.total && r.pct < 20;
+    // Cada capa arranca donde termina la de abajo (con un respiro entre capas)
+    const capa = (k, clase, base, extra = '') => r[k] ? `<div class="bat-capa ${clase}" data-alto="${p(k)}" data-base="${base}" style="height:0;bottom:0">${extra}</div>` : '';
+    const ola = '<svg class="bat-ola" viewBox="0 0 320 12" preserveAspectRatio="none" aria-hidden="true"><path d="M0 6 Q20 0 40 6 T80 6 T120 6 T160 6 T200 6 T240 6 T280 6 T320 6 V12 H0 Z"></path></svg>';
+    const burbujas = BURBUJAS.map(([x, t, d]) => `<span class="bat-burbuja" style="left:${x}%;width:${t}px;height:${t}px;animation-delay:${d}s"></span>`).join('');
+    const baseIng = r.completadas ? `calc(${p('completadas')}% + 8px)` : '0px';
+    const baseApe = `calc(${p('completadas') + p('ingresar')}% + ${(r.completadas ? 8 : 0) + (r.ingresar ? 4 : 0)}px)`;
     return `<div class="bat-card">
-        <div class="bat-card-titulo">${esc(marca)}</div>
-        <div class="bateria" role="img" aria-label="${esc(marca)}: ${r.completadas} de ${r.total} completadas">
-            <div class="bateria-cuerpo">${SEGMENTOS_BATERIA.filter(s => r[s.k]).map(s =>
-                `<div class="bat-seg ${s.clase}" data-ancho="${pctDe(r[s.k], r.total)}" style="width:0" title="${s.lbl}: ${r[s.k]}"></div>`).join('')}
-                <div class="bateria-brillo"></div></div>
-            <div class="bateria-polo"></div>
+        <div class="bat-viva ${baja ? 'bat-baja' : ''}" role="img" aria-label="${esc(marca)}: ${r.pct}% cubierto, ${r.completadas} de ${r.total} vacantes">
+            <div class="bat-viva-polo"></div>
+            <div class="bat-viva-cuerpo"><div class="bat-viva-interior">
+                ${capa('apertura', 'bat-capa-apertura', baseApe)}
+                ${capa('ingresar', 'bat-capa-ingresar', baseIng)}
+                ${capa('completadas', 'bat-capa-ok', '0px', ola + `<div class="bat-burbujas">${burbujas}</div>`)}
+            </div>${r.ingresar ? '<div class="bat-rayo" aria-hidden="true">⚡</div>' : ''}</div>
         </div>
-        <div class="bat-ref">${SEGMENTOS_BATERIA.map(s => `<div class="bat-ref-fila"><span><i class="bat-punto ${s.clase}"></i>${s.lbl}</span>
-            <strong>${r[s.k]} · ${pctDe(r[s.k], r.total)}%</strong></div>`).join('')}</div>
-        <div class="bat-pie"><strong>${r.completadas} / ${r.total}</strong> vacantes completadas</div>
+        <div class="bat-info">
+            <div class="bat-card-titulo"><span class="bat-emoji" aria-hidden="true">${EMOJI_MARCA[marca] || '🍽️'}</span>${esc(marca)}</div>
+            <div><div class="bat-num" data-pct="${r.pct}">${r.pct}%</div>
+                <div class="bat-sub">${r.completadas} de ${r.total} vacantes cubiertas</div></div>
+            <div class="bat-chips"><span class="bat-chip ${claseEstado}">${estado}</span>${r.ingresar ? `<span class="bat-chip bat-chip-rayo">⚡ ${r.ingresar} en onboarding</span>` : ''}</div>
+            <div class="bat-ref ${baja ? 'bat-baja' : ''}">${SEGMENTOS_BATERIA.map(s => `<div class="bat-ref-fila"><span><i class="bat-punto ${s.clase}"></i>${s.lbl}</span>
+                <strong>${r[s.k]} · ${p(s.k)}%</strong></div>`).join('')}</div>
+        </div>
     </div>`;
 }
 
-// Las barras "cargan" de cero hasta su valor
-function cargarBaterias(box) {
-    requestAnimationFrame(() => requestAnimationFrame(() =>
-        box.querySelectorAll('.bat-seg').forEach(s => { s.style.width = s.dataset.ancho + '%'; })));
+// Cumplimiento de cada semana por marca, con la fila Total al final
+const SEMANAS_EN_TABLA = 12;
+function celdaSemana(lista) {
+    const r = partesBateria(lista);
+    return r.total ? `<div class="sem-celda"><span>${r.completadas}/${r.total} · <strong>${r.pct}%</strong></span>
+        <div class="bar-track"><div class="bar-fill" style="width:${r.pct}%"></div></div></div>` : '<span class="tip">—</span>';
+}
+function tablaSemanas(subset, semanas, marcas, elegida) {
+    const fila = (clave, titulo, lista) => `<tr class="${elegida === clave ? 'sem-fila-activa' : ''}" onclick="elegirSemanaStats('${clave}')">
+        <td><strong>${titulo}</strong></td>${marcas.length > 1 ? marcas.map(m => `<td>${celdaSemana(lista.filter(b => b.marca === m))}</td>`).join('') : ''}
+        <td>${celdaSemana(lista)}</td></tr>`;
+    return `<div class="sem-tabla"><div class="sem-tabla-tit">Cumplimiento por semana</div>
+        <div class="table-wrap"><table class="tabla-informe"><thead><tr><th>Semana</th>${marcas.length > 1 ? marcas.map(m => `<th>${esc(m)}</th>`).join('') : ''}<th>${marcas.length > 1 ? 'Total' : 'Cubiertas'}</th></tr></thead>
+        <tbody>${semanas.slice(0, SEMANAS_EN_TABLA).map(w => fila(w, etiquetaSemana(w), subset.filter(b => semanaDe(b) === w))).join('')}</tbody>
+        <tfoot>${fila('total', 'Total', subset)}</tfoot></table></div></div>`;
+}
+
+// La batería se llena y el número cuenta hasta su valor al entrar o al cambiar de marca o semana;
+// si solo se refrescaron los datos, queda directo en su lugar (sin volver a animar).
+let _ultimaBateria = '';
+function cargarBaterias(box, clave) {
+    const animar = clave !== _ultimaBateria && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    _ultimaBateria = clave;
+    const capas = box.querySelectorAll('.bat-capa');
+    const llenar = () => capas.forEach(c => { c.style.height = c.dataset.alto + '%'; c.style.bottom = c.dataset.base; });
+    if (!animar) {
+        capas.forEach(c => { c.style.transition = 'none'; });
+        llenar();
+        void box.offsetHeight;
+        capas.forEach(c => { c.style.transition = ''; });
+        return;
+    }
+    const nums = [...box.querySelectorAll('.bat-num')];
+    nums.forEach(n => { n.textContent = '0%'; });
+    requestAnimationFrame(() => requestAnimationFrame(llenar));
+    const t0 = performance.now(), DURA = 1600;
+    const paso = ahora => {
+        const k = Math.min(1, (ahora - t0) / DURA), e = 1 - Math.pow(1 - k, 3);
+        nums.forEach(n => { n.textContent = Math.round(n.dataset.pct * e) + '%'; });
+        if (k < 1) requestAnimationFrame(paso);
+    };
+    requestAnimationFrame(paso);
 }
 
 function renderStats(tab) {
@@ -78,8 +156,12 @@ function renderStats(tab) {
     // Incluye lo que sacó "Limpiar semana": las estadísticas cuentan todo
     const todas = todasLasBusquedas();
     const subset = tab === 'general' ? todas : todas.filter(b => b.marca === tab);
-    const r = partesBateria(subset);
     const marcas = tab === 'general' ? MARCAS : [tab];
+    // Batería: la semana elegida (por defecto, la última con vacantes) o el Total
+    const semanas = [...new Set(subset.filter(b => b.status !== 'Cancelada' && cuentaComoActiva(b)).map(semanaDe).filter(Boolean))].sort().reverse();
+    const sem = statsSemana === 'total' || semanas.includes(statsSemana) ? statsSemana : (semanas[0] || 'total');
+    const periodo = sem === 'total' ? subset : subset.filter(b => semanaDe(b) === sem);
+    const r = partesBateria(periodo);
     const ahora = new Date();
     const corte = `${String(ahora.getDate()).padStart(2, '0')}/${String(ahora.getMonth() + 1).padStart(2, '0')}/${ahora.getFullYear()} ${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
 
@@ -91,16 +173,21 @@ function renderStats(tab) {
     box.innerHTML = `
         <div class="cob-card">
             <div class="cob-titulo">Nivel de cobertura</div>
-            <div class="cob-sub">Cada batería representa el total de vacantes de la marca (sin locales excedidos).</div>
+            <div class="cob-sub">Cada batería representa las vacantes de la marca cargadas en la semana elegida (sin locales excedidos). Total suma todas las semanas.</div>
+            <div class="sem-chips" role="group" aria-label="Semana">
+                ${semanas.slice(0, SEMANAS_EN_TABLA).map(w => `<button class="sem-chip ${sem === w ? 'active' : ''}" onclick="elegirSemanaStats('${w}')">Semana ${etiquetaSemana(w)}</button>`).join('')}
+                <button class="sem-chip ${sem === 'total' ? 'active' : ''}" onclick="elegirSemanaStats('total')">Total</button>
+            </div>
             <div class="cob-kpis">
                 ${kpiHtml(r.total, 'Total', 'violeta', 'Vacantes activas')}
                 ${kpiHtml(r.completadas, 'Cubiertas', 'violeta', `${r.pct}% de cobertura`)}
                 ${kpiHtml(r.ingresar, 'Onboarding', 'violeta', 'Ingresos en curso')}
                 ${kpiHtml(r.apertura + r.pendientes, 'Pendientes', 'violeta', 'Requieren acción')}
             </div>
-            <div class="bat-grid ${marcas.length === 1 ? 'bat-grid-una' : ''}">${marcas.map(m => bateriaHtml(m, subset.filter(b => b.marca === m))).join('')}</div>
+            <div class="bat-grid ${marcas.length === 1 ? 'bat-grid-una' : ''}">${marcas.map(m => bateriaHtml(m, periodo.filter(b => b.marca === m))).join('')}</div>
+            ${semanas.length ? tablaSemanas(subset, semanas, marcas, sem) : ''}
             <div class="cob-resumen">
-                <div><div class="cob-resumen-tag">Resumen semanal · ${marcas.length === 1 ? esc(marcas[0]) : 'Sabores + Extremas'}</div>
+                <div><div class="cob-resumen-tag">${sem === 'total' ? 'Resumen total' : 'Resumen semanal · ' + etiquetaSemana(sem)} · ${marcas.length === 1 ? esc(marcas[0]) : 'Sabores + Extremas'}</div>
                     <div class="cob-resumen-tit">Estado consolidado del equipo</div>
                     <div class="tip" style="font-style:normal">Corte actualizado: ${corte}</div></div>
                 <div class="cob-resumen-num"><strong>${r.completadas} / ${r.total}</strong><span>${r.pct}% de cobertura</span></div>
@@ -115,7 +202,7 @@ function renderStats(tab) {
                 ${porLocal.length ? porLocal.map(x => `<div class="rank-row"><span class="rank-name">${esc(x.k)} <span style="font-size:11px;color:var(--muted)">· ${esc(x.marca)}</span></span><span class="rank-stat">${x.pendientes} pend.</span><span style="font-size:11px;color:var(--muted);margin-left:6px">${x.pct}%</span></div>`).join('') : '<span class="tip">Sin vacantes pendientes</span>'}
             </div>
         </div>`;
-    cargarBaterias(box);
+    cargarBaterias(box, tab + '|' + sem);
 }
 
 // Mismas columnas que la hoja Solicitudes (para pegar en la planilla) + datos del portal
