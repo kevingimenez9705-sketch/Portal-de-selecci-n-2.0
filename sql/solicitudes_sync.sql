@@ -1,16 +1,14 @@
 -- ══════════════════════════════════════════════════════════════════════════
 --  Solicitudes Extremas / Sabores (TAREAS GRUPALES) → vacantes del portal
 -- ──────────────────────────────────────────────────────────────────────────
---  El Apps Script (paso 8 de SincronizarPortal) manda cada fila de las pestañas
---  "Solicitudes Extremas" y "Solicitudes Sabores" con el N° de vacante que
---  guarda en la propia fila (un dato oculto: no agrega columnas). Acá:
---   · Fila con N° → se actualizan SOLO los datos que cambiaron en la hoja desde
---     la última lectura: lo que se edite a mano en el portal se respeta hasta
---     que la hoja diga otra cosa para ese dato.
---   · Fila sin N° → se vincula con la vacante que ya estaba en el portal (misma
---     persona, local y puesto; o la que estaba en esa fila; o una abierta del mismo
---     local y puesto que todavía no tiene fila); si no hay ninguna, se crea.
---     Se devuelve el N° para que el script lo guarde en la fila.
+--  El Apps Script (paso 8 de SincronizarPortal) manda todas las filas de las
+--  pestañas "Solicitudes Extremas" y "Solicitudes Sabores". Acá:
+--   · Cada fila se reconoce por su contenido (local, puesto y persona), aunque
+--     se ordene la hoja o se muevan filas. Se actualizan SOLO los datos que
+--     cambiaron en la hoja desde la última lectura: lo que se edite a mano en el
+--     portal se respeta hasta que la hoja diga otra cosa para ese dato.
+--   · Fila nueva en la hoja → se vincula con una vacante del portal del mismo
+--     local y puesto (primero la de la misma persona); si no hay, se crea.
 --   · Cambiar el ESTADO en la hoja hace lo mismo que en el portal: fechas de la
 --     demora, COMUNICADO = vacante cubierta, etc.
 --   · Borrar una fila de la hoja NO borra la vacante del portal.
@@ -146,11 +144,13 @@ end;
 $$;
 
 -- p_filas: [{ fila, numero, datos: { selector, local, puesto, … } }]  (una pestaña completa por llamada)
--- Devuelve { creadas, actualizadas, vincular: [{ fila, numero }] } (N° a guardar en cada fila)
+-- Cada fila se reconoce por su CONTENIDO (local, puesto y persona), no por la posición: la hoja se
+-- ordena, se cortan y pegan filas… El N° que guarda la fila ya no se usa para vincular.
+-- Devuelve { creadas, actualizadas, vincular: [{ fila, numero }] }
 create or replace function public.seleccion_solicitudes_sync(p_hoja text, p_marca text, p_filas jsonb) returns jsonb
 language plpgsql volatile security definer set search_path = public as $$   -- definer: usa seleccion_norm_ (cerrada al público); igual exige el código
 declare
-    f record; b seleccion_busquedas; res jsonb; paso int;
+    f record; b seleccion_busquedas; res jsonb; paso int; v_ref text;
     vistos bigint[] := '{}'; hechas int[] := '{}'; vincular jsonb := '[]';
     creadas int := 0; actualizadas int := 0;
 begin
@@ -160,49 +160,66 @@ begin
     if p_marca not in ('Hamburguesas Extremas', 'Sabores Express') then
         raise exception 'Marca desconocida: %', p_marca;
     end if;
-    create temp table if not exists _sol (fila int primary key, numero text, nueva jsonb) on commit drop;
-    truncate _sol;
+    drop table if exists _sol;
+    create temp table _sol (fila int primary key, numero text, nueva jsonb, clave text, persona text) on commit drop;
     insert into _sol
-    select x.fila, upper(nullif(trim(x.numero), '')), jsonb_strip_nulls(coalesce(x.datos, '{}'))
+    select x.fila, upper(nullif(trim(x.numero), '')), n.v, seleccion_clave_local_(n.v->>'local'),
+           seleccion_norm_(concat_ws(' ', n.v->>'nombre', n.v->>'apellido'))
       from jsonb_to_recordset(coalesce(p_filas, '[]')) as x(fila int, numero text, datos jsonb)
+      cross join lateral (select jsonb_strip_nulls(coalesce(x.datos, '{}')) as v) n
      where coalesce(x.datos->>'local', '') <> ''
     on conflict (fila) do nothing;
 
-    -- Pasos: 0) fila con N° guardado · 1) misma persona, local y puesto · 2) la vacante que estaba en esa
-    -- misma fila (mismo local; la persona pudo cambiar) · 3) misma vacante abierta de ese local y puesto · 4) nueva
-    for paso in 0..4 loop
-        for f in select * from _sol where not (fila = any(hechas)) and (paso > 0 or numero is not null) order by fila loop
+    -- 1) la misma fila sin cambios · 2) misma persona en el mismo local y puesto · 3) mismo local y puesto en
+    -- esa misma fila (cambió la persona) · 4) mismo local y puesto que estaba en la hoja · 5) cargada en el
+    -- portal con la misma persona · 6) abierta en el portal del mismo local y puesto · 7) vacante nueva
+    for paso in 1..7 loop
+        for f in select * from _sol where not (fila = any(hechas)) order by fila loop
             b := null;
-            if paso = 0 then
-                select * into b from seleccion_busquedas s where s.numero = f.numero and not (s.id = any(vistos));
-                -- La fila se reutilizó para otro local: es otra vacante
-                if b.id is not null and seleccion_clave_local_(b.local) <> seleccion_clave_local_(f.nueva->>'local') then b := null; end if;
-                if b.id is null then continue; end if;
-            elsif paso = 1 then
+            v_ref := p_hoja || '!' || f.fila;
+            if paso = 1 then
                 select * into b from seleccion_busquedas s
-                 where s.planilla_vinculada is null and s.archivada is null and s.marca = p_marca and not (s.id = any(vistos))
-                   and seleccion_clave_local_(s.local) = seleccion_clave_local_(f.nueva->>'local')
-                   and s.puesto = f.nueva->>'puesto'
-                   and seleccion_norm_(concat_ws(' ', s.nombre, s.apellido)) = seleccion_norm_(concat_ws(' ', f.nueva->>'nombre', f.nueva->>'apellido'))
-                 order by s.id limit 1;
-                if b.id is null then continue; end if;
+                 where s.marca = p_marca and s.planilla_hoja = f.nueva and not (s.id = any(vistos))
+                 order by (s.planilla_fila = v_ref) desc nulls last, s.id limit 1;
             elsif paso = 2 then
                 select * into b from seleccion_busquedas s
-                 where s.planilla_fila = p_hoja || '!' || f.fila and s.marca = p_marca and not (s.id = any(vistos))
-                   and seleccion_clave_local_(s.local) = seleccion_clave_local_(f.nueva->>'local')
-                 order by s.id limit 1;
-                if b.id is null then continue; end if;
+                 where s.marca = p_marca and s.planilla_hoja is not null and not (s.id = any(vistos)) and f.persona <> ''
+                   and seleccion_clave_local_(s.planilla_hoja->>'local') = f.clave
+                   and (s.planilla_hoja->>'puesto') is not distinct from (f.nueva->>'puesto')
+                   and ((f.nueva->>'id_postulante') = (s.planilla_hoja->>'id_postulante')
+                     or (f.nueva->>'email') = (s.planilla_hoja->>'email')
+                     or seleccion_norm_(concat_ws(' ', s.planilla_hoja->>'nombre', s.planilla_hoja->>'apellido')) = f.persona)
+                 order by (s.planilla_fila = v_ref) desc nulls last, s.id limit 1;
             elsif paso = 3 then
                 select * into b from seleccion_busquedas s
-                 where s.planilla_vinculada is null and s.archivada is null and s.status in ('Proceso', 'Pausada')
-                   and s.marca = p_marca and not (s.id = any(vistos))
-                   and seleccion_clave_local_(s.local) = seleccion_clave_local_(f.nueva->>'local')
-                   and s.puesto = f.nueva->>'puesto'
+                 where s.marca = p_marca and s.planilla_hoja is not null and not (s.id = any(vistos))
+                   and s.planilla_fila = v_ref
+                   and seleccion_clave_local_(s.planilla_hoja->>'local') = f.clave
+                   and (s.planilla_hoja->>'puesto') is not distinct from (f.nueva->>'puesto')
+                 limit 1;
+            elsif paso = 4 then
+                select * into b from seleccion_busquedas s
+                 where s.marca = p_marca and s.planilla_hoja is not null and not (s.id = any(vistos))
+                   and s.planilla_fila like p_hoja || '!%'
+                   and seleccion_clave_local_(s.planilla_hoja->>'local') = f.clave
+                   and (s.planilla_hoja->>'puesto') is not distinct from (f.nueva->>'puesto')
                  order by s.id limit 1;
-                if b.id is null then continue; end if;
+            elsif paso = 5 then
+                select * into b from seleccion_busquedas s
+                 where s.marca = p_marca and s.planilla_hoja is null and s.archivada is null and not (s.id = any(vistos))
+                   and seleccion_clave_local_(s.local) = f.clave and s.puesto = f.nueva->>'puesto'
+                   and seleccion_norm_(concat_ws(' ', s.nombre, s.apellido)) = f.persona
+                 order by s.id limit 1;
+            elsif paso = 6 then
+                select * into b from seleccion_busquedas s
+                 where s.marca = p_marca and s.planilla_hoja is null and s.archivada is null and not (s.id = any(vistos))
+                   and s.status in ('Proceso', 'Pausada')
+                   and seleccion_clave_local_(s.local) = f.clave and s.puesto = f.nueva->>'puesto'
+                 order by s.id limit 1;
             elsif coalesce(f.nueva->>'puesto', '') = '' then
                 continue;                                   -- sin puesto todavía: se crea en la próxima vuelta
             end if;
+            if paso < 7 and b.id is null then continue; end if;
             res := seleccion_solicitud_fila_(b, f.nueva, p_hoja, f.fila, p_marca);
             hechas := hechas || f.fila;
             vistos := vistos || (res->>'id')::bigint;
