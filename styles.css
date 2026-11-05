@@ -435,12 +435,13 @@ button.nomina.activo { box-shadow: 0 0 0 2px currentColor; }
    ══════════════════════════════════════════════ */
 :root {
     --calm-ink: #1e293b; --calm-accent: #3f5f8f; --calm-accent-soft: #eef2f8; --calm-line: #dde4ee;
-    --t1: #edf3fa; --t1-ink: #2c5282;   /* ENVIADO A ZONAL */
-    --t2: #e8f2f6; --t2-ink: #1f5f7a;   /* APROBADO ZONAL */
-    --t3: #e5f3f2; --t3-ink: #18665f;   /* CITADO */
-    --t4: #e6f3ec; --t4-ink: #1d6b48;   /* HUELLA */
-    --t5: #dbefe2; --t5-ink: #14583a;   /* COMUNICADO */
-    --rose: #f8edef; --rose-ink: #9b3048;
+    /* Un color propio por ESTADO (fila suave + etiqueta más marcada), para no confundirlos */
+    --t1: #eef4ff; --t1-ink: #1d4ed8;   /* ENVIADO A ZONAL: azul */
+    --t2: #f3f0ff; --t2-ink: #5b21b6;   /* APROBADO ZONAL: violeta */
+    --t3: #fff7e3; --t3-ink: #92400e;   /* CITADO: ámbar */
+    --t4: #fdf0f7; --t4-ink: #9d174d;   /* HUELLA: rosa (en proceso, como la batería) */
+    --t5: #e6f6ec; --t5-ink: #14532d;   /* COMUNICADO: verde */
+    --rose: #fdeeee; --rose-ink: #b91c1c;   /* RECHAZADO ZONAL: rojo */
     --sabores: #8a6d4b; --extremas: #8a4f58; --sabores-soft: #f6f2ed; --extremas-soft: #f7eff0;
     --sabores-line: #e4d9cc; --extremas-line: #e8d5d8;
     --mania: #4f7a72; --mania-soft: #eef4f2;
@@ -473,12 +474,12 @@ table.grilla tr.row-cubierta td { background: var(--t5); }
 table.grilla tr.row-alerta td { background: var(--card); }
 table.grilla tr.row-alerta td.col-fija { box-shadow: inset 3px 0 0 var(--rose-ink), 1px 0 0 var(--line); }
 table.grilla tbody tr:hover td { filter: brightness(.985); }
-.est-enviado { background: #dbe7f5; color: var(--t1-ink); }
-.est-aprobado { background: #d5e8ef; color: var(--t2-ink); }
-.est-citado { background: #d3ebe8; color: var(--t3-ink); }
-.est-huella { background: #d3eadd; color: var(--t4-ink); }
-.est-comunicado { background: #2f7d57; color: #fff; }
-.est-rechazado { background: #f1dce1; color: var(--rose-ink); }
+.est-enviado { background: #dbeafe; color: var(--t1-ink); }
+.est-aprobado { background: #e4dcfd; color: var(--t2-ink); }
+.est-citado { background: #fde68a; color: var(--t3-ink); }
+.est-huella { background: #fbcfe8; color: var(--t4-ink); }
+.est-comunicado { background: #15803d; color: #fff; }
+.est-rechazado { background: #fecaca; color: var(--rose-ink); }
 .alerta-72 { color: var(--rose-ink); }
 
 /* Nómina: mismo hilo */
