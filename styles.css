@@ -436,12 +436,13 @@ button.nomina.activo { box-shadow: 0 0 0 2px currentColor; }
 :root {
     --calm-ink: #1e293b; --calm-accent: #3f5f8f; --calm-accent-soft: #eef2f8; --calm-line: #dde4ee;
     /* Un color propio por ESTADO (fila suave + etiqueta más marcada), para no confundirlos */
-    --t1: #eef4ff; --t1-ink: #1d4ed8;   /* ENVIADO A ZONAL: azul */
-    --t2: #f3f0ff; --t2-ink: #5b21b6;   /* APROBADO ZONAL: violeta */
-    --t3: #fff7e3; --t3-ink: #92400e;   /* CITADO: ámbar */
-    --t4: #fdf0f7; --t4-ink: #9d174d;   /* HUELLA: rosa (en proceso, como la batería) */
-    --t5: #e6f6ec; --t5-ink: #14532d;   /* COMUNICADO: verde */
-    --rose: #fdeeee; --rose-ink: #b91c1c;   /* RECHAZADO ZONAL: rojo */
+    /* --tN fondo de la fila · --tN-ink texto de la etiqueta · --tN-bar franja de la izquierda */
+    --t1: #dbeafe; --t1-ink: #1d4ed8; --t1-bar: #2563eb;   /* ENVIADO A ZONAL: azul */
+    --t2: #ede4ff; --t2-ink: #5b21b6; --t2-bar: #7c3aed;   /* APROBADO ZONAL: violeta */
+    --t3: #fef3c7; --t3-ink: #92400e; --t3-bar: #f59e0b;   /* CITADO: ámbar */
+    --t4: #fce7f3; --t4-ink: #9d174d; --t4-bar: #db2777;   /* HUELLA: rosa (en proceso, como la batería) */
+    --t5: #dcfce7; --t5-ink: #14532d; --t5-bar: #16a34a;   /* COMUNICADO: verde */
+    --rose: #fee2e2; --rose-ink: #b91c1c; --rose-bar: #dc2626;   /* RECHAZADO ZONAL: rojo */
     --sabores: #8a6d4b; --extremas: #8a4f58; --sabores-soft: #f6f2ed; --extremas-soft: #f7eff0;
     --sabores-line: #e4d9cc; --extremas-line: #e8d5d8;
     --mania: #4f7a72; --mania-soft: #eef4f2;
@@ -470,16 +471,23 @@ table.grilla tr.fila-est-citado td { background: var(--t3); }
 table.grilla tr.fila-est-huella td { background: var(--t4); }
 table.grilla tr.fila-est-comunicado td { background: var(--t5); }
 table.grilla tr.fila-est-rechazado td { background: var(--rose); }
+/* Franja del color del estado en la primera columna: se ve aunque la columna ESTADO quede fuera de pantalla */
+table.grilla tr.fila-est-enviado td.col-fija { box-shadow: inset 6px 0 0 var(--t1-bar), 1px 0 0 var(--line); }
+table.grilla tr.fila-est-aprobado td.col-fija { box-shadow: inset 6px 0 0 var(--t2-bar), 1px 0 0 var(--line); }
+table.grilla tr.fila-est-citado td.col-fija { box-shadow: inset 6px 0 0 var(--t3-bar), 1px 0 0 var(--line); }
+table.grilla tr.fila-est-huella td.col-fija { box-shadow: inset 6px 0 0 var(--t4-bar), 1px 0 0 var(--line); }
+table.grilla tr.fila-est-comunicado td.col-fija, table.grilla tr.row-cubierta td.col-fija { box-shadow: inset 6px 0 0 var(--t5-bar), 1px 0 0 var(--line); }
+table.grilla tr.fila-est-rechazado td.col-fija { box-shadow: inset 6px 0 0 var(--rose-bar), 1px 0 0 var(--line); }
 table.grilla tr.row-cubierta td { background: var(--t5); }
 table.grilla tr.row-alerta td { background: var(--card); }
 table.grilla tr.row-alerta td.col-fija { box-shadow: inset 3px 0 0 var(--rose-ink), 1px 0 0 var(--line); }
 table.grilla tbody tr:hover td { filter: brightness(.985); }
-.est-enviado { background: #dbeafe; color: var(--t1-ink); }
-.est-aprobado { background: #e4dcfd; color: var(--t2-ink); }
-.est-citado { background: #fde68a; color: var(--t3-ink); }
-.est-huella { background: #fbcfe8; color: var(--t4-ink); }
+.est-enviado { background: #2563eb; color: #fff; }
+.est-aprobado { background: #7c3aed; color: #fff; }
+.est-citado { background: #fcd34d; color: #78350f; }
+.est-huella { background: #db2777; color: #fff; }
 .est-comunicado { background: #15803d; color: #fff; }
-.est-rechazado { background: #fecaca; color: var(--rose-ink); }
+.est-rechazado { background: #dc2626; color: #fff; }
 .alerta-72 { color: var(--rose-ink); }
 
 /* Nómina: mismo hilo */
