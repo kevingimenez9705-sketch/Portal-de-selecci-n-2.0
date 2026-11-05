@@ -26,6 +26,13 @@
       cada marca (A selector, B regional, C zonal, D local, V estado del local)
       cargan el Mapa de equipos del portal. Un dato se actualiza solo cuando
       cambia en la hoja: lo reasignado a mano en el portal se respeta.
+   8. Solicitudes Extremas / Sabores → Vacantes del portal: cada fila es una
+      vacante. Una fila nueva crea la vacante; lo que se cambia en la hoja
+      (estado, persona, fechas…) se pasa al portal. Un dato se actualiza solo
+      cuando cambia en la hoja: lo editado a mano en el portal se respeta.
+      El N° de vacante queda guardado en la fila como dato oculto (no agrega
+      columnas). Borrar una fila de la hoja no borra la vacante del portal.
+      Para empezar de cero una fila conviene borrarla (no solo vaciarla).
 
    Todo queda dentro de PortalSync: se puede pegar como un archivo más del
    proyecto de TAREAS GRUPALES sin chocar con Codigo.gs, Onboarding.gs, etc.
@@ -175,6 +182,7 @@ var PortalSync = (function () {
         baseAlPortal_(libro, codigo),
         bloqueadosAlPortal_(libro, codigo),
         ingresoAlPortal_(libro, codigo),
+        solicitudesAlPortal_(libro, codigo),  // antes de zonales y onboarding: así lo nuevo de la hoja sigue el circuito
         zonalesAlPortal_(libro, codigo),
         citacionesDelPortal_(codigo),
         asignacionesAlPortal_(codigo)
@@ -1462,6 +1470,123 @@ function obtenerHorarioPrimerDiaOnboarding_(
 
 
   /* =========================================================
+     8. SOLICITUDES (Extremas / Sabores) → VACANTES DEL PORTAL
+     ========================================================= */
+
+  const SOLICITUDES = {
+    hojas: [
+      { nombre: 'Solicitudes Extremas', marca: 'Hamburguesas Extremas' },
+      { nombre: 'Solicitudes Sabores', marca: 'Sabores Express' }
+    ],
+    meta: 'portal_vacante',   // N° de vacante guardado en la fila (dato oculto de la hoja)
+    // Encabezado de la hoja (normalizado) → campo de la vacante
+    columnas: {
+      'selector': 'selector', 'regional': 'regional', 'zonal': 'zonal', 'local': 'local',
+      'local entrenamiento': 'local_entrenamiento', 'puesto': 'puesto', 'jornada': 'jornada',
+      'notas sobre la solicitud': 'notas', 'fecha': 'fecha_citacion', 'hora': 'hora_citacion', 'estado': 'estado',
+      'primer dia': 'ingreso', 'nombre': 'nombre', 'apellido': 'apellido', 'email': 'email', 'tel': 'tel',
+      'tel emergencia': 'tel_emergencia', 'fecha de nacimiento': 'fecha_nacimiento', 'nacionalidad': 'nacionalidad',
+      'cuil': 'cuil', 'dni': 'dni', 'sexo': 'sexo', 'domicilio': 'domicilio', 'numero': 'domicilio_numero',
+      'codigo postal': 'codigo_postal', 'localidad': 'localidad', 'provincia': 'provincia', 'pais': 'pais',
+      'altas rrhh': 'altas_rrhh', 'registro datos': 'registro_datos', 'id postulante': 'id_postulante'
+    },
+    fechas: ['fecha_citacion', 'ingreso', 'fecha_nacimiento']
+  };
+
+  function solicitudesAlPortal_(libro, codigo) {
+    const lineas = [];
+    SOLICITUDES.hojas.forEach(function (h) {
+      const hoja = libro.getSheetByName(h.nombre);
+      if (!hoja) { lineas.push('Solicitudes: no está la pestaña "' + h.nombre + '".'); return; }
+      const leido = filasDeSolicitudes_(hoja);
+      // Filas vaciadas que todavía guardaban un N°: se les quita (la fila queda libre para otra vacante)
+      Object.keys(leido.meta).forEach(function (fila) {
+        if (!leido.conDatos[fila]) leido.meta[fila].remove();
+      });
+      if (!leido.filas.length) return;
+      // Una pestaña entera por llamada: así se ve qué fila es cada vacante aunque se hayan movido
+      const r = llamarPortal_('seleccion_solicitudes_sync', { p_hoja: h.nombre, p_marca: h.marca, p_filas: leido.filas }, codigo) || {};
+      (r.vincular || []).forEach(function (v) {
+        const m = leido.meta[v.fila];
+        if (m && leido.conDatos[v.fila]) m.setValue(String(v.numero));
+        else hoja.getRange(v.fila + ':' + v.fila).addDeveloperMetadata(SOLICITUDES.meta, String(v.numero));
+      });
+      if (r.creadas || r.actualizadas) {
+        lineas.push(h.nombre + ' → portal: ' + (r.creadas || 0) + ' vacantes nuevas, ' + (r.actualizadas || 0) + ' actualizadas.');
+      }
+    });
+    return lineas.join('\n');
+  }
+
+  // Filas de una pestaña Solicitudes: { filas: [{ fila, numero, datos }], meta: { fila → N° guardado }, conDatos }
+  function filasDeSolicitudes_(hoja) {
+    const res = { filas: [], meta: {}, conDatos: {} };
+    const ultima = hoja.getLastRow(), ancho = hoja.getLastColumn();
+    if (ultima < 2 || !ancho) return res;
+    const rango = hoja.getRange(1, 1, ultima, ancho);
+    const valores = rango.getValues(), textos = rango.getDisplayValues();
+    // Encabezado: la fila que tiene SELECTOR y LOCAL (hoy la 2; la 1 está vacía)
+    let enc = -1;
+    for (let i = 0; i < Math.min(6, textos.length) && enc === -1; i++) {
+      const n = textos[i].map(normalizar_);
+      if (n.indexOf('selector') !== -1 && n.indexOf('local') !== -1) enc = i;
+    }
+    if (enc === -1) throw new Error('"' + hoja.getName() + '" no tiene el encabezado con SELECTOR y LOCAL.');
+    const cols = {};
+    textos[enc].forEach(function (t, i) {
+      const campo = SOLICITUDES.columnas[normalizar_(t)];
+      if (campo && !(campo in cols)) cols[campo] = i;
+    });
+    if (!('local' in cols)) throw new Error('"' + hoja.getName() + '" no tiene la columna LOCAL.');
+    // N° de vacante guardado en cada fila
+    hoja.createDeveloperMetadataFinder().withKey(SOLICITUDES.meta).find().forEach(function (m) {
+      const lugar = m.getLocation();
+      if (lugar.getLocationType() === SpreadsheetApp.DeveloperMetadataLocationType.ROW) res.meta[lugar.getRow().getRow()] = m;
+    });
+    for (let i = enc + 1; i < valores.length; i++) {
+      const datos = {};
+      Object.keys(cols).forEach(function (campo) {
+        const c = cols[campo];
+        let v = SOLICITUDES.fechas.indexOf(campo) !== -1 ? fechaSolicitud_(valores[i][c]) : texto_(textos[i][c]);
+        if (v && campo === 'email') v = v.toLowerCase().replace(/\s+/g, '');
+        if (v && campo === 'hora_citacion') v = v.toUpperCase().replace(/\s*HS\.?$/, ' HS');
+        if (v) datos[campo] = v;
+      });
+      if (!datos.local || normalizar_(datos.local) === 'local') continue;
+      // Sabores: la columna ID POSTULANTE a veces trae la marca temporal del registro de datos
+      if (datos.id_postulante && /^\d{1,2}\/\d{1,2}\/\d{4}/.test(datos.id_postulante) && !datos.registro_datos) {
+        datos.registro_datos = datos.id_postulante;
+        delete datos.id_postulante;
+      }
+      const fila = i + 1;
+      res.conDatos[fila] = true;
+      res.filas.push({ fila: fila, numero: res.meta[fila] ? String(res.meta[fila].getValue() || '') : '', datos: datos });
+    }
+    return res;
+  }
+
+  // Fecha de la hoja → 'aaaa-mm-dd' (acepta el año que viene: un primer día de enero cargado en diciembre)
+  function fechaSolicitud_(v) {
+    let a, mes, d;
+    if (v instanceof Date) {
+      if (isNaN(v.getTime())) return '';
+      a = +Utilities.formatDate(v, SYNC.ZONA_HORARIA, 'yyyy');
+      mes = +Utilities.formatDate(v, SYNC.ZONA_HORARIA, 'M');
+      d = +Utilities.formatDate(v, SYNC.ZONA_HORARIA, 'd');
+    } else {
+      const m = texto_(v).match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+      if (!m) return '';
+      d = +m[1]; mes = +m[2]; a = +m[3];
+      if (a < 100) a += a > 30 ? 1900 : 2000;
+    }
+    const f = new Date(Date.UTC(a, mes - 1, d));
+    if (f.getUTCDate() !== d || f.getUTCMonth() !== mes - 1) return '';
+    if (a < 1930 || a > new Date().getFullYear() + 1) return '';
+    return a + '-' + ('0' + mes).slice(-2) + '-' + ('0' + d).slice(-2);
+  }
+
+
+  /* =========================================================
      LIMPIEZA DE DATOS
      ========================================================= */
 
@@ -1598,7 +1723,8 @@ function obtenerHorarioPrimerDiaOnboarding_(
       bloqueados_: bloqueados_, llamarPortal_: llamarPortal_, horario_: horario_, fecha_: fecha_, estado_: estado_,
       agregarFilas_: agregarFilas_, fechaDeTexto_: fechaDeTexto_, enHorario_: enHorario_, sexo_: sexo_,
       hojasZonales_: hojasZonales_, indiceZonal_: indiceZonal_, datosCitacion_: datosCitacion_,
-      filasDeAsignaciones_: filasDeAsignaciones_, asignacionesAlPortal_: asignacionesAlPortal_
+      filasDeAsignaciones_: filasDeAsignaciones_, asignacionesAlPortal_: asignacionesAlPortal_,
+      filasDeSolicitudes_: filasDeSolicitudes_, solicitudesAlPortal_: solicitudesAlPortal_, fechaSolicitud_: fechaSolicitud_
     }
   };
 })();
