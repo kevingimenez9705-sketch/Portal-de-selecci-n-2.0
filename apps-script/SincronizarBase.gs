@@ -1483,8 +1483,7 @@ function obtenerHorarioPrimerDiaOnboarding_(
   if (
     puesto.includes('FULL TIME') ||
     puesto.includes('ENCARGADO') ||
-    puesto.includes('GERENTE') ||
-    puesto.includes('ENTRENADOR')
+    puesto.includes('GERENTE')
   ) {
 
     return ONBOARDING_CONFIG.firstDaySchedules.fullTime;
