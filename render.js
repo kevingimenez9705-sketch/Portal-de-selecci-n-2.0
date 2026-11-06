@@ -265,7 +265,11 @@ function celda(b, c) {
     const on = `onchange="updateField(${b.id},'${c.f}',this.value)"`;
     switch (c.tipo) {
         case 'selector': return `<select class="celda" ${on}>${optionsHtml(selectores(), v, '—')}</select>`;
-        case 'select':   return `<select class="celda" ${on}>${optionsHtml(c.ops, v, '—')}</select>`;
+        case 'select':
+            // Puestos de jerarquía (encargado, gerente, entrenador): letra resaltada
+            if (c.f === 'puesto') return `<select class="celda${PUESTOS_JERARQUIA.includes(v) ? ' puesto-jerarquia' : ''}" ${on}>${optionsHtml(c.ops, v, '—')
+                .replace(/<option value="(ENCARGADO|GERENTE|ENTRENADOR)"/g, '<option class="opt-jerarquia" value="$1"')}</select>`;
+            return `<select class="celda" ${on}>${optionsHtml(c.ops, v, '—')}</select>`;
         case 'estado':   return `<select class="celda celda-estado ${estadoClass(v)}" ${on}>${optionsHtml(ESTADOS_SOLICITUD, v, '—')}</select>`;
         case 'fecha':    return `<input type="date" class="celda" value="${esc(v || '')}" ${on}>`;
         case 'numero':   return `<input class="celda mono" inputmode="numeric" value="${esc(v)}" ${on}>`;

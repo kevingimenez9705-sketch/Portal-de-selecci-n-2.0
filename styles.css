@@ -763,3 +763,7 @@ table.grilla input[type="date"].celda:hover::-webkit-calendar-picker-indicator, 
 .menu-selectores > button.active, .menu-selectores > button.active:hover { background: var(--team); color: #fff; }
 .menu-selectores > button.active .sel-n { color: #fff; }
 .menu-selectores .avatar { box-shadow: 0 0 0 2px #fff; }
+
+/* Puestos de jerarquía (encargado, gerente, entrenador): letra resaltada */
+table.grilla select.celda.puesto-jerarquia { color: var(--purple); font-weight: 800; letter-spacing: .02em; }
+.opt-jerarquia { color: #42158b; font-weight: 800; }
