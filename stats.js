@@ -170,7 +170,9 @@ function renderStats(tab) {
         .filter(x => x.pendientes > 0).sort((a, b) => b.pendientes - a.pendientes).slice(0, 8);
 
     const box = document.getElementById('stats-content');
+    const tablero = tab === 'general' ? busquedas : busquedas.filter(b => b.marca === tab);
     box.innerHTML = `
+        <div class="kpi-row">${kpisBusquedasHtml(tablero)}</div>
         <div class="cob-card">
             <div class="cob-titulo">Nivel de cobertura</div>
             <div class="cob-sub">Cada batería representa las vacantes de la marca cargadas en la semana elegida (sin locales excedidos). Total suma todas las semanas.</div>
