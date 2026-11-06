@@ -76,10 +76,30 @@ function actualizarDatalists() {
 // ══════════════════════════════════════════════
 //  CHIPS DE SELECTOR + PESTAÑAS DE MARCA
 // ══════════════════════════════════════════════
-// Filtro de selector (desplegable en la barra de filtros)
+// Vacantes que se cuentan en los filtros (como la tarjeta "Vacantes": sin canceladas ni locales excedidos)
+const contable = b => b.status !== 'Cancelada' && cuentaComoActiva(b);
+
+// Filtro de selector: desplegable con la foto, el color y las vacantes de cada uno (en la marca elegida)
 function renderSelectorChips() {
-    const sel = document.getElementById('f-selector');
-    if (sel) sel.innerHTML = optionsHtml(selectores(), selectorFiltroActivo, 'Todos los selectores');
+    const btn = document.getElementById('f-selector'), lista = document.getElementById('f-selector-lista');
+    if (!btn || !lista) return;
+    const base = busquedas.filter(b => contable(b) && (!marcaActiva || b.marca === marcaActiva));
+    const cuantas = s => base.filter(b => !s || b.selector === s).length;
+    const foto = s => s ? avatarHtml(s, 'avatar-filtro') : '<span class="avatar avatar-filtro avatar-todos" aria-hidden="true"><i class="fas fa-users"></i></span>';
+    const actual = selectorFiltroActivo;
+    btn.style.cssText = actual ? `--team:${colorDe(actual)}` : '';
+    btn.classList.toggle('con-selector', !!actual);
+    btn.innerHTML = `${foto(actual)}<span class="sel-nom">${esc(actual || 'Todos los selectores')}</span><span class="sel-n">${cuantas(actual)}</span><i class="fas fa-chevron-down menu-flecha"></i>`;
+    lista.innerHTML = ['', ...selectores()].map(s => `<button class="${s === actual ? 'active' : ''}" style="--team:${s ? colorDe(s) : '#94a3b8'}" data-sel="${esc(s)}" onclick="filtrarPorSelector(this.dataset.sel)">
+        ${foto(s)}<span class="sel-nom">${esc(s || 'Todos los selectores')}</span><span class="sel-n">${cuantas(s)}</span></button>`).join('');
+}
+// Pestañas de marca: total de vacantes de cada una (del selector elegido)
+function renderConteoMarcas() {
+    const base = busquedas.filter(b => contable(b) && (!selectorFiltroActivo || b.selector === selectorFiltroActivo));
+    document.querySelectorAll('#marca-tabs [data-marca]').forEach(btn => {
+        const n = btn.querySelector('.seg-n');
+        if (n) n.textContent = base.filter(b => !btn.dataset.marca || b.marca === btn.dataset.marca).length;
+    });
 }
 function filtrarPorSelector(nombre) {
     selectorFiltroActivo = nombre;
@@ -324,6 +344,8 @@ function kpisBusquedasHtml(todas) {
 function renderKPIs() {
     const todas = busquedas.filter(b => (!selectorFiltroActivo || b.selector === selectorFiltroActivo) && (!marcaActiva || b.marca === marcaActiva));
     renderLeyendaNomina(todas.filter(vacanteAbierta));
+    renderSelectorChips();
+    renderConteoMarcas();
     actualizarBotonIcheck();
     actualizarBotonOnb();
 }
