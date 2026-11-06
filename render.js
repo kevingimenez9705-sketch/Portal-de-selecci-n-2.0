@@ -37,11 +37,11 @@ function prepararApp() {
 function showView(v) {
     vistaActual = v;
     ['vacantes', 'base', 'stats', 'equipos'].forEach(id => document.getElementById('view-' + id).classList.toggle('hidden', id !== v));
-    document.querySelectorAll('.inline-nav-btn[id^="nav-"]').forEach(b => b.classList.toggle('active', b.id === 'nav-' + v));
+    document.querySelectorAll('#menu-vistas [id^="nav-"]').forEach(b => b.classList.toggle('active', b.id === 'nav-' + v));
     document.getElementById('filters-vacantes').classList.toggle('hidden', v !== 'vacantes');
     document.getElementById('filters-base').classList.toggle('hidden', v !== 'base');
     document.getElementById('btn-nueva-busqueda').classList.toggle('hidden', v !== 'vacantes');
-    document.getElementById('menu-herramientas').classList.toggle('hidden', v !== 'vacantes');
+    ['btn-importar', 'btn-datos-ingreso', 'btn-onb', 'btn-icheck'].forEach(id => document.getElementById(id).classList.toggle('hidden', v !== 'vacantes'));
     ['btn-nuevo-postulante', 'btn-elegi-vacante'].forEach(id => document.getElementById(id).classList.toggle('hidden', v !== 'base'));
     document.getElementById('main-title').textContent = TITULOS[v][0];
     document.getElementById('main-sub').textContent = TITULOS[v][1];
@@ -326,12 +326,6 @@ function renderKPIs() {
     renderLeyendaNomina(todas.filter(vacanteAbierta));
     actualizarBotonIcheck();
     actualizarBotonOnb();
-    const herr = document.getElementById('herr-count');
-    if (herr) {
-        const n = ['onb-count', 'icheck-count'].reduce((t, id) => t + (Number(document.getElementById(id)?.textContent) || 0), 0);
-        herr.textContent = n || '';
-        herr.classList.toggle('hidden', !n);
-    }
 }
 
 // Referencia de nómina de los locales (vacantes abiertas); cada una filtra la grilla

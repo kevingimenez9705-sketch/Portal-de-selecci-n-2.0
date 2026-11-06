@@ -56,31 +56,27 @@
     <main class="main">
         <div class="top-bar">
             <div>
-                <div class="page-title" id="main-title">Vacantes</div>
+                <details class="menu" id="menu-vistas">
+                    <summary class="titulo-vista" title="Cambiar de pantalla"><span class="page-title" id="main-title">Vacantes</span><i class="fas fa-chevron-down menu-flecha"></i></summary>
+                    <div class="menu-lista">
+                        <button class="active" id="nav-vacantes" onclick="showView('vacantes')"><i class="fas fa-table"></i> Vacantes</button>
+                        <button id="nav-base" onclick="showView('base')"><i class="fas fa-database"></i> Base de postulantes</button>
+                        <button id="nav-stats" onclick="showView('stats')"><i class="fas fa-chart-bar"></i> Estadísticas</button>
+                        <button id="nav-equipos" onclick="showView('equipos')"><i class="fas fa-sitemap"></i> Mapa de equipos</button>
+                    </div>
+                </details>
                 <div class="page-subtitle" id="main-sub"></div>
             </div>
             <!-- Botones de alta según la pantalla (render.js: showView) -->
             <div class="top-bar-acciones">
-                <details class="menu menu-derecha" id="menu-herramientas">
-                    <summary class="btn-secundario" title="Importar, datos de ingreso, zonal y onboarding, iCheck"><i class="fas fa-toolbox"></i> Herramientas <span class="icheck-count hidden" id="herr-count"></span><i class="fas fa-chevron-down menu-flecha"></i></summary>
-                    <div class="menu-lista">
-                        <button id="btn-importar" onclick="openImportar()"><i class="fas fa-file-import"></i> Importar solicitudes</button>
-                        <button id="btn-datos-ingreso" onclick="openDatosIngreso()" title="Copiar a cada vacante los datos del formulario de ingreso (por email)"><i class="fas fa-id-card"></i> Datos de ingreso</button>
-                        <button id="btn-onb" onclick="openOnboarding()" title="Alertas del zonal y citación a onboarding"><i class="fas fa-envelope-open-text"></i> Zonal y onboarding <span class="icheck-count hidden" id="onb-count"></span></button>
-                        <button id="btn-icheck" onclick="openIcheck()" title="Bajar las vacantes en HUELLA para cargar en iCheck"><i class="fas fa-fingerprint"></i> iCheck <span class="icheck-count hidden" id="icheck-count"></span></button>
-                    </div>
-                </details>
+                <button class="btn-secundario" id="btn-importar" onclick="openImportar()"><i class="fas fa-file-import"></i> Importar solicitudes</button>
+                <button class="btn-secundario" id="btn-datos-ingreso" onclick="openDatosIngreso()" title="Copiar a cada vacante los datos del formulario de ingreso (por email)"><i class="fas fa-id-card"></i> Datos de ingreso</button>
+                <button class="btn-secundario" id="btn-onb" onclick="openOnboarding()" title="Alertas del zonal y citación a onboarding"><i class="fas fa-envelope-open-text"></i> Zonal y onboarding <span class="icheck-count hidden" id="onb-count"></span></button>
+                <button class="btn-secundario" id="btn-icheck" onclick="openIcheck()" title="Bajar las vacantes en HUELLA para cargar en iCheck"><i class="fas fa-fingerprint"></i> iCheck <span class="icheck-count hidden" id="icheck-count"></span></button>
                 <button class="btn-primary" id="btn-nueva-busqueda" onclick="openNuevaBusqueda()"><i class="fas fa-plus"></i> Nueva vacante</button>
                 <a class="btn-secundario hidden" id="btn-elegi-vacante" href="elegi-tu-vacante.html" target="_blank" rel="noopener" title="Página pública donde cada persona deja sus datos y su disponibilidad (llegan solos a la Base)"><i class="fas fa-up-right-from-square"></i> Elegí tu vacante</a>
                 <button class="btn-primary hidden" id="btn-nuevo-postulante" onclick="openPostulanteModal()"><i class="fas fa-user-plus"></i> Nuevo postulante</button>
             </div>
-        </div>
-
-        <div class="inline-nav">
-            <button class="inline-nav-btn active" id="nav-vacantes" onclick="showView('vacantes')"><i class="fas fa-table"></i> Vacantes</button>
-            <button class="inline-nav-btn" id="nav-base" onclick="showView('base')"><i class="fas fa-database"></i> Base de postulantes</button>
-            <button class="inline-nav-btn" id="nav-stats" onclick="showView('stats')"><i class="fas fa-chart-bar"></i> Estadísticas</button>
-            <button class="inline-nav-btn" id="nav-equipos" onclick="showView('equipos')"><i class="fas fa-sitemap"></i> Mapa de equipos</button>
         </div>
 
         <div class="filters filtros-linea" id="filters-vacantes">
