@@ -46,6 +46,7 @@ const DOC_OPCIONES       = ['Sí', 'No', 'En trámite'];
 
 // Desplegables de la hoja "Solicitudes Sabores / Extremas"
 const PUESTOS          = ['PART TIME (5HS)', 'FULL TIME (9HS)', 'ENCARGADO', 'GERENTE', 'ENTRENADOR'];
+const PUESTOS_JERARQUIA = ['ENCARGADO', 'GERENTE', 'ENTRENADOR'];   // se resaltan en la grilla
 const JORNADAS         = ['ROTATIVO', 'ROTATIVO MAÑANA', 'ROTATIVO MEDIO', 'ROTATIVO NOCHE'];
 const HORAS_CITACION   = ['09:30 HS', '11:30 HS', '14:30 HS', '16:00 HS'];
 const ESTADOS_SOLICITUD = ['ENVIADO A ZONAL', 'APROBADO ZONAL', 'RECHAZADO ZONAL', 'CITADO', 'HUELLA', 'COMUNICADO'];
