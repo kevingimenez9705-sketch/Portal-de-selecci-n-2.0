@@ -33,7 +33,7 @@ function faltaParaCitar(b) {
     if (!b.fecha_citacion) f.push('fecha de onboarding');
     if (!b.hora_citacion) f.push('hora');
     if (!b.ingreso) f.push('primer día');
-    if (!/FULL TIME|ENCARGADO|GERENTE|PART TIME/.test(normTxt(b.puesto).replace(/[-_]+/g, ' '))) f.push('puesto con horario de primer día');
+    if (!/FULL TIME|ENCARGADO|GERENTE|ENTRENADOR|PART TIME/.test(normTxt(b.puesto).replace(/[-_]+/g, ' '))) f.push('puesto con horario de primer día');
     const apertura = normTxt(b.local).includes('APER');
     if (apertura && !b.local_entrenamiento) f.push('local de entrenamiento');
     if (!apertura && !infoLocal(b.local)?.direccion) f.push('dirección del local');

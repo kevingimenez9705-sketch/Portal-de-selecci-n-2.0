@@ -760,6 +760,8 @@ var PortalSync = (function () {
     senderName: 'Equipo de Selección',
     officeAddress: 'Florida 428, CABA',
     formUrl: 'https://forms.gle/JYp28JhtcyKu9smt8',
+    // Código de Ética: se muestra en el paso 1 del mail, debajo del formulario (como Onboarding.gs)
+    codigoEticaUrl: 'https://c-digo-de-etica.vercel.app/',
     scheduleText: 'Los horarios del puesto son rotativos.',
     firstDaySchedules: { partTime: '15:00 a 20:00 hs', fullTime: '11:00 a 20:00 hs' },
     // Página del portal que registra el "Confirmo asistencia"
@@ -1055,6 +1057,35 @@ function crearEmailOnboarding_(
       </p>
 
 
+      <p style="margin-top:18px;">
+
+        <strong>
+          Completá el Código de Ética
+        </strong> 📋
+
+      </p>
+
+
+      <p>
+
+        <a
+          href="${escaparHtmlOnboarding_(ONBOARDING_CONFIG.codigoEticaUrl)}"
+          style="
+            display:inline-block;
+            background:#0f2a44;
+            color:#ffffff;
+            padding:12px 20px;
+            border-radius:6px;
+            text-decoration:none;
+            font-weight:bold;
+          "
+        >
+          Completar Código de Ética
+        </a>
+
+      </p>
+
+
       <p style="margin-top:28px;">
 
         <strong>
@@ -1200,6 +1231,10 @@ Fuiste seleccionado/a para sumarte a nuestro equipo.
 1️⃣ Completá el formulario de ingreso 📝
 
 ${ONBOARDING_CONFIG.formUrl}
+
+Completá el Código de Ética 📋
+
+${ONBOARDING_CONFIG.codigoEticaUrl}
 
 2️⃣ Presentate en nuestra Oficina de Selección para realizar tu Bienvenida e Ingreso.
 
@@ -1448,7 +1483,8 @@ function obtenerHorarioPrimerDiaOnboarding_(
   if (
     puesto.includes('FULL TIME') ||
     puesto.includes('ENCARGADO') ||
-    puesto.includes('GERENTE')
+    puesto.includes('GERENTE') ||
+    puesto.includes('ENTRENADOR')
   ) {
 
     return ONBOARDING_CONFIG.firstDaySchedules.fullTime;
