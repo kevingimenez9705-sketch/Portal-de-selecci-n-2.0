@@ -439,9 +439,9 @@ button.nomina.activo { box-shadow: 0 0 0 2px currentColor; }
     /* --tN fondo de la fila · --tN-ink texto de la etiqueta · --tN-bar franja de la izquierda */
     --t1: #dbeafe; --t1-ink: #1d4ed8; --t1-bar: #2563eb;   /* ENVIADO A ZONAL: azul */
     --t2: #ede4ff; --t2-ink: #5b21b6; --t2-bar: #7c3aed;   /* APROBADO ZONAL: violeta */
-    --t3: #fef3c7; --t3-ink: #92400e; --t3-bar: #f59e0b;   /* CITADO: ámbar */
+    --t3: #fcd34d; --t3-ink: #78350f; --t3-bar: #b45309;   /* CITADO: ámbar fuerte (resalta sobre el resto) */
     --t4: #fce7f3; --t4-ink: #9d174d; --t4-bar: #db2777;   /* HUELLA: rosa (en proceso, como la batería) */
-    --t5: #dcfce7; --t5-ink: #14532d; --t5-bar: #16a34a;   /* COMUNICADO: verde */
+    --t5: #86efac; --t5-ink: #14532d; --t5-bar: #15803d;   /* COMUNICADO: verde fuerte (resalta sobre el resto) */
     --rose: #fee2e2; --rose-ink: #b91c1c; --rose-bar: #dc2626;   /* RECHAZADO ZONAL: rojo */
     --sabores: #8a6d4b; --extremas: #8a4f58; --sabores-soft: #f6f2ed; --extremas-soft: #f7eff0;
     --sabores-line: #e4d9cc; --extremas-line: #e8d5d8;
@@ -484,9 +484,9 @@ table.grilla tr.row-alerta td.col-fija { box-shadow: inset 3px 0 0 var(--rose-in
 table.grilla tbody tr:hover td { filter: brightness(.985); }
 .est-enviado { background: #2563eb; color: #fff; }
 .est-aprobado { background: #7c3aed; color: #fff; }
-.est-citado { background: #fcd34d; color: #78350f; }
+.est-citado { background: #b45309; color: #fff; }
 .est-huella { background: #db2777; color: #fff; }
-.est-comunicado { background: #15803d; color: #fff; }
+.est-comunicado { background: #14532d; color: #fff; }
 .est-rechazado { background: #dc2626; color: #fff; }
 .alerta-72 { color: var(--rose-ink); }
 
@@ -619,3 +619,59 @@ table.grilla tbody tr:hover td { filter: brightness(.985); }
 .eq-leyenda .eq-punto { margin-right: 5px; vertical-align: 0; }
 @media (max-width: 640px) { .eq-zonales { grid-template-columns: 1fr; } .eq-buscar { min-width: 0; } }
 .eq-vacio { padding: 24px; text-align: center; font-style: normal; }
+
+/* ══════════════════════════════════════════════
+   VISTA COMPACTA — todo un poco más chico: más filas a la vista, menos scroll
+   ══════════════════════════════════════════════ */
+body { font-size: 13px; }
+.topnav { min-height: 48px; padding: 0 24px; }
+.topnav-logo { font-size: 16px; }
+.logo-equipo { width: 28px; height: 28px; }
+.topnav-btn { padding: 5px 10px; font-size: 11px; }
+.main { padding: 16px 24px 32px; }
+.top-bar { margin-bottom: 12px; }
+.page-title { font-size: clamp(20px, 2vw, 24px); }
+.page-subtitle { font-size: 12px; margin-top: 1px; }
+.inline-nav, .page-tabs { gap: 6px; margin-bottom: 12px; }
+.inline-nav-btn, .page-tab, .btn-primary, .btn-secundario, .btn-cancel { min-height: 32px; padding: 6px 12px; font-size: 12px; border-radius: 10px; }
+.btn-primary { box-shadow: 0 4px 12px rgba(66, 21, 139, .2); }
+.page-tab .tab-logo { width: 16px; height: 16px; margin-right: 6px; }
+.filters { gap: 6px; margin-bottom: 12px; }
+.filter-select, .filter-input { min-height: 32px; padding: 5px 8px; font-size: 12px; }
+/* Tarjetas de números */
+.kpi-row { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.kpi { min-height: 64px; padding: 9px 12px 9px 16px; border-radius: 12px; }
+.kpi::after { width: 4px; }
+.kpi-num { font-size: clamp(20px, 2vw, 26px); }
+.kpi-lbl { font-size: 10px; margin-top: 3px; }
+.kpi-sub { font-size: 11px; margin-top: 1px; }
+.nomina-leyenda { margin-bottom: 12px; }
+button.nomina { padding: 4px 9px; font-size: 10px; }
+/* Grilla de vacantes: filas más bajas */
+.table-wrap { border-radius: 14px; }
+.grilla-wrap { max-height: 78vh; }
+table.grilla thead th { padding: 5px 8px; font-size: 10px; }
+table.grilla .fila-grupos th { height: 26px; }
+table.grilla .fila-columnas th { top: 26px; }
+table.grilla td { padding: 2px 3px; }
+table.grilla .col-fija { min-width: 124px; padding: 3px 8px; }
+.celda { padding: 3px 5px; font-size: 11.5px; }
+.celda-estado { font-size: 10.5px; }
+.num-linea { gap: 4px; margin-bottom: 1px; }
+.link-btn { font-size: 11px; }
+.tag { padding: 1px 6px; font-size: 9px; }
+.demora-badge { padding: 0 6px; font-size: 10px; }
+td { padding: 8px 10px; }
+thead th { padding: 8px 10px; }
+/* Estadísticas */
+.cob-card, .stat-card, .chart-card { padding: 16px; border-radius: 14px; }
+.cob-titulo { font-size: 16px; }
+.cob-sub { margin-bottom: 12px; }
+.cob-kpis { gap: 10px; margin-bottom: 12px; }
+.stat-card-title, .chart-card-title { font-size: 14px; margin-bottom: 10px; padding-bottom: 8px; }
+.bat-card { padding: 14px; gap: 16px; border-radius: 16px; }
+.bat-viva { width: 92px; }
+.bat-viva-cuerpo { height: 176px; }
+.bat-num { font-size: 44px; }
+.cob-resumen { padding: 12px 14px; }
+.cob-resumen-num strong { font-size: 24px; }
