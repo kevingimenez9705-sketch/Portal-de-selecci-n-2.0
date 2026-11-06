@@ -217,9 +217,9 @@ function pasoProceso(b) {
 
 function renderTable() {
     const body = document.getElementById('table-body');
-    // Por paso del proceso; dentro de cada paso, las más nuevas arriba
+    // Por paso del proceso; dentro de cada paso, las más viejas arriba (prioridad)
     const list = busquedas.filter(b => filteredIds.has(b.id))
-        .sort((a, b) => (pasoProceso(a) - pasoProceso(b)) || (b.id - a.id));
+        .sort((a, b) => (pasoProceso(a) - pasoProceso(b)) || (a.id - b.id));
     const visibles = list.slice(0, vacantesVisibles);
     const cols = COLUMNAS.length + 2;
     body.innerHTML = visibles.length
