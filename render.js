@@ -304,22 +304,26 @@ function renderRow(b) {
     </tr>`;
 }
 
-// Los KPI respetan la marca y el selector elegidos, no el resto de los filtros.
-function renderKPIs() {
-    const todas = busquedas.filter(b => (!selectorFiltroActivo || b.selector === selectorFiltroActivo) && (!marcaActiva || b.marca === marcaActiva));
+// Tarjetas del estado actual de las búsquedas (se muestran en Estadísticas)
+function kpisBusquedasHtml(todas) {
     const data = todas.filter(cuentaComoActiva);
     const validas = data.filter(b => b.status !== 'Cancelada');
     const cubiertas = validas.filter(cubierta).length;
     const pct = validas.length ? Math.round(cubiertas / validas.length * 100) : 0;
     const abiertas = data.filter(vacanteAbierta);
     const cuenta = e => abiertas.filter(b => b.estado === e).length;
-    document.getElementById('kpi-row').innerHTML =
-        kpiHtml(validas.length, 'Vacantes', 'violeta', `${abiertas.length} abiertas`) +
+    return kpiHtml(validas.length, 'Vacantes', 'violeta', `${abiertas.length} abiertas`) +
         kpiHtml(abiertas.filter(b => !tienePersona(b)).length, 'Sin persona', 'gris', 'falta colocar a alguien') +
         kpiHtml(cuenta('ENVIADO A ZONAL'), 'Enviado a zonal', 'azul') +
         kpiHtml(cuenta('CITADO') + cuenta('HUELLA'), 'Citados / huella', 'ambar') +
         kpiHtml(cubiertas, 'Cubiertas', 'verde', `${pct}% cumplimiento`) +
         kpiHtml(data.filter(alertaZonalVencida).length, 'Alertas 72hs zonal', 'rosa');
+}
+
+// Vacantes: referencia de nómina y botones (las tarjetas quedaron solo en Estadísticas).
+// Respetan la marca y el selector elegidos, no el resto de los filtros.
+function renderKPIs() {
+    const todas = busquedas.filter(b => (!selectorFiltroActivo || b.selector === selectorFiltroActivo) && (!marcaActiva || b.marca === marcaActiva));
     renderLeyendaNomina(todas.filter(vacanteAbierta));
     actualizarBotonIcheck();
     actualizarBotonOnb();
