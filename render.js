@@ -85,7 +85,8 @@ function renderSelectorChips() {
     if (!btn || !lista) return;
     const base = busquedas.filter(b => contable(b) && (!marcaActiva || b.marca === marcaActiva));
     const cuantas = s => base.filter(b => !s || b.selector === s).length;
-    const foto = s => s ? avatarHtml(s, 'avatar-filtro') : '<span class="avatar avatar-filtro avatar-todos" aria-hidden="true"><i class="fas fa-users"></i></span>';
+    const foto = s => s ? avatarHtml(s, 'avatar-filtro')
+        : '<span class="avatar avatar-filtro avatar-todos" aria-hidden="true"><i class="fas fa-users"></i><img src="assets/selectores-todos.jpg" alt="" onerror="this.remove()"></span>';
     const actual = selectorFiltroActivo;
     btn.style.cssText = actual ? `--team:${colorDe(actual)}` : '';
     btn.classList.toggle('con-selector', !!actual);
