@@ -41,8 +41,13 @@
         <div class="topnav-logo"><img class="logo-equipo" src="assets/logo-gastro.png" alt="Gastro Buenos Aires"><div>El <span>Dojo</span></div></div>
         <div class="topnav-right">
             <button class="topnav-btn" id="btn-actualizar" onclick="actualizarTodo()" title="Sincroniza con Drive (planilla, zonales, onboarding) y vuelve a traer los datos"><i class="fas fa-sync-alt"></i> Actualizar</button>
-            <button class="topnav-btn" id="btn-limpiar" onclick="limpiarSemana()" title="Saca todas las vacantes del tablero para empezar la semana; siguen contando en Estadísticas"><i class="fas fa-broom"></i> Limpiar semana</button>
-            <button class="topnav-btn" id="btn-equipo" onclick="openEquipoModal()" title="Lista de selectores"><i class="fas fa-users-cog"></i> Equipo</button>
+            <details class="menu menu-derecha" id="menu-config">
+                <summary class="topnav-btn topnav-icono" title="Configuración" aria-label="Configuración"><i class="fas fa-cog"></i></summary>
+                <div class="menu-lista">
+                    <button id="btn-equipo" onclick="openEquipoModal()"><i class="fas fa-users-cog"></i> Equipo</button>
+                    <button id="btn-limpiar" onclick="limpiarSemana()" title="Saca todas las vacantes del tablero para empezar la semana; siguen contando en Estadísticas"><i class="fas fa-broom"></i> Limpiar semana</button>
+                </div>
+            </details>
             <div class="topnav-sep"></div>
             <button class="topnav-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Salir</button>
         </div>
@@ -56,10 +61,15 @@
             </div>
             <!-- Botones de alta según la pantalla (render.js: showView) -->
             <div class="top-bar-acciones">
-                <button class="btn-secundario" id="btn-importar" onclick="openImportar()"><i class="fas fa-file-import"></i> Importar solicitudes</button>
-                <button class="btn-secundario" id="btn-datos-ingreso" onclick="openDatosIngreso()" title="Copiar a cada vacante los datos del formulario de ingreso (por email)"><i class="fas fa-id-card"></i> Datos de ingreso</button>
-                <button class="btn-secundario" id="btn-onb" onclick="openOnboarding()" title="Alertas del zonal y citación a onboarding"><i class="fas fa-envelope-open-text"></i> Zonal y onboarding <span class="icheck-count hidden" id="onb-count"></span></button>
-                <button class="btn-secundario" id="btn-icheck" onclick="openIcheck()" title="Bajar las vacantes en HUELLA para cargar en iCheck"><i class="fas fa-fingerprint"></i> iCheck <span class="icheck-count hidden" id="icheck-count"></span></button>
+                <details class="menu menu-derecha" id="menu-herramientas">
+                    <summary class="btn-secundario" title="Importar, datos de ingreso, zonal y onboarding, iCheck"><i class="fas fa-toolbox"></i> Herramientas <span class="icheck-count hidden" id="herr-count"></span><i class="fas fa-chevron-down menu-flecha"></i></summary>
+                    <div class="menu-lista">
+                        <button id="btn-importar" onclick="openImportar()"><i class="fas fa-file-import"></i> Importar solicitudes</button>
+                        <button id="btn-datos-ingreso" onclick="openDatosIngreso()" title="Copiar a cada vacante los datos del formulario de ingreso (por email)"><i class="fas fa-id-card"></i> Datos de ingreso</button>
+                        <button id="btn-onb" onclick="openOnboarding()" title="Alertas del zonal y citación a onboarding"><i class="fas fa-envelope-open-text"></i> Zonal y onboarding <span class="icheck-count hidden" id="onb-count"></span></button>
+                        <button id="btn-icheck" onclick="openIcheck()" title="Bajar las vacantes en HUELLA para cargar en iCheck"><i class="fas fa-fingerprint"></i> iCheck <span class="icheck-count hidden" id="icheck-count"></span></button>
+                    </div>
+                </details>
                 <button class="btn-primary" id="btn-nueva-busqueda" onclick="openNuevaBusqueda()"><i class="fas fa-plus"></i> Nueva vacante</button>
                 <a class="btn-secundario hidden" id="btn-elegi-vacante" href="elegi-tu-vacante.html" target="_blank" rel="noopener" title="Página pública donde cada persona deja sus datos y su disponibilidad (llegan solos a la Base)"><i class="fas fa-up-right-from-square"></i> Elegí tu vacante</a>
                 <button class="btn-primary hidden" id="btn-nuevo-postulante" onclick="openPostulanteModal()"><i class="fas fa-user-plus"></i> Nuevo postulante</button>
@@ -73,22 +83,31 @@
             <button class="inline-nav-btn" id="nav-equipos" onclick="showView('equipos')"><i class="fas fa-sitemap"></i> Mapa de equipos</button>
         </div>
 
-        <div class="selector-chips" id="selector-chips"></div>
-
-        <div class="filters" id="filters-vacantes">
-            <span class="filter-label">Filtrar:</span>
-            <select class="filter-select" id="f-estado" onchange="applyFilters()"></select>
-            <select class="filter-select" id="f-status" onchange="applyFilters()"></select>
-            <select class="filter-select" id="f-regional" onchange="applyFilters()"></select>
-            <select class="filter-select" id="f-alerta" onchange="applyFilters()">
-                <option value="">Mostrar: todas</option>
-                <option value="libres">Solo sin persona</option>
-                <option value="72">Solo alerta 72hs zonal</option>
-                <option value="plazo">Solo fuera de plazo</option>
-                <option value="nom:ACTIVAS">Solo búsquedas activas (sin excedidos)</option>
-                <option value="nom:EXCEDIDO">Solo locales excedidos (no cuentan)</option>
-            </select>
+        <div class="filters filtros-linea" id="filters-vacantes">
+            <div class="segmentos" id="marca-tabs" role="group" aria-label="Marca">
+                <button class="page-tab active" onclick="cambiarMarca('',this)">Todas</button>
+                <button class="page-tab tab-extremas" onclick="cambiarMarca('Hamburguesas Extremas',this)"><img class="tab-logo" src="assets/logo-extremas.png" alt="">Extremas</button>
+                <button class="page-tab tab-sabores" onclick="cambiarMarca('Sabores Express',this)"><img class="tab-logo" src="assets/logo-sabores.png" alt="">Sabores</button>
+            </div>
+            <select class="filter-select" id="f-selector" onchange="filtrarPorSelector(this.value)" aria-label="Selector"></select>
+            <select class="filter-select" id="f-estado" onchange="applyFilters()" aria-label="Estado"></select>
             <input class="filter-input" id="f-search" placeholder="Buscar local, N°, nombre, DNI…" oninput="applyFiltersDebounced()">
+            <details class="menu" id="menu-filtros">
+                <summary class="filter-select mas-filtros">Más filtros <span class="mas-filtros-n hidden" id="mas-filtros-n"></span><i class="fas fa-chevron-down menu-flecha"></i></summary>
+                <div class="menu-lista menu-filtros">
+                    <label>Vacante <select class="filter-select" id="f-status" onchange="applyFilters()"></select></label>
+                    <label>Regional <select class="filter-select" id="f-regional" onchange="applyFilters()"></select></label>
+                    <label>Mostrar <select class="filter-select" id="f-alerta" onchange="applyFilters()">
+                        <option value="">Todas</option>
+                        <option value="libres">Solo sin persona</option>
+                        <option value="72">Solo alerta 72hs zonal</option>
+                        <option value="plazo">Solo fuera de plazo</option>
+                        <option value="nom:ACTIVAS">Solo búsquedas activas (sin excedidos)</option>
+                        <option value="nom:EXCEDIDO">Solo locales excedidos (no cuentan)</option>
+                    </select></label>
+                </div>
+            </details>
+            <div class="nomina-leyenda" id="nomina-leyenda"></div>
         </div>
 
         <div class="filters hidden" id="filters-base">
@@ -118,14 +137,6 @@
 
         <!-- VACANTES: misma grilla que la hoja Solicitudes -->
         <div id="view-vacantes">
-            <div class="tabs-y-leyenda">
-                <div class="page-tabs" id="marca-tabs">
-                    <button class="page-tab active" onclick="cambiarMarca('',this)">Todas</button>
-                    <button class="page-tab tab-extremas" onclick="cambiarMarca('Hamburguesas Extremas',this)"><img class="tab-logo" src="assets/logo-extremas.png" alt="">Solicitudes Extremas</button>
-                    <button class="page-tab tab-sabores" onclick="cambiarMarca('Sabores Express',this)"><img class="tab-logo" src="assets/logo-sabores.png" alt="">Solicitudes Sabores</button>
-                </div>
-                <div class="nomina-leyenda" id="nomina-leyenda"></div>
-            </div>
             <div class="table-wrap grilla-wrap">
                 <table class="grilla">
                     <thead id="grilla-head"></thead>
