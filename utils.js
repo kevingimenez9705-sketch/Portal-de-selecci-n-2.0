@@ -185,8 +185,9 @@ function nombrePostulante(p) { return p ? [p.nombre, p.apellido].filter(Boolean)
 
 // ── CLASES DE ESTILO ──
 function limiteDe(b) { return DEMORA_LIMITE[b.puesto] || DEMORA_LIMITE_OTROS; }
+// Hasta 2 días hábiles: en término · más de 2: con demora (amarillo) · más del límite del puesto: muy tarde (rojo)
 function demoraClass(dias, lim) {
-    if (dias <= lim * 0.6) return 'demora-ok';
+    if (dias <= 2) return 'demora-ok';
     if (dias <= lim) return 'demora-warn';
     return 'demora-danger';
 }
@@ -275,6 +276,14 @@ function cargarXLSX() {
 }
 
 // ── MODALES ──
+// Menús desplegables (<details class="menu">): se cierran al elegir una opción, al tocar afuera o con Esc
+document.addEventListener('click', e => {
+    document.querySelectorAll('details.menu[open]').forEach(m => {
+        const enLista = e.target.closest('.menu-lista');
+        if (!m.contains(e.target) || (enLista && m.contains(enLista) && e.target.closest('button, a'))) m.removeAttribute('open');
+    });
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(m => m.removeAttribute('open')); });
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.add('hidden'); }));

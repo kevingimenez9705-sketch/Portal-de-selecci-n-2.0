@@ -675,3 +675,63 @@ thead th { padding: 8px 10px; }
 .bat-num { font-size: 44px; }
 .cob-resumen { padding: 12px 14px; }
 .cob-resumen-num strong { font-size: 24px; }
+
+/* ══════════════════════════════════════════════
+   MENOS RUIDO — un solo acento (violeta) para la acción principal y lo activo; el resto en gris.
+   En la grilla las filas van en blanco: el color del ESTADO se ve en el N° y en la etiqueta.
+   ══════════════════════════════════════════════ */
+.btn-secundario { color: #334155; border-color: var(--line); }
+.btn-secundario:hover { color: var(--purple); border-color: var(--purple-line); background: var(--purple-soft); }
+.page-tab.tab-extremas.active, .page-tab.tab-sabores.active, .sem-chip.active { background: var(--purple); border-color: var(--purple); }
+.icheck-count { background: var(--purple); }
+.kpi, .kpi--verde, .kpi--ambar, .kpi--rosa, .kpi--azul, .kpi--gris, .kpi--violeta { --k-accent: #cbd5e1; }
+.nomina-completar { background: #f1f5f9; color: #475569; border-color: var(--line); }
+.nomina-completar i { background: #94a3b8; }
+.marca-mini, .marca-mini.marca-sabores, .marca-mini.marca-extremas, .marca-mini.marca-mania { background: none; color: var(--muted); padding: 0; }
+
+/* Menús desplegables (Herramientas, configuración, Más filtros) */
+details.menu { position: relative; }
+details.menu > summary { list-style: none; cursor: pointer; user-select: none; }
+details.menu > summary::-webkit-details-marker { display: none; }
+.menu-flecha { font-size: 9px; opacity: .6; margin-left: 2px; transition: transform .15s; }
+details.menu[open] .menu-flecha { transform: rotate(180deg); }
+.menu-lista { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 220px; display: grid; gap: 2px; padding: 6px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 30px rgba(15, 23, 42, .14); }
+.menu-derecha .menu-lista { left: auto; right: 0; }
+.menu-lista > button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: none;
+    color: #334155; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer; white-space: nowrap; }
+.menu-lista > button:hover { background: var(--purple-soft); color: var(--purple); }
+.menu-lista > button i { width: 14px; text-align: center; color: var(--muted); }
+.topnav-icono { padding: 6px 9px; }
+
+/* Filtros de Vacantes en una sola línea */
+.filtros-linea { align-items: center; }
+.filtros-linea .filter-input { flex: 0 1 240px; min-width: 180px; }
+.segmentos { display: inline-flex; gap: 2px; padding: 2px; background: #e9edf3; border-radius: 10px; }
+.segmentos .page-tab { min-height: 28px; padding: 4px 10px; border: 0; border-radius: 8px; background: none; color: #475569; }
+.segmentos .page-tab:hover { color: var(--purple); }
+.segmentos .page-tab.active, .segmentos .page-tab.tab-extremas.active, .segmentos .page-tab.tab-sabores.active { background: var(--card); color: var(--purple); box-shadow: 0 1px 2px rgba(15, 23, 42, .15); }
+.mas-filtros { display: inline-flex; align-items: center; gap: 6px; }
+.mas-filtros-n { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--purple); color: #fff; font-size: 10px; font-weight: 800; }
+.menu-filtros { min-width: 270px; gap: 10px; padding: 12px; }
+.menu-filtros label { display: grid; gap: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.menu-filtros .filter-select { width: 100%; font-weight: 500; text-transform: none; letter-spacing: 0; }
+#filters-vacantes .nomina-leyenda { margin: 0 0 0 auto; }
+
+/* Grilla: filas en blanco; se pinta solo el N° (con la franja) y la etiqueta del ESTADO */
+table.grilla tr[class*="fila-est-"] td, table.grilla tr.row-cubierta td { background: var(--card); }
+table.grilla tr.fila-est-enviado td.col-fija { background: var(--t1); }
+table.grilla tr.fila-est-aprobado td.col-fija { background: var(--t2); }
+table.grilla tr.fila-est-citado td.col-fija { background: var(--t3); }
+table.grilla tr.fila-est-huella td.col-fija { background: var(--t4); }
+table.grilla tr.fila-est-comunicado td.col-fija, table.grilla tr.row-cubierta td.col-fija { background: var(--t5); }
+table.grilla tr.fila-est-rechazado td.col-fija { background: var(--rose); }
+table.grilla th.grupo-solicitud, table.grilla th.grupo-proceso, table.grilla th.grupo-ingresante, table.grilla th.grupo-altas { background: #f1f5f9; color: #475569; }
+
+/* Celdas tipo planilla: la flecha del desplegable y el calendario aparecen solo al pasar el mouse */
+table.grilla select.celda:not(.celda-estado) { -webkit-appearance: none; appearance: none; padding-right: 18px;
+    background-repeat: no-repeat; background-position: right 5px center; background-size: 9px 6px; }
+table.grilla select.celda:not(.celda-estado):hover, table.grilla select.celda:not(.celda-estado):focus {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%2364748b' stroke-width='1.5'/%3E%3C/svg%3E"); }
+table.grilla input[type="date"].celda::-webkit-calendar-picker-indicator { opacity: 0; }
+table.grilla input[type="date"].celda:hover::-webkit-calendar-picker-indicator, table.grilla input[type="date"].celda:focus::-webkit-calendar-picker-indicator { opacity: .6; }

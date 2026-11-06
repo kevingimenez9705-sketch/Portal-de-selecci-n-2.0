@@ -19,7 +19,7 @@ function prepararApp() {
     fill('n-puesto', PUESTOS);
     fill('n-jornada', JORNADAS, '— Jornada —');
     fill('f-estado', ESTADOS_SOLICITUD, 'Estado: todos');
-    fill('f-status', ESTADOS_BUSQUEDA, 'Vacante: todas');
+    fill('f-status', ESTADOS_BUSQUEDA, 'Todas');
     fill('fb-zona', ZONAS, 'Todas las zonas');
     fill('fb-estado', ESTADOS_POSTULANTE, 'Todos los estados');
     fill('fb-horario', HORARIOS, 'Cualquier horario');
@@ -40,9 +40,8 @@ function showView(v) {
     document.querySelectorAll('.inline-nav-btn[id^="nav-"]').forEach(b => b.classList.toggle('active', b.id === 'nav-' + v));
     document.getElementById('filters-vacantes').classList.toggle('hidden', v !== 'vacantes');
     document.getElementById('filters-base').classList.toggle('hidden', v !== 'base');
-    document.getElementById('selector-chips').classList.toggle('hidden', v !== 'vacantes');
     document.getElementById('btn-nueva-busqueda').classList.toggle('hidden', v !== 'vacantes');
-    ['btn-importar', 'btn-datos-ingreso', 'btn-onb', 'btn-icheck'].forEach(id => document.getElementById(id).classList.toggle('hidden', v !== 'vacantes'));
+    document.getElementById('menu-herramientas').classList.toggle('hidden', v !== 'vacantes');
     ['btn-nuevo-postulante', 'btn-elegi-vacante'].forEach(id => document.getElementById(id).classList.toggle('hidden', v !== 'base'));
     document.getElementById('main-title').textContent = TITULOS[v][0];
     document.getElementById('main-sub').textContent = TITULOS[v][1];
@@ -77,17 +76,10 @@ function actualizarDatalists() {
 // ══════════════════════════════════════════════
 //  CHIPS DE SELECTOR + PESTAÑAS DE MARCA
 // ══════════════════════════════════════════════
+// Filtro de selector (desplegable en la barra de filtros)
 function renderSelectorChips() {
-    const box = document.getElementById('selector-chips');
-    box.innerHTML = ['', ...selectores()].map(s => {
-        const activo = s === selectorFiltroActivo;
-        // Cada selector con su color (Equipo); "Todos" queda neutro
-        const color = s ? colorDe(s) : null;
-        const style = color
-            ? ` style="${activo ? `background:${color};border-color:${color};color:#fff;` : `border-color:${color}55;color:#334155;`}"`
-            : '';
-        return `<button class="selector-chip${activo ? ' active' : ''}${s ? ' con-avatar' : ''}"${style} data-sel="${esc(s)}" onclick="filtrarPorSelector(this.dataset.sel)">${s ? avatarHtml(s, 'avatar-chip') : ''}${esc(s || 'Todos los selectores')}</button>`;
-    }).join('');
+    const sel = document.getElementById('f-selector');
+    if (sel) sel.innerHTML = optionsHtml(selectores(), selectorFiltroActivo, 'Todos los selectores');
 }
 function filtrarPorSelector(nombre) {
     selectorFiltroActivo = nombre;
@@ -292,14 +284,12 @@ function renderRow(b) {
     const coment = b.comentarios.length;
     return `
     <tr id="row-${b.id}" class="${b.estado ? 'fila-' + estadoClass(b.estado) : cubierta(b) ? 'row-cubierta' : ''} ${b.status === 'Cancelada' ? 'row-locked' : ''} ${alerta ? 'row-alerta' : ''}">
-        <td class="col-fija ${marcaClass(b.marca)}">
+        <td class="col-fija">
             <div class="num-linea">
                 <button class="link-btn" onclick="openDetalle(${b.id})" title="Ver detalle, historial y demora">${esc(b.numero)}</button>
                 ${marcaMiniHtml(b.marca, b.local)}
-            </div>
-            <div class="num-linea">
-                <span class="tag ${tagClass(b.status)}">${esc(cubierta(b) ? 'Cubierta' : b.status)}</span>
-                ${vacanteAbierta(b) ? `<span class="demora-badge ${demoraClass(dias, limiteDe(b))}" title="Días hábiles abierta · límite ${limiteDe(b)}hd">${dias}hd</span>` : ''}
+                ${vacanteAbierta(b) && demoraClass(dias, limiteDe(b)) !== 'demora-ok' ? `<span class="demora-badge ${demoraClass(dias, limiteDe(b))}" title="Días hábiles abierta · hasta 2 en término, más de 2 con demora, más de ${limiteDe(b)} fuera de plazo">${dias}hd</span>` : ''}
+                ${b.status === 'Pausada' || b.status === 'Cancelada' ? `<span class="tag ${tagClass(b.status)}">${esc(b.status)}</span>` : ''}
             </div>
             ${b.estado_nomina ? `<div class="num-linea">${nominaHtml(b)}</div>` : ''}
             ${zonalHojaHtml(b)}
@@ -336,6 +326,12 @@ function renderKPIs() {
     renderLeyendaNomina(todas.filter(vacanteAbierta));
     actualizarBotonIcheck();
     actualizarBotonOnb();
+    const herr = document.getElementById('herr-count');
+    if (herr) {
+        const n = ['onb-count', 'icheck-count'].reduce((t, id) => t + (Number(document.getElementById(id)?.textContent) || 0), 0);
+        herr.textContent = n || '';
+        herr.classList.toggle('hidden', !n);
+    }
 }
 
 // Referencia de nómina de los locales (vacantes abiertas); cada una filtra la grilla
@@ -366,6 +362,8 @@ function applyFilters() { resetPaginado(); refreshView(); }
 function computeFilteredIds() {
     const v = id => document.getElementById(id).value;
     const estado = v('f-estado'), status = v('f-status'), regional = v('f-regional'), alerta = v('f-alerta');
+    const mas = [status, regional, alerta].filter(Boolean).length, masEl = document.getElementById('mas-filtros-n');
+    if (masEl) { masEl.textContent = mas || ''; masEl.classList.toggle('hidden', !mas); }
     const search = v('f-search').trim().toLowerCase();
     return busquedas.filter(b => {
         if (marcaActiva && b.marca !== marcaActiva) return false;
@@ -388,7 +386,7 @@ function computeFilteredIds() {
 
 function actualizarFiltroRegional() {
     const sel = document.getElementById('f-regional');
-    sel.innerHTML = optionsHtml(valoresUsados('regional'), sel.value, 'Todos los regionales');
+    sel.innerHTML = optionsHtml(valoresUsados('regional'), sel.value, 'Todos');
 }
 
 // Desde la base o el informe: ir a la vacante en la grilla
