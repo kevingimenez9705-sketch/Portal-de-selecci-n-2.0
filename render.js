@@ -206,11 +206,20 @@ function renderEncabezadoGrilla() {
         <tr class="fila-columnas">${COLUMNAS.map(c => `<th class="grupo-${c.g.toLowerCase()}" style="min-width:${c.w}px">${c.t}</th>`).join('')}</tr>`;
 }
 
+// Orden de la grilla: cada búsqueda baja a medida que avanza en el proceso (COMUNICADO abajo de todo).
+// Sin estado y RECHAZADO ZONAL (hay que buscar otra persona) quedan arriba; las canceladas, al final.
+const ORDEN_PROCESO = ['', 'RECHAZADO ZONAL', 'ENVIADO A ZONAL', 'APROBADO ZONAL', 'CITADO', 'HUELLA', 'COMUNICADO'];
+function pasoProceso(b) {
+    if (b.status === 'Cancelada') return ORDEN_PROCESO.length;
+    if (cubierta(b)) return ORDEN_PROCESO.length - 1;            // cubierta = como COMUNICADO
+    return Math.max(0, ORDEN_PROCESO.indexOf(b.estado || ''));
+}
+
 function renderTable() {
     const body = document.getElementById('table-body');
-    // Abiertas primero; dentro de cada grupo, las más nuevas arriba
+    // Por paso del proceso; dentro de cada paso, las más nuevas arriba
     const list = busquedas.filter(b => filteredIds.has(b.id))
-        .sort((a, b) => (vacanteAbierta(b) - vacanteAbierta(a)) || (b.id - a.id));
+        .sort((a, b) => (pasoProceso(a) - pasoProceso(b)) || (b.id - a.id));
     const visibles = list.slice(0, vacantesVisibles);
     const cols = COLUMNAS.length + 2;
     body.innerHTML = visibles.length
