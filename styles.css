@@ -743,3 +743,23 @@ table.grilla input[type="date"].celda:hover::-webkit-calendar-picker-indicator, 
 .titulo-vista:hover .menu-flecha, details[open] > .titulo-vista .menu-flecha { background: var(--purple-soft); color: var(--purple); }
 .menu-lista > button.active { background: var(--purple); color: #fff; }
 .menu-lista > button.active i { color: #fff; }
+
+/* Marca: total de vacantes en cada pestaña */
+.seg-n { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 17px; margin-left: 6px; padding: 0 6px; border-radius: 999px;
+    background: #dfe4ec; color: #475569; font-family: var(--mono); font-size: 10px; font-weight: 500; }
+.segmentos .page-tab.active .seg-n { background: var(--purple-soft); color: var(--purple); }
+
+/* Selector: foto, color y vacantes de cada uno */
+.avatar-filtro { width: 22px; height: 22px; font-size: 9px; }
+.avatar-todos { background: #cbd5e1; color: #fff; font-size: 10px; }
+.sel-filtro { display: inline-flex; align-items: center; gap: 8px; min-width: 200px; padding: 3px 10px 3px 4px; color: var(--ink); }
+.sel-filtro .menu-flecha { margin-left: 2px; }
+.sel-filtro.con-selector { border-color: var(--team); box-shadow: inset 4px 0 0 var(--team); padding-left: 8px; }
+.sel-nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sel-n { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.menu-selectores { min-width: 240px; max-height: 60vh; overflow-y: auto; }
+.menu-selectores > button { gap: 10px; border-left: 4px solid var(--team); }
+.menu-selectores > button:hover { background: color-mix(in srgb, var(--team) 14%, #fff); color: var(--ink); }
+.menu-selectores > button.active, .menu-selectores > button.active:hover { background: var(--team); color: #fff; }
+.menu-selectores > button.active .sel-n { color: #fff; }
+.menu-selectores .avatar { box-shadow: 0 0 0 2px #fff; }

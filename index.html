@@ -81,11 +81,14 @@
 
         <div class="filters filtros-linea" id="filters-vacantes">
             <div class="segmentos" id="marca-tabs" role="group" aria-label="Marca">
-                <button class="page-tab active" onclick="cambiarMarca('',this)">Todas</button>
-                <button class="page-tab tab-extremas" onclick="cambiarMarca('Hamburguesas Extremas',this)"><img class="tab-logo" src="assets/logo-extremas.png" alt="">Extremas</button>
-                <button class="page-tab tab-sabores" onclick="cambiarMarca('Sabores Express',this)"><img class="tab-logo" src="assets/logo-sabores.png" alt="">Sabores</button>
+                <button class="page-tab active" data-marca="" onclick="cambiarMarca('',this)">Todas <span class="seg-n"></span></button>
+                <button class="page-tab tab-extremas" data-marca="Hamburguesas Extremas" onclick="cambiarMarca('Hamburguesas Extremas',this)"><img class="tab-logo" src="assets/logo-extremas.png" alt="">Extremas <span class="seg-n"></span></button>
+                <button class="page-tab tab-sabores" data-marca="Sabores Express" onclick="cambiarMarca('Sabores Express',this)"><img class="tab-logo" src="assets/logo-sabores.png" alt="">Sabores <span class="seg-n"></span></button>
             </div>
-            <select class="filter-select" id="f-selector" onchange="filtrarPorSelector(this.value)" aria-label="Selector"></select>
+            <details class="menu" id="menu-selector">
+                <summary class="filter-select sel-filtro" id="f-selector" aria-label="Selector"></summary>
+                <div class="menu-lista menu-selectores" id="f-selector-lista"></div>
+            </details>
             <select class="filter-select" id="f-estado" onchange="applyFilters()" aria-label="Estado"></select>
             <input class="filter-input" id="f-search" placeholder="Buscar local, N°, nombre, DNI…" oninput="applyFiltersDebounced()">
             <details class="menu" id="menu-filtros">
