@@ -9,7 +9,8 @@
 --  3. La persona toca "Confirmo asistencia" → confirmar.html → ALTAS RRHH =
 --     CONFIRMA ONB (si estaba vacía).
 --
---  Citables: Extremas con APROBADO ZONAL; Sabores con ESTADO vacío (no pasa por zonal).
+--  Citables: Extremas con APROBADO ZONAL; Sabores con ESTADO vacío o APROBADO ZONAL
+--  (Sabores no pasa por zonal: el APROBADO ZONAL lo pone el equipo).
 --  Una vez pedida, la citación sale aunque alguien ya haya puesto CITADO a mano. Si
 --  antes del envío la vacante pasó a otro ESTADO (HUELLA, COMUNICADO…) o se cerró,
 --  no sale: el panel la marca "No enviado · se modificó la vacante" y queda la nota
@@ -39,7 +40,7 @@ create or replace function public.seleccion_onb_citable_(p_marca text, p_estado 
 language sql immutable set search_path = public as $$
     select coalesce(p_status in ('Proceso', 'Pausada')
        and ((p_marca = 'Hamburguesas Extremas' and p_estado in ('APROBADO ZONAL', 'CITADO'))
-         or (p_marca = 'Sabores Express' and coalesce(trim(p_estado), '') in ('', 'CITADO'))), false)
+         or (p_marca = 'Sabores Express' and coalesce(trim(p_estado), '') in ('', 'APROBADO ZONAL', 'CITADO'))), false)
 $$;
 
 -- Citaciones pedidas que todavía no salieron, con todo lo que lleva el mail

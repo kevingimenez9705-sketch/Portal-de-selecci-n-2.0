@@ -2,7 +2,8 @@
 //  ZONAL Y ONBOARDING
 //  · Alertas: vacantes en ENVIADO A ZONAL hace 3+ días hábiles sin respuesta.
 //  · Citar a onboarding (Onboarding.gs): Extremas con APROBADO ZONAL y Sabores con
-//    la persona cargada y ESTADO vacío. Se completan fecha, hora y primer día (de a uno
+//    la persona cargada y ESTADO vacío o APROBADO ZONAL (en Sabores lo pone el equipo,
+//    no pasa por zonal). Se completan fecha, hora y primer día (de a uno
 //    o para todos los marcados) y "Citar" las deja en cola: el Apps Script de TAREAS
 //    GRUPALES manda el mail de bienvenida de siempre y la vacante pasa a CITADO.
 //    Cuando la persona toca "Confirmo asistencia", ALTAS RRHH = CONFIRMA ONB.
@@ -18,12 +19,12 @@ const enColaOnb = b => !!b.onb_pedido && (!b.onb_enviado || String(b.onb_enviado
 function saleElMailOnb(b) {
     if (!vacanteAbierta(b)) return false;
     if (b.marca === 'Hamburguesas Extremas') return ['APROBADO ZONAL', 'CITADO'].includes(b.estado);
-    return b.marca === 'Sabores Express' && (!b.estado || b.estado === 'CITADO');
+    return b.marca === 'Sabores Express' && (!b.estado || ['APROBADO ZONAL', 'CITADO'].includes(b.estado));
 }
 
 function citableOnb(b) {
     if (!vacanteAbierta(b) || !tienePersona(b) || enColaOnb(b)) return false;
-    return (b.marca === 'Hamburguesas Extremas' && b.estado === 'APROBADO ZONAL') || (b.marca === 'Sabores Express' && !b.estado);
+    return (b.marca === 'Hamburguesas Extremas' && b.estado === 'APROBADO ZONAL') || (b.marca === 'Sabores Express' && (!b.estado || b.estado === 'APROBADO ZONAL'));
 }
 
 // Lo que necesita el mail (mismas reglas que Onboarding.gs)
@@ -87,7 +88,7 @@ function renderOnboarding() {
                     ${b.onb_error ? `<div><span class="tag tag-error">✕ No enviado</span> <span class="cand-meta">${esc(b.onb_error)}</span></div>` : ''}</td>
             </tr>`;
         }).join('')}</tbody></table>`
-        : '<span class="tip">No hay nadie para citar: Extremas necesita APROBADO ZONAL; Sabores, la persona cargada y el ESTADO vacío.</span>';
+        : '<span class="tip">No hay nadie para citar: Extremas necesita APROBADO ZONAL; Sabores, la persona cargada y el ESTADO vacío o APROBADO ZONAL.</span>';
 
     // Primero el resultado del mail: enviado, en cola o no enviado (con el motivo)
     const fila = (b, envio, clase = '') => `<tr class="${clase}"><td>${envio}</td><td>${vacante(b)}</td><td>${persona(b)}</td>
