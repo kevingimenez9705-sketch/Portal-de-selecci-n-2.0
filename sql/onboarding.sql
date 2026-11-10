@@ -28,11 +28,20 @@ alter table public.seleccion_busquedas
     add column if not exists onb_confirmado timestamptz;   -- la persona confirmó
 
 -- Dirección de un local (Direcciones Extremas / Sabores, cargadas en seleccion_locales). Es un dato público.
+-- Mismo criterio que el portal (claveLocal / infoLocal) y asignaciones.sql: "SABORES EXPRESS SAN MIGUEL 3"
+-- = "SABORES SAN MIGUEL 3", "EXTREMAS PALOMAR" = "EXTREMAS EL PALOMAR", y también por alias.
+-- Necesita seleccion_clave_local_ y la columna alias (asignaciones.sql).
 create or replace function public.seleccion_onb_direccion_(p_marca text, p_local text) returns text
 language sql stable security definer set search_path = public as $$
     select l.direccion from seleccion_locales l
-     where seleccion_norm_(l.local) = seleccion_norm_(p_local) and coalesce(trim(l.direccion), '') <> ''
-     order by (l.marca = p_marca) desc, l.id limit 1
+     where (seleccion_clave_local_(l.local) = seleccion_clave_local_(p_local)
+         or seleccion_clave_local_(p_local) in (select seleccion_clave_local_(a) from unnest(coalesce(l.alias, '{}')) a))
+       and coalesce(trim(l.direccion), '') <> ''
+     -- primero la misma marca y el nombre exacto: "SANTA FE 1" y "SANTA FE (PROVINCIA)" comparten clave
+     order by (l.marca = p_marca) desc,
+              (seleccion_norm_(p_local) = seleccion_norm_(l.local)
+                or seleccion_norm_(p_local) in (select seleccion_norm_(a) from unnest(coalesce(l.alias, '{}')) a)) desc,
+              l.activo desc, l.id limit 1
 $$;
 
 -- ¿La citación pedida todavía puede salir? (mismas reglas que saleElMailOnb de onboarding.js)
