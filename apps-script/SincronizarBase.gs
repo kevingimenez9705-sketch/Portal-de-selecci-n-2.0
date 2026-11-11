@@ -1111,33 +1111,55 @@ function crearEmailOnboarding_(
       </p>
 
 
-      <p style="margin-top:18px;">
+      <div style="
+        margin:18px 0 0 0;
+        padding:18px;
+        background:#eaf0f7;
+        border:1px solid #b9c9dc;
+        border-radius:8px;
+        text-align:center;
+      ">
 
-        <strong>
-          Completá el Código de Ética
-        </strong> 📋
+        <p style="margin:0 0 14px 0;">
 
-      </p>
+          <strong>
+            Completá el Código de Ética
+          </strong> 📋
 
+        </p>
 
-      <p>
+        <p style="margin:0 0 14px 0;">
 
-        <a
-          href="${escaparHtmlOnboarding_(ONBOARDING_CONFIG.codigoEticaUrl)}"
-          style="
-            display:inline-block;
-            background:#0f2a44;
-            color:#ffffff;
-            padding:12px 20px;
-            border-radius:6px;
-            text-decoration:none;
-            font-weight:bold;
-          "
-        >
-          Completar Código de Ética
-        </a>
+          <a
+            href="${escaparHtmlOnboarding_(ONBOARDING_CONFIG.codigoEticaUrl)}"
+            style="
+              display:inline-block;
+              background:#0f2a44;
+              color:#ffffff;
+              padding:14px 26px;
+              border-radius:6px;
+              text-decoration:none;
+              font-weight:bold;
+              font-size:16px;
+            "
+          >
+            Completar Código de Ética
+          </a>
 
-      </p>
+        </p>
+
+        <p style="
+          margin:0;
+          font-size:13px;
+          color:#0f2a44;
+        ">
+
+          ⚠️ <strong>Importante:</strong>
+          formulario obligatorio para poder avanzar con la propuesta.
+
+        </p>
+
+      </div>
 
 
       <p style="margin-top:28px;">
@@ -1289,6 +1311,8 @@ ${ONBOARDING_CONFIG.formUrl}
 Completá el Código de Ética 📋
 
 ${ONBOARDING_CONFIG.codigoEticaUrl}
+
+⚠️ Importante: formulario obligatorio para poder avanzar con la propuesta.
 
 2️⃣ Presentate en nuestra Oficina de Selección para realizar tu Bienvenida e Ingreso.
 
