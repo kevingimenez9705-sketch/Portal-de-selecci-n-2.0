@@ -78,6 +78,12 @@ function mapBusqueda(b) {
 let postulantesById = new Map();
 function indexarPostulantes() { postulantesById = new Map(postulantes.map(p => [p.id, p])); }
 
+// Trae de nuevo la Base (p. ej. después de un RECHAZADO ZONAL, que bloquea a la persona en Supabase)
+async function recargarPostulantes() {
+    try { postulantes = await fetchTodo('seleccion_postulantes'); indexarPostulantes(); }
+    catch (e) { console.warn('Recargar base:', msgError(e)); }
+}
+
 async function loadData() {
     // Locales y zonas son de consulta: si todavía no existen las tablas, el portal funciona igual
     const opcional = p => p.catch(e => { console.warn('Sin locales/zonas:', msgError(e)); return []; });
@@ -325,10 +331,14 @@ async function cambiarEstado(b, estado) {
         else toast('Falta el REGIONAL de la vacante: completalo para que se copie a su hoja', true);
     } else toast('Estado: ' + (estado || 'sin estado') + ' ✓');
 
-    // Rechazado por el zonal: ofrecer liberar la vacante para colocar a otro
-    if (estado === 'RECHAZADO ZONAL' && tienePersona(row)
-        && await confirmar(`¿Liberar la vacante ${b.numero} para colocar a otra persona? ${nombreCompleto(row)} queda en el historial y vuelve a la base como disponible.`, 'Liberar')) {
-        await liberarVacante(b.id, true);
+    // Rechazado por el zonal: la persona queda Bloqueada (Supabase la pasa a BLOQUEADOS y la saca
+    // de BASE DE DATOS). Se trae su estado nuevo y se ofrece liberar la vacante para colocar a otro.
+    if (estado === 'RECHAZADO ZONAL' && tienePersona(row)) {
+        await recargarPostulantes();
+        refreshView();
+        if (await confirmar(`${nombreCompleto(row)} queda bloqueado (pasa a BLOQUEADOS y sale de la base). ¿Liberar la vacante ${b.numero} para colocar a otra persona? Queda en el historial.`, 'Liberar')) {
+            await liberarVacante(b.id, true);
+        }
     }
 }
 
@@ -460,7 +470,8 @@ async function registrarSalida(b, motivo) {
 async function liberarVacante(id, sinPreguntar = false) {
     const b = busquedas.find(x => x.id === id);
     if (!b || !tienePersona(b)) return;
-    if (!sinPreguntar && !(await confirmar(`¿Sacar a ${nombreCompleto(b) || 'la persona'} de la vacante ${b.numero}? Queda en el historial y vuelve a la base como disponible.`, 'Liberar'))) return;
+    const vuelve = b.estado === 'RECHAZADO ZONAL' ? 'queda bloqueado por el rechazo del zonal' : 'vuelve a la base como disponible';
+    if (!sinPreguntar && !(await confirmar(`¿Sacar a ${nombreCompleto(b) || 'la persona'} de la vacante ${b.numero}? Queda en el historial y ${vuelve}.`, 'Liberar'))) return;
     await registrarSalida(b, b.estado === 'RECHAZADO ZONAL' ? 'Rechazado por el zonal' : 'Liberado');
     const update = { postulante_id: null, estado: null, fecha_estado: null, fecha_citacion: null, hora_citacion: null };
     CAMPOS_PERSONA.forEach(f => update[f] = null);

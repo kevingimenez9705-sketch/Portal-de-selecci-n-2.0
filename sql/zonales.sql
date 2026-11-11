@@ -11,6 +11,8 @@
 --     vacante pasa a APROBADO ZONAL / RECHAZADO ZONAL. Si cambió PUESTO u
 --     HORARIO se copian; sus OBSERVACIONES quedan en el historial.
 --   - Solo se tocan vacantes que siguen en ENVIADO A ZONAL.
+--   - RECHAZADO ZONAL bloquea a la persona (BLOQUEADOS) y la saca de BASE DE
+--     DATOS: ver sql/rechazado_zonal.sql.
 --
 --  CÓMO EJECUTAR: Supabase → ats-gastronomico → SQL Editor → pegar todo → Run.
 --  Se puede volver a correr sin problema.
