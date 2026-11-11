@@ -11,6 +11,8 @@
         vacíos; lo editado en el portal no se pisa.
       - Queda "Bloqueado" quien NO está interesado en la propuesta o figura ACTIVO
         en BLOQUEADOS (los bloqueos por documentación incompleta ya no cuentan).
+      - Rechazados por el zonal (ACTIVO en BLOQUEADOS con motivo RECHAZADO ZONAL,
+        lo agrega el portal solo): sus filas se sacan de BASE DE DATOS.
    3. BLOQUEADOS → portal (la página los usa para no dejar pasar a nadie bloqueado).
    4. Proceso de Ingreso → portal (botón "Datos de ingreso" de Vacantes).
    5. Zonales (como Zonales.gs): las vacantes de Extremas que en el portal están en
@@ -18,6 +20,8 @@
       (pestaña HOJAS ZONALES: REGIONAL | LINK). Cuando el zonal pone APROBADO o
       DESAPROBADO, la vacante pasa a APROBADO ZONAL / RECHAZADO ZONAL; si cambió
       PUESTO u HORARIO se copian, y sus OBSERVACIONES quedan en el historial.
+      El RECHAZADO ZONAL deja a la persona Bloqueada (sql/rechazado_zonal.sql): en
+      la próxima vuelta pasa a BLOQUEADOS y sale de BASE DE DATOS.
    6. Onboarding (como Onboarding.gs): las citaciones que se piden en el portal
       (panel "Zonal y onboarding") salen con el mismo mail de bienvenida y el
       botón "Confirmo asistencia"; la vacante pasa a CITADO. Si algo falta
@@ -339,14 +343,58 @@ var PortalSync = (function () {
   function baseAlPortal_(libro, codigo) {
     const hoja = libro.getSheetByName(SYNC.HOJA_BASE);
     if (!hoja) throw new Error('No encontré la pestaña "' + SYNC.HOJA_BASE + '" en TAREAS GRUPALES.');
-    const filas = filasDeLaBase_(hoja.getDataRange().getValues(), bloqueados_(libro));
+    const bloq = bloqueados_(libro);
+    let valores = hoja.getDataRange().getValues();
+    const quitar = filasRechazadasZonal_(valores, bloq);
+    let aviso = '';
+    if (quitar.length) {
+      try {
+        borrarFilas_(hoja, quitar);
+        const fuera = {};
+        quitar.forEach(function (i) { fuera[i] = true; });
+        valores = valores.filter(function (_, i) { return !fuera[i]; });
+        aviso = 'Rechazados por el zonal: ' + quitar.length + ' filas fuera de ' + SYNC.HOJA_BASE + ' (quedan en ' + SYNC.HOJA_BLOQUEADOS + ').\n';
+      } catch (err) {
+        // Si no se pueden borrar (hoja protegida, filtro…), igual viajan como Bloqueado
+        aviso = 'Rechazados por el zonal: no pude sacar ' + quitar.length + ' filas de ' + SYNC.HOJA_BASE + ': ' + String((err && err.message) || err).slice(0, 120) + '\n';
+      }
+    }
+    const filas = filasDeLaBase_(valores, bloq);
     const total = { nuevos: 0, completados: 0, sin_cambios: 0, omitidas: 0 };
     for (let i = 0; i < filas.length; i += SYNC.LOTE) {
       const r = llamarPortal_('seleccion_sync_postulantes', { filas: filas.slice(i, i + SYNC.LOTE) }, codigo);
       Object.keys(total).forEach(function (k) { total[k] += r[k] || 0; });
     }
-    return 'Base → portal: ' + total.nuevos + ' nuevos, ' + total.completados + ' completados, ' +
+    return aviso + 'Base → portal: ' + total.nuevos + ' nuevos, ' + total.completados + ' completados, ' +
       total.sin_cambios + ' sin cambios, ' + total.omitidas + ' omitidas (sin nombre o sin DNI/email).';
+  }
+
+  // Índices (de valores) de las filas de BASE DE DATOS cuya persona fue rechazada por el zonal
+  // (figura ACTIVA en BLOQUEADOS con motivo RECHAZADO ZONAL, por DNI o mail)
+  function filasRechazadasZonal_(valores, bloq) {
+    const r = bloq.rechazadosZonal;
+    if (valores.length < 2 || (!Object.keys(r.dnis).length && !Object.keys(r.emails).length)) return [];
+    const idx = indicesColumnas_(valores[0], { dni: COLUMNAS_BASE.dni, email: COLUMNAS_BASE.email });
+    const salida = [];
+    for (let i = 1; i < valores.length; i++) {
+      const dni = idx.dni === -1 ? '' : soloDigitos_(valores[i][idx.dni]).replace(/^0+/, '');
+      const email = idx.email === -1 ? '' : texto_(valores[i][idx.email]).toLowerCase();
+      if ((dni && r.dnis[dni]) || (email && r.emails[email])) salida.push(i);
+    }
+    return salida;
+  }
+
+  // Borra filas (índices de valores, 0 = encabezado) de abajo hacia arriba, de a bloques seguidos
+  function borrarFilas_(hoja, indices) {
+    const filas = indices.map(function (i) { return i + 1; }).sort(function (a, b) { return a - b; });
+    let k = filas.length - 1;
+    while (k >= 0) {
+      let desde = filas[k], n = 1;
+      while (k - n >= 0 && filas[k - n] === desde - 1) { desde--; n++; }
+      hoja.deleteRows(desde, n);
+      k -= n;
+    }
+    SpreadsheetApp.flush();
   }
 
   function filasDeLaBase_(valores, bloq) {
@@ -403,9 +451,10 @@ var PortalSync = (function () {
     return salida;
   }
 
-  // DNIs y mails de la pestaña BLOQUEADOS con ACTIVO = SÍ (menos los bloqueos por documentación incompleta)
+  // DNIs y mails de la pestaña BLOQUEADOS con ACTIVO = SÍ (menos los bloqueos por documentación incompleta).
+  // rechazadosZonal: los que además tienen motivo RECHAZADO ZONAL (se sacan de BASE DE DATOS).
   function bloqueados_(libro) {
-    const res = { dnis: {}, emails: {} };
+    const res = { dnis: {}, emails: {}, rechazadosZonal: { dnis: {}, emails: {} } };
     const hoja = libro.getSheetByName(SYNC.HOJA_BLOQUEADOS);
     if (!hoja) return res;
     const valores = hoja.getDataRange().getValues();
@@ -420,6 +469,11 @@ var PortalSync = (function () {
       const mail = cMail === -1 ? '' : texto_(v[cMail]).toLowerCase();
       if (dni) res.dnis[dni] = true;
       if (mail) res.emails[mail] = true;
+      const motivo = cMotivo === -1 ? '' : normalizar_(v[cMotivo]);
+      if (motivo.indexOf('rechaz') !== -1 && motivo.indexOf('zonal') !== -1) {
+        if (dni) res.rechazadosZonal.dnis[dni.replace(/^0+/, '')] = true;
+        if (mail) res.rechazadosZonal.emails[mail] = true;
+      }
     }
     return res;
   }
@@ -1754,7 +1808,7 @@ function obtenerHorarioPrimerDiaOnboarding_(
     sincronizar: sincronizar, activar: activar, desactivar: desactivar, probarConexion: probarConexion, desdeElPortal: desdeElPortal,
     // Para las pruebas
     _t: {
-      filasDeLaBase_: filasDeLaBase_, filasDeIngreso_: filasDeIngreso_, filasDeBloqueados_: filasDeBloqueados_,
+      filasDeLaBase_: filasDeLaBase_, filasRechazadasZonal_: filasRechazadasZonal_, borrarFilas_: borrarFilas_, baseAlPortal_: baseAlPortal_, filasDeIngreso_: filasDeIngreso_, filasDeBloqueados_: filasDeBloqueados_,
       bloqueados_: bloqueados_, llamarPortal_: llamarPortal_, horario_: horario_, fecha_: fecha_, estado_: estado_,
       agregarFilas_: agregarFilas_, fechaDeTexto_: fechaDeTexto_, enHorario_: enHorario_, sexo_: sexo_,
       hojasZonales_: hojasZonales_, indiceZonal_: indiceZonal_, datosCitacion_: datosCitacion_,
