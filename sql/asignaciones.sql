@@ -7,7 +7,7 @@
 --  llama a seleccion_asignaciones_sync. La hoja es la fuente del Mapa:
 --   · Regional (GR) y zonal (GZ): siempre los de la hoja.
 --   · Local de la hoja que no está en el portal → se crea (zona por localidad).
---   · Local que dejó de estar en la hoja → sale del Mapa (en_hoja queda viejo).
+--   · Local que no está en la hoja → sigue en el Mapa con "No está en la hoja" (en_hoja viejo o vacío).
 --   · Selector y nómina se pisan solo cuando CAMBIAN en la hoja: lo que se
 --     reasigne a mano en el portal se mantiene hasta que la hoja diga otra cosa.
 --

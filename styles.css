@@ -610,6 +610,7 @@ table.grilla tbody tr:hover td { filter: brightness(.985); }
 .eq-local { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; }
 .eq-local-nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--calm-ink); }
 .eq-local-marca { font-size: 10px; color: var(--muted); }
+.eq-local-fuera { font-size: 10px; color: var(--muted); border: 1px dashed currentColor; border-radius: 4px; padding: 0 4px; }
 .eq-asignar { max-width: 150px; font-size: 11px; padding: 3px 6px; }
 .eq-punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; border: none; padding: 0; }
 .eq-punto.nomina-completar { background: var(--calm-accent); }
