@@ -184,8 +184,13 @@
                 <input class="filter-select eq-buscar" id="eq-buscar" placeholder="Buscar local, zonal o regional…" oninput="renderEquipos()">
                 <select class="filter-select" id="eq-regional" onchange="renderEquipos()"></select>
                 <select class="filter-select" id="eq-zonal" onchange="renderEquipos()"></select>
+                <div class="eq-vista" role="group" aria-label="Ver como">
+                    <button class="selector-chip active" id="eq-ver-lista" onclick="eqVerMapa(false)"><i class="fas fa-list"></i> Lista</button>
+                    <button class="selector-chip" id="eq-ver-mapa" onclick="eqVerMapa(true)"><i class="fas fa-map-location-dot"></i> Mapa</button>
+                </div>
             </div>
             <div id="equipos-selectores" class="eq-selectores"></div>
+            <div id="equipos-mapa" class="eq-mapa hidden"></div>
             <div id="equipos-arbol"></div>
         </div>
     </main>
@@ -406,6 +411,7 @@
 <script src="procesos.js"></script>
 <script src="onboarding.js"></script>
 <script src="equipos.js"></script>
+<script src="mapa.js"></script>
 <script>initApp();</script>
 
 </body>
