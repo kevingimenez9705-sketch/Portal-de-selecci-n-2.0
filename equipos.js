@@ -69,6 +69,10 @@ function renderEquipos() {
         && (eqSelector === null || (l.selector || '') === eqSelector)
         && (!q || [l.local, l.zonal, l.regional, l.localidad].some(v => normTxt(v).includes(q))));
     const box = document.getElementById('equipos-arbol');
+    // Vista Mapa: la misma lista filtrada, en el mapa (mapa.js)
+    box.classList.toggle('hidden', eqModoMapa);
+    document.getElementById('equipos-mapa').classList.toggle('hidden', !eqModoMapa);
+    if (eqModoMapa) { pintarMapaEquipos(lista, fuera); return; }
     if (!locales.length) { box.innerHTML = '<div class="tip eq-vacio">No hay locales cargados.</div>'; return; }
     if (!lista.length) { box.innerHTML = '<div class="tip eq-vacio">Ningún local coincide con el filtro.</div>'; return; }
     const porReg = agrupar(lista, l => l.regional || 'Sin regional');
