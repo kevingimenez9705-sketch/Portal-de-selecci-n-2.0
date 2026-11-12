@@ -19,15 +19,16 @@ function fotoPersonaHtml(nombre, marca, chica = false) {
         onerror="${otra ? `if(!this.dataset.otra){this.dataset.otra=1;this.src='${esc(otra)}'}else ` : ''}this.remove()"></span>`;
 }
 
-// El Mapa sale de las hojas de asignaciones (Solicitudes y Asignaciones de cada marca): muestra solo
-// los locales que vio la última sincronización de su marca (6 h de margen). Marca sin sincronizar: todos.
+// Regional y zonal salen de las hojas de asignaciones (Solicitudes y Asignaciones de cada marca). El Mapa
+// muestra todos los locales; los que la última sincronización no vio en la hoja de su marca (6 h de margen)
+// llevan "No está en la hoja" (muchos son próximas aperturas). Marca todavía sin sincronizar: no se marca.
 const MARGEN_HOJA = 6 * 3600e3;
-function localesDelMapa() {
+function fueraDeHoja() {
     const ultima = {};
     locales.forEach(l => { const t = Date.parse(l.en_hoja) || 0; if (t > (ultima[l.marca] || 0)) ultima[l.marca] = t; });
-    return locales.filter(l => !ultima[l.marca] || (Date.parse(l.en_hoja) || 0) >= ultima[l.marca] - MARGEN_HOJA);
+    return l => !!ultima[l.marca] && (Date.parse(l.en_hoja) || 0) < ultima[l.marca] - MARGEN_HOJA;
 }
-function eqLocalesMarca() { return localesDelMapa().filter(l => !eqMarca || l.marca === eqMarca); }
+function eqLocalesMarca() { return locales.filter(l => !eqMarca || l.marca === eqMarca); }
 const distintos = (lista, f) => [...new Set(lista.map(f).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
 function eqElegirMarca(m) { eqMarca = eqMarca === m ? '' : m; eqSelector = null; renderEquipos(); }
@@ -35,10 +36,10 @@ function eqElegirSelector(s) { eqSelector = eqSelector === s ? null : s; renderE
 
 function renderEquipos() {
     const base = eqLocalesMarca();
+    const fuera = fueraDeHoja();
     // Tarjetas de marca: locales y zonales
-    const delMapa = localesDelMapa();
     document.getElementById('equipos-marcas').innerHTML = MARCAS.map(m => {
-        const ls = delMapa.filter(l => l.marca === m);
+        const ls = locales.filter(l => l.marca === m);
         return `<button class="eq-marca ${eqMarca === m ? 'activa' : ''}" data-m="${esc(m)}" onclick="eqElegirMarca(this.dataset.m)">
             <span class="eq-marca-nom">${esc(m)}</span>
             <span class="eq-marca-num"><strong>${ls.length}</strong> locales · <strong>${distintos(ls, l => l.zonal).length}</strong> zonales</span></button>`;
@@ -86,7 +87,7 @@ function renderEquipos() {
                     ${ls.map(l => {
                         const [cls, txt] = NOMINA_PUNTO[l.estado_nomina] || ['nomina-sin', 'Sin dato de nómina'];
                         return `<div class="eq-local"><span class="eq-punto ${cls}" title="${txt}"></span>
-                            <span class="eq-local-nom">${esc(l.local)}${eqMarca ? '' : ` <span class="eq-local-marca">${l.marca === 'Sabores Express' ? (esMania(l.local) ? 'Mania' : 'Sabores') : 'Extremas'}</span>`}</span>
+                            <span class="eq-local-nom">${esc(l.local)}${eqMarca ? '' : ` <span class="eq-local-marca">${l.marca === 'Sabores Express' ? (esMania(l.local) ? 'Mania' : 'Sabores') : 'Extremas'}</span>`}${fuera(l) ? ' <span class="eq-local-fuera" title="No figura en la hoja Solicitudes y Asignaciones de su marca">No está en la hoja</span>' : ''}</span>
                             <select class="filter-select eq-asignar" onchange="asignarSelector([${l.id}], this.value, this)">${optionsHtml(sels, l.selector || null, '— Sin asignar —')}</select></div>`;
                     }).join('')}
                 </div>`;
