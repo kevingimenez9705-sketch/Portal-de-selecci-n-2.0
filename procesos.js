@@ -118,7 +118,7 @@ function filaIcheck(b) {
     const sexo = ['M', 'F'].includes(sexoDe(b.sexo)) ? sexoDe(b.sexo) : '';   // iCheck solo acepta M o F
     return [b.nombre, b.apellido, sexo, b.dni, b.cuil, fechaIcheck(b.fecha_nacimiento), b.email, b.dni, b.local, fechaIcheck(b.ingreso),
         b.domicilio, b.domicilio_numero, '', '', b.localidad, b.provincia, b.pais, b.codigo_postal, b.tel, '',
-        (infoLocal(b.local)?.razon_social || '').toUpperCase(), '', categoriaIcheck(b.puesto), 'UNICO', '', '', '', '', b.nacionalidad, '']
+        (infoLocal(b.local)?.razon_social || '').toUpperCase(), 'UNICO', categoriaIcheck(b.puesto), 'UNICO', '', '', '', '', b.nacionalidad, '']
         .map(v => v == null ? '' : v);
 }
 
