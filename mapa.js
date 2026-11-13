@@ -131,6 +131,16 @@ function busquedasPorLocal() {
     return bq;
 }
 const contarVacantes = bq => new Map([...bq].map(([id, bs]) => [id, bs.length]));
+// Vacantes del tablero cuyo local no está en la lista de locales: no tienen lugar en el mapa, pero suman en
+// los totales (con los mismos filtros, usando la marca / regional / zonal / selector de la vacante)
+function vacantesSinUbicar() {
+    const val = id => normTxt(document.getElementById(id)?.value || '');
+    const reg = val('eq-regional'), zon = val('eq-zonal'), q = val('eq-buscar');
+    return busquedas.filter(b => contable(b) && !localDe(b.local) && (!eqMarca || b.marca === eqMarca)
+        && (!reg || normTxt(b.regional) === reg) && (!zon || normTxt(b.zonal) === zon)
+        && (eqSelector === null || (b.selector || '') === eqSelector)
+        && (!q || [b.local, b.zonal, b.regional, b.localidad].some(v => normTxt(v).includes(q))));
+}
 const vacantesPorLocal = () => contarVacantes(busquedasPorLocal());
 const metrosA = lat => ({ kx: 1 / (111320 * Math.cos(lat * Math.PI / 180)), ky: 1 / 111320 });
 function posicionesMapa(lista) {
@@ -165,17 +175,24 @@ function columnasMapa(pos, vac, fuera) {
 
 // ── Vista agrupada: una burbuja por zonal / regional / selector
 const mediana = a => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
-function gruposMapa(lista, pos, vac, bq) {
+function gruposMapa(lista, pos, vac, bq, sueltas) {
     const porId = new Map(pos.map(x => [x.l.id, x])), g = new Map();
     lista.forEach(l => {
         const k = l[eqMapaGrupo] || '';
-        if (!g.has(k)) g.set(k, { clave: k, locales: [], puntos: [], aprox: [], vac: 0, etapas: etapasVacias(), marcas: {} });
+        if (!g.has(k)) g.set(k, { clave: k, locales: [], puntos: [], aprox: [], vac: 0, sueltas: 0, etapas: etapasVacias(), marcas: {} });
         const e = g.get(k), x = porId.get(l.id);
         e.locales.push(l);
         e.vac += vac.get(l.id) || 0;
         (bq.get(l.id) || []).forEach(b => e.etapas[etapaBusqueda(b)]++);
         e.marcas[l.marca] = (e.marcas[l.marca] || 0) + 1;
         if (x) (x.aprox ? e.aprox : e.puntos).push([x.lng, x.lat]);
+    });
+    // Las que no tienen local en la lista van al grupo de su propio zonal / regional / selector (si está en el mapa)
+    const porNombre = new Map([...g.values()].map(e => [normTxt(e.clave), e]));
+    sueltas.forEach(b => {
+        const e = porNombre.get(normTxt(b[eqMapaGrupo]));
+        if (!e) return;
+        e.vac++; e.sueltas++; e.etapas[etapaBusqueda(b)]++;
     });
     return [...g.values()].map(e => {
         const pts = e.puntos.length ? e.puntos : e.aprox;
@@ -426,9 +443,9 @@ function actualizarMapaEquipos() {
     const tip = document.getElementById('mg-tip');
     if (tip) tip.hidden = true;
     const { lista, fuera } = _eqMapaDatos;
-    const bq = busquedasPorLocal(), vac = contarVacantes(bq);
+    const bq = busquedasPorLocal(), vac = contarVacantes(bq), sueltas = vacantesSinUbicar();
     const { pos, sinPos } = posicionesMapa(lista);
-    _eqMapaGrupos = agrupado ? gruposMapa(lista, pos, vac, bq) : [];
+    _eqMapaGrupos = agrupado ? gruposMapa(lista, pos, vac, bq, sueltas) : [];
     if (_eqMapaSel !== null && !_eqMapaGrupos.some(e => e.clave === _eqMapaSel)) _eqMapaSel = null;
     const sel = _eqMapaGrupos.find(e => e.clave === _eqMapaSel);
     _eqMapaPuntos = pos.map(x => [x.lng, x.lat]);
@@ -446,7 +463,7 @@ function actualizarMapaEquipos() {
         _eqMapa.getSource('eq-zona').setData(sel ? fc([zonaGrupo(sel)]) : fc([]));
         marcadoresMapa();
     }
-    document.getElementById('mg-resumen').innerHTML = resumenHtml(lista, vac, bq);
+    document.getElementById('mg-resumen').innerHTML = resumenHtml(lista, vac, bq, sueltas);
     document.getElementById('mg-lista').innerHTML = sel ? detalleGrupoHtml(sel, bq, fuera) : agrupado ? rankingHtml() : leyendaLocalesHtml(lista, vac);
     const nFuera = lista.filter(fuera).length;
     document.getElementById('eq-mapa-nota').innerHTML = (agrupado
@@ -454,14 +471,16 @@ function actualizarMapaEquipos() {
         : `<b>Altura</b> = vacantes del tablero`)
         + ` · ubicación aproximada por localidad`
         + (nFuera ? ` · <b>${nFuera}</b> ${agrupado ? 'hueco' : 'transparente'}${nFuera === 1 ? '' : 's'} = no está${nFuera === 1 ? '' : 'n'} en la hoja (posibles aperturas)` : '')
-        + (sinPos ? ` · ${sinPos} sin ubicación` : '');
+        + (sinPos ? ` · ${sinPos} sin ubicación` : '')
+        + (sueltas.length ? ` · <b>${sueltas.length}</b> ${sueltas.length === 1 ? 'vacante suma' : 'vacantes suman'} en los totales pero no se ve${sueltas.length === 1 ? '' : 'n'} en el mapa: su local no está en la lista de locales` : '');
 }
 
 // ── Paneles
-function resumenHtml(lista, vac, bq) {
+function resumenHtml(lista, vac, bq, sueltas) {
     const et = etapasVacias();
     lista.forEach(l => (bq.get(l.id) || []).forEach(b => et[etapaBusqueda(b)]++));
-    const nVac = lista.reduce((s, l) => s + (vac.get(l.id) || 0), 0);
+    sueltas.forEach(b => et[etapaBusqueda(b)]++);
+    const nVac = lista.reduce((s, l) => s + (vac.get(l.id) || 0), 0) + sueltas.length;
     const tercero = eqMapaGrupo === 'locales' ? ['zonal', 'Zonales'] : [eqMapaGrupo, MAPA_GRUPOS_PL[eqMapaGrupo]];
     const nGrupos = new Set(lista.map(l => l[tercero[0]]).filter(Boolean)).size;
     const marca = eqMarca ? (eqMarca === 'Sabores Express' ? 'Sabores' : 'Extremas') : 'Sabores y Extremas';
@@ -533,6 +552,7 @@ function detalleGrupoHtml(e, bq, fuera) {
             <div class="mg-barra mg-barra-grande">${barraEtapas(e.etapas, e.vac)}</div>
             <div class="mg-etapas">${MAPA_ETAPAS.filter(([k]) => e.etapas[k]).map(([k, t, c]) => `<span><i style="background:${c}"></i>${t} <b>${e.etapas[k]}</b></span>`).join('')}</div>` : ''}
         <div class="mg-sec">Locales</div>
+        ${e.sueltas ? `<div class="tip" style="margin-bottom:4px">+ ${plural(e.sueltas, 'vacante', 'vacantes')} de locales que no están en la lista</div>` : ''}
         <div class="mg-filas">${ls.map(l => {
             const bs = bq.get(l.id) || [], et = etapasVacias();
             bs.forEach(b => et[etapaBusqueda(b)]++);
