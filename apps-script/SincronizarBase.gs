@@ -813,7 +813,8 @@ var PortalSync = (function () {
         color: '#b45309', logo: 'https://kevingimenez9705-sketch.github.io/Portal-de-selecci-n-2.0/assets/logo-sabores.png' }
     },
     // Empanada Mania va dentro de Sabores en el portal, pero el mail lleva su propio nombre
-    mania: { brand: 'EMPANADA MANIA', subject: 'BIENVENIDA E INGRESO: EMPANADA MANIA', signature: 'Empanada Mania', color: '#0f766e', logo: '' },
+    mania: { brand: 'EMPANADA MANIA', subject: 'BIENVENIDA E INGRESO: EMPANADA MANÍA', signature: 'Empanada Manía',
+      color: '#4a1a12', logo: 'https://kevingimenez9705-sketch.github.io/Portal-de-selecci-n-2.0/assets/logo-mania.png' },
     senderName: 'Equipo de Selección',
     officeAddress: 'Florida 428, CABA',
     // Código de Ética: paso 2 del mail, junto con la documentación obligatoria
