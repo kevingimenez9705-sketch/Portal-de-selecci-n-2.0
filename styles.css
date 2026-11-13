@@ -55,8 +55,8 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .topnav-logo { font-size: 18px; font-weight: 800; letter-spacing: -.03em; white-space: nowrap; }
 .topnav-logo span { color: var(--pink-light); }
 .topnav-logo { display: flex; align-items: center; gap: 10px; }
-.logo-equipo { width: 34px; height: 34px; flex: none; }
-.logo-equipo-login { display: block; width: 56px; height: 56px; margin-bottom: 14px; border-radius: 50%; background: var(--purple); box-shadow: 0 0 0 3px var(--purple); }
+.logo-equipo { width: 34px; height: 34px; flex: none; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .35); }
+.logo-equipo.logo-equipo-login { display: block; width: 64px; height: 64px; margin-bottom: 14px; box-shadow: 0 6px 18px rgba(66, 21, 139, .25); }
 .topnav-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .topnav-btn { display: flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 10px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .2); color: #e4dff4; cursor: pointer; font-size: 12px; font-weight: 700; transition: all .15s; white-space: nowrap; }
 .topnav-btn i { font-size: 11px; }
