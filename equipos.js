@@ -32,7 +32,7 @@ function eqLocalesMarca() { return locales.filter(l => !eqMarca || l.marca === e
 const distintos = (lista, f) => [...new Set(lista.map(f).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
 function eqElegirMarca(m) { eqMarca = eqMarca === m ? '' : m; eqSelector = null; renderEquipos(); }
-function eqElegirSelector(s) { eqSelector = eqSelector === s ? null : s; renderEquipos(); }
+function eqElegirSelector(s) { eqSelector = s === null || eqSelector === s ? null : s; renderEquipos(); }
 
 function renderEquipos() {
     const base = eqLocalesMarca();
@@ -55,7 +55,11 @@ function renderEquipos() {
     // Tarjetas de selector: cuántos locales tiene cada uno
     const sels = selectores();
     const cuenta = s => base.filter(l => (l.selector || '') === s).length;
-    document.getElementById('equipos-selectores').innerHTML = [...sels, ''].map(s => {
+    // "Ver todos" primero: saca el filtro de selector
+    const todos = `<button class="eq-sel eq-sel-todos ${eqSelector === null ? 'activa' : ''}" onclick="eqElegirSelector(null)">
+            <span class="avatar avatar-eq eq-todos" aria-hidden="true"><i class="fas fa-users"></i></span>
+            <span><span class="eq-sel-nom">Ver todos</span><span class="eq-sel-num">${base.length} local${base.length === 1 ? '' : 'es'}</span></span></button>`;
+    document.getElementById('equipos-selectores').innerHTML = todos + [...sels, ''].map(s => {
         const n = cuenta(s);
         if (!s && !n) return '';
         return `<button class="eq-sel ${eqSelector === s ? 'activa' : ''}" ${s ? `style="--team:${colorDe(s)}"` : ''} data-s="${esc(s)}" onclick="eqElegirSelector(this.dataset.s)">

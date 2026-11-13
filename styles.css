@@ -590,6 +590,9 @@ table.grilla tbody tr:hover td { filter: brightness(.985); }
 .eq-sel.activa { border-color: var(--team); background: var(--team); }
 .eq-sel.activa .eq-sel-nom, .eq-sel.activa .eq-sel-num { color: #fff; }
 .eq-sel-nom { display: block; font-weight: 800; font-size: 13px; color: var(--calm-ink); }
+.eq-sel-todos { --team: var(--calm-accent); }
+.eq-todos { background: var(--calm-accent); font-size: 14px; }
+.eq-sel-todos.activa .eq-todos { background: #fff; color: var(--calm-accent); }
 .eq-sel-num { display: block; font-size: 11px; color: var(--muted); }
 .avatar.avatar-eq { width: 38px; height: 38px; font-size: 13px; }
 .eq-sin { background: #cbd5e1 !important; color: #fff; }
