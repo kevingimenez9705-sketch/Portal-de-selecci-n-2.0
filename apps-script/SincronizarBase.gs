@@ -818,6 +818,8 @@ var PortalSync = (function () {
     officeAddress: 'Florida 428, CABA',
     // Código de Ética: paso 2 del mail, junto con la documentación obligatoria
     codigoEticaUrl: 'https://c-digo-de-etica.vercel.app/',
+    // Cómo tramitar cada documento (va debajo de la lista de documentación)
+    documentacionUrl: 'https://sites.google.com/view/postulantes-seleccion/documentacion',
     scheduleText: 'Los horarios del puesto son rotativos.',
     firstDaySchedules: { partTime: '15:00 a 20:00 hs', fullTime: '11:00 a 20:00 hs' },
     // Página del portal que registra el "Confirmo asistencia"
@@ -978,7 +980,15 @@ function crearEmailOnboarding_(data) {
         <tr><td valign="top" style="padding:3px 8px 3px 0;color:${color};font-weight:bold;">✓</td><td style="padding:3px 0;font-size:15px;color:#1f2937;${fuente}">DNI formato físico.</td></tr>
         <tr><td valign="top" style="padding:3px 8px 3px 0;color:${color};font-weight:bold;">✓</td><td style="padding:3px 0;font-size:15px;color:#1f2937;${fuente}">Carnet o constancia del Curso de Manipulación de Alimentos.</td></tr>
         <tr><td valign="top" style="padding:3px 8px 3px 0;color:${color};font-weight:bold;">✓</td><td style="padding:3px 0;font-size:15px;color:#1f2937;${fuente}">Certificado de Antecedentes Penales.</td></tr>
-      </table>`, '#ffffff', '#e2e8f0');
+      </table>
+      <div style="margin-top:12px;padding:12px 14px;background:#f8fafc;border-radius:10px;font-size:14px;color:#374151;line-height:1.5;">
+        🤔 ¿Te falta alguno o no sabés cómo tramitarlo? No te preocupes, te lo explicamos paso a paso:
+        <div style="margin-top:8px;">
+          <a href="${e(ONBOARDING_CONFIG.documentacionUrl)}"
+            style="display:inline-block;color:${color};font-weight:bold;text-decoration:none;border:2px solid ${color};
+              padding:8px 16px;border-radius:8px;font-size:14px;${fuente}">Ver cómo tramitar la documentación →</a>
+        </div>
+      </div>`, '#ffffff', '#e2e8f0');
 
   // ── 3. Sede asignada (después de la Bienvenida)
   const local = `
@@ -1091,6 +1101,9 @@ ${ONBOARDING_CONFIG.codigoEticaUrl}
 • DNI formato físico.
 • Carnet o constancia del Curso de Manipulación de Alimentos.
 • Certificado de Antecedentes Penales.
+
+🤔 ¿Te falta alguno o no sabés cómo tramitarlo? Te lo explicamos paso a paso acá:
+${ONBOARDING_CONFIG.documentacionUrl}
 
 3️⃣ Tu sede asignada
 Luego de presentarte en ${ONBOARDING_CONFIG.officeAddress}, esta es tu sede:
