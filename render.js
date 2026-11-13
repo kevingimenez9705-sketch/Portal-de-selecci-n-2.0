@@ -18,8 +18,6 @@ function prepararApp() {
     fill('n-motivo', MOTIVOS);
     fill('n-puesto', PUESTOS);
     fill('n-jornada', JORNADAS, '— Jornada —');
-    fill('f-estado', ESTADOS_SOLICITUD, 'Estado: todos');
-    fill('f-status', ESTADOS_BUSQUEDA, 'Todas');
     fill('fb-zona', ZONAS, 'Todas las zonas');
     fill('fb-estado', ESTADOS_POSTULANTE, 'Todos los estados');
     fill('fb-horario', HORARIOS, 'Cualquier horario');
@@ -28,8 +26,6 @@ function prepararApp() {
     fill('p-horario', HORARIOS, '— Horario —');
     fill('p-curso-manipulacion', DOC_OPCIONES, '— Sin dato —');
     fill('p-antecedentes', DOC_OPCIONES, '— Sin dato —');
-    // "Sin estado" = vacantes que todavía no arrancaron el circuito
-    document.getElementById('f-estado').insertAdjacentHTML('beforeend', '<option value="__sin">Sin estado</option>');
     renderEncabezadoGrilla();
     renderSelectorChips();
 }
@@ -96,15 +92,14 @@ function renderSelectorChips() {
 }
 // Pestañas de marca: total de vacantes de cada una (del selector elegido)
 function renderConteoMarcas() {
-    const base = busquedas.filter(b => contable(b) && (!selectorFiltroActivo || b.selector === selectorFiltroActivo));
+    const base = busquedas.filter(b => contable(b) && pasaSelector(b));
     document.querySelectorAll('#marca-tabs [data-marca]').forEach(btn => {
         const n = btn.querySelector('.seg-n');
         if (n) n.textContent = base.filter(b => !btn.dataset.marca || b.marca === btn.dataset.marca).length;
     });
 }
 function filtrarPorSelector(nombre) {
-    selectorFiltroActivo = nombre;
-    renderSelectorChips();
+    if (nombre) filtrosColumna.selector = new Set([nombre]); else delete filtrosColumna.selector;
     applyFilters();
 }
 // Pestañas como las de la planilla: Solicitudes Extremas / Solicitudes Sabores
@@ -210,13 +205,20 @@ function mostrarMasHtml(cual, visibles, total) {
 function renderEncabezadoGrilla() {
     const grupos = [];
     COLUMNAS.forEach(c => { const g = grupos[grupos.length - 1]; if (g && g.nombre === c.g) g.n++; else grupos.push({ nombre: c.g, n: 1 }); });
+    // Cada columna con su filtro (filtros.js); en N°, el buscador y la vista (estado, alertas, nómina)
     document.getElementById('grilla-head').innerHTML = `
         <tr class="fila-grupos">
-            <th class="col-fija" rowspan="2">N°</th>
+            <th class="col-fija th-num" rowspan="2">
+                <div class="th-col"><span>N°</span><button type="button" class="btn-filtro" data-filtro="__vista" onclick="abrirFiltroVista(this)"
+                    title="Estado de la vacante, alertas y nómina" aria-label="Filtrar por estado de la vacante, alertas y nómina"><i class="fas fa-sliders"></i></button></div>
+                <input class="th-buscar" id="f-search" placeholder="Buscar local, N°, nombre…" aria-label="Buscar" oninput="applyFiltersDebounced()">
+            </th>
             ${grupos.map(g => `<th colspan="${g.n}" class="grupo grupo-${g.nombre.toLowerCase()}">${g.nombre}</th>`).join('')}
             <th rowspan="2" class="col-acciones-th"></th>
         </tr>
-        <tr class="fila-columnas">${COLUMNAS.map(c => `<th class="grupo-${c.g.toLowerCase()}" style="min-width:${c.w}px">${c.t}</th>`).join('')}</tr>`;
+        <tr class="fila-columnas">${COLUMNAS.map(c => `<th class="grupo-${c.g.toLowerCase()}" style="min-width:${c.w}px">
+            <div class="th-col"><span>${c.t}</span><button type="button" class="btn-filtro" data-filtro="${c.f}" onclick="abrirFiltroColumna(this.dataset.filtro, this)"
+                title="Filtrar ${esc(c.t)}" aria-label="Filtrar ${esc(c.t)}"><i class="fas fa-filter"></i></button></div></th>`).join('')}</tr>`;
 }
 
 // Orden de la grilla: cada búsqueda baja a medida que avanza en el proceso (COMUNICADO abajo de todo).
@@ -347,7 +349,7 @@ function kpisBusquedasHtml(todas) {
 // Vacantes: referencia de nómina y botones (las tarjetas quedaron solo en Estadísticas).
 // Respetan la marca y el selector elegidos, no el resto de los filtros.
 function renderKPIs() {
-    const todas = busquedas.filter(b => (!selectorFiltroActivo || b.selector === selectorFiltroActivo) && (!marcaActiva || b.marca === marcaActiva));
+    const todas = busquedas.filter(b => pasaSelector(b) && (!marcaActiva || b.marca === marcaActiva));
     renderLeyendaNomina(todas.filter(vacanteAbierta));
     renderSelectorChips();
     renderConteoMarcas();
@@ -371,8 +373,7 @@ function renderLeyendaNomina(abiertas) {
     }).join('');
 }
 function filtrarNomina(e) {
-    const sel = document.getElementById('f-alerta');
-    sel.value = sel.value === 'nom:' + e ? '' : 'nom:' + e;
+    filtroVista.nomina = filtroVista.nomina === e ? '' : e;
     applyFilters();
 }
 
@@ -380,41 +381,20 @@ let _filtroTimer = null;
 function applyFiltersDebounced() { clearTimeout(_filtroTimer); _filtroTimer = setTimeout(applyFilters, 200); }
 function applyFilters() { resetPaginado(); refreshView(); }
 
+// Filtros de los encabezados (filtros.js) + pestaña de marca
 function computeFilteredIds() {
-    const v = id => document.getElementById(id).value;
-    const estado = v('f-estado'), status = v('f-status'), regional = v('f-regional'), alerta = v('f-alerta');
-    const mas = [status, regional, alerta].filter(Boolean).length, masEl = document.getElementById('mas-filtros-n');
-    if (masEl) { masEl.textContent = mas || ''; masEl.classList.toggle('hidden', !mas); }
-    const search = v('f-search').trim().toLowerCase();
-    return busquedas.filter(b => {
-        if (marcaActiva && b.marca !== marcaActiva) return false;
-        if (selectorFiltroActivo && b.selector !== selectorFiltroActivo) return false;
-        if (estado === '__sin' ? !!b.estado : (estado && b.estado !== estado)) return false;
-        if (status && b.status !== status) return false;
-        if (regional && b.regional !== regional) return false;
-        if (alerta === '72' && !alertaZonalVencida(b)) return false;
-        if (alerta === 'plazo' && !fueraDePlazo(b)) return false;
-        if (alerta === 'libres' && !(vacanteAbierta(b) && !tienePersona(b))) return false;
-        if (alerta === 'nom:ACTIVAS' && !cuentaComoActiva(b)) return false;
-        if (alerta.startsWith('nom:') && alerta !== 'nom:ACTIVAS' && b.estado_nomina !== alerta.slice(4)) return false;
-        if (search) {
-            const hay = [b.numero, b.local, b.local_entrenamiento, b.puesto, b.selector, b.regional, b.zonal, b.nombre, b.apellido, b.dni, b.notas].join(' ').toLowerCase();
-            if (!hay.includes(search)) return false;
-        }
-        return true;
-    }).reduce((set, b) => set.add(b.id), new Set());
+    marcarFiltrosActivos();
+    return busquedas.filter(b => pasaFiltros(b)).reduce((set, b) => set.add(b.id), new Set());
 }
 
-function actualizarFiltroRegional() {
-    const sel = document.getElementById('f-regional');
-    sel.innerHTML = optionsHtml(valoresUsados('regional'), sel.value, 'Todos');
-}
+function actualizarFiltroRegional() { /* la regional se filtra desde su encabezado */ }
 
 // Desde la base o el informe: ir a la vacante en la grilla
 function verEnPipeline(numero) {
-    ['f-estado', 'f-status', 'f-regional', 'f-alerta'].forEach(id => document.getElementById(id).value = '');
+    filtrosColumna = {};
+    filtroVista = { status: '', mostrar: '', nomina: '' };
     document.getElementById('f-search').value = numero;
-    selectorFiltroActivo = ''; marcaActiva = '';
+    marcaActiva = '';
     document.querySelectorAll('#marca-tabs .page-tab').forEach((b, i) => b.classList.toggle('active', i === 0));
     renderSelectorChips();
     showView('vacantes');
@@ -617,7 +597,7 @@ function openNuevaBusqueda() {
     document.getElementById('n-jornada').value = 'ROTATIVO';
     document.getElementById('n-inicio').value = today();
     document.getElementById('n-cantidad').value = 1;
-    document.getElementById('n-selector').innerHTML = optionsHtml(selectores(), selectorFiltroActivo, '— Sin asignar —');
+    document.getElementById('n-selector').innerHTML = optionsHtml(selectores(), selectorUnico(), '— Sin asignar —');
     openModal('modal-nueva');
 }
 

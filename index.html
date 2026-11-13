@@ -85,28 +85,8 @@
                 <button class="page-tab tab-extremas" data-marca="Hamburguesas Extremas" onclick="cambiarMarca('Hamburguesas Extremas',this)"><img class="tab-logo" src="assets/logo-extremas.png" alt="">Extremas <span class="seg-n"></span></button>
                 <button class="page-tab tab-sabores" data-marca="Sabores Express" onclick="cambiarMarca('Sabores Express',this)"><img class="tab-logo" src="assets/logo-sabores.png" alt="">Sabores <span class="seg-n"></span></button>
             </div>
-            <details class="menu" id="menu-selector">
-                <summary class="filter-select sel-filtro" id="f-selector" aria-label="Selector"></summary>
-                <div class="menu-lista menu-selectores" id="f-selector-lista"></div>
-            </details>
-            <select class="filter-select" id="f-estado" onchange="applyFilters()" aria-label="Estado"></select>
-            <input class="filter-input" id="f-search" placeholder="Buscar local, N°, nombre, DNI…" oninput="applyFiltersDebounced()">
-            <details class="menu" id="menu-filtros">
-                <summary class="filter-select mas-filtros">Más filtros <span class="mas-filtros-n hidden" id="mas-filtros-n"></span><i class="fas fa-chevron-down menu-flecha"></i></summary>
-                <div class="menu-lista menu-filtros">
-                    <label>Vacante <select class="filter-select" id="f-status" onchange="applyFilters()"></select></label>
-                    <label>Regional <select class="filter-select" id="f-regional" onchange="applyFilters()"></select></label>
-                    <label>Mostrar <select class="filter-select" id="f-alerta" onchange="applyFilters()">
-                        <option value="">Todas</option>
-                        <option value="libres">Solo sin persona</option>
-                        <option value="72">Solo alerta 72hs zonal</option>
-                        <option value="plazo">Solo fuera de plazo</option>
-                        <option value="nom:ACTIVAS">Solo búsquedas activas (sin excedidos)</option>
-                        <option value="nom:EXCEDIDO">Solo locales excedidos (no cuentan)</option>
-                    </select></label>
-                </div>
-            </details>
-            <div class="nomina-leyenda" id="nomina-leyenda"></div>
+            <span class="filtros-ayuda"><i class="fas fa-filter"></i> Filtrá desde el encabezado de cada columna</span>
+            <button type="button" class="btn-sm btn-limpiar-filtros hidden" id="btn-limpiar-filtros" onclick="limpiarFiltros()"><i class="fas fa-filter-circle-xmark"></i> Limpiar filtros <span></span></button>
         </div>
 
         <div class="filters hidden" id="filters-base">
@@ -406,6 +386,7 @@
 <script src="utils.js"></script>
 <script src="api.js"></script>
 <script src="render.js"></script>
+<script src="filtros.js"></script>
 <script src="stats.js"></script>
 <script src="importar.js"></script>
 <script src="procesos.js"></script>
