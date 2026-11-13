@@ -805,16 +805,18 @@ var PortalSync = (function () {
 
   // Lo mismo que ONBOARDING_CONFIG de Onboarding.gs (vive solo dentro de PortalSync)
   const ONBOARDING_CONFIG = {
+    // color: encabezado y números de los pasos del mail · logo: va en el encabezado (si no carga, queda el nombre)
     marcas: {
-      'Hamburguesas Extremas': { brand: 'EXTREMAS', subject: 'BIENVENIDA E INGRESO: HAMBURGUESAS EXTREMAS', signature: 'Hamburguesas Extremas' },
-      'Sabores Express': { brand: 'SABORES', subject: 'BIENVENIDA E INGRESO: SABORES EXPRESS', signature: 'Sabores Express' }
+      'Hamburguesas Extremas': { brand: 'EXTREMAS', subject: 'BIENVENIDA E INGRESO: HAMBURGUESAS EXTREMAS', signature: 'Hamburguesas Extremas',
+        color: '#d71920', logo: 'https://kevingimenez9705-sketch.github.io/Portal-de-selecci-n-2.0/assets/logo-extremas.png' },
+      'Sabores Express': { brand: 'SABORES', subject: 'BIENVENIDA E INGRESO: SABORES EXPRESS', signature: 'Sabores Express',
+        color: '#b45309', logo: 'https://kevingimenez9705-sketch.github.io/Portal-de-selecci-n-2.0/assets/logo-sabores.png' }
     },
     // Empanada Mania va dentro de Sabores en el portal, pero el mail lleva su propio nombre
-    mania: { brand: 'EMPANADA MANIA', subject: 'BIENVENIDA E INGRESO: EMPANADA MANIA', signature: 'Empanada Mania' },
+    mania: { brand: 'EMPANADA MANIA', subject: 'BIENVENIDA E INGRESO: EMPANADA MANIA', signature: 'Empanada Mania', color: '#0f766e', logo: '' },
     senderName: 'Equipo de Selección',
     officeAddress: 'Florida 428, CABA',
-    formUrl: 'https://forms.gle/JYp28JhtcyKu9smt8',
-    // Código de Ética: se muestra en el paso 1 del mail, debajo del formulario (como Onboarding.gs)
+    // Código de Ética: paso 2 del mail, junto con la documentación obligatoria
     codigoEticaUrl: 'https://c-digo-de-etica.vercel.app/',
     scheduleText: 'Los horarios del puesto son rotativos.',
     firstDaySchedules: { partTime: '15:00 a 20:00 hs', fullTime: '11:00 a 20:00 hs' },
@@ -880,6 +882,7 @@ var PortalSync = (function () {
     if (showTraining && !trainingAddress) throw new Error('No se encontró dirección para LOCAL ENTRENAMIENTO "' + trainingLocal + '" en la lista de locales.');
     return {
       subject: marca.subject, name: String(v.nombre || '').trim(), brand: marca.brand, signature: marca.signature,
+      color: marca.color, logo: marca.logo,
       position: position, scheduleText: ONBOARDING_CONFIG.scheduleText, onboardingDate: onboardingDate, onboardingTime: onboardingTime,
       firstDayDate: firstDayDate, local: local, localAddress: localAddress, trainingLocal: showTraining ? trainingLocal : '',
       trainingAddress: trainingAddress, opening: opening, firstDaySchedule: firstDaySchedule,
@@ -893,485 +896,234 @@ var PortalSync = (function () {
     catch (e) { Utilities.sleep(ONBOARDING_CONFIG.esperaReintentoMs); MailApp.sendEmail(mail); }
   }
 
-  // ── Copiadas tal cual de Onboarding.gs: el mail sale igual que desde la planilla ──
+  // ── Mail de bienvenida (HTML y texto plano). Si se cambia, copiar las dos funciones también a
+  //    Onboarding.gs de TAREAS GRUPALES para que salga igual desde la planilla. ──
 
-  // (sin cambios ni sangría: el texto de los mails depende de cada espacio y renglón)
+/*
+ * Orden del mail:
+ *   1. Presentarse en la Oficina de Selección (dirección, fecha y horario de la Bienvenida)
+ *   2. Código de Ética + documentación obligatoria
+ *   3. Sede asignada (después de la Bienvenida): local, entrenamiento y primer día
+ *   y al final, el botón para confirmar la asistencia.
+ * Diseño con tablas y estilos en línea para que se vea bien en Gmail, Outlook y el celular.
+ */
+function crearEmailOnboarding_(data) {
+  const e = escaparHtmlOnboarding_;
+  const color = data.color || '#42158b';
+  const fuente = 'font-family:Arial,Helvetica,sans-serif;';
+  const saludo = data.name ? '¡Hola ' + e(data.name) + '! ¿Cómo estás?' : '¡Hola! ¿Cómo estás?';
 
-function crearEmailOnboarding_(
-  data
-) {
+  // Número del paso (círculo con el color de la marca) + título
+  const paso = function (n, titulo, sub) {
+    return `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:30px 0 12px 0;">
+        <tr>
+          <td width="40" valign="top">
+            <div style="width:32px;height:32px;line-height:32px;border-radius:16px;background:${color};color:#ffffff;
+              text-align:center;font-weight:bold;font-size:16px;${fuente}">${n}</div>
+          </td>
+          <td valign="middle" style="${fuente}">
+            <div style="font-size:17px;font-weight:bold;color:#1f2937;line-height:1.3;">${titulo}</div>
+            ${sub ? `<div style="font-size:14px;color:#6b7280;margin-top:2px;">${sub}</div>` : ''}
+          </td>
+        </tr>
+      </table>`;
+  };
 
-  const greeting =
-    data.name
-      ? '🎉 ¡Hola ' +
-        escaparHtmlOnboarding_(data.name) +
-        '! ¿Cómo estás?'
-      : '🎉 ¡Hola! ¿Cómo estás?';
+  // Renglón "ícono  Etiqueta: valor"
+  const dato = function (icono, etiqueta, valor) {
+    return `
+      <tr>
+        <td width="30" valign="top" style="padding:5px 0;font-size:16px;">${icono}</td>
+        <td style="padding:5px 0;${fuente}font-size:15px;color:#1f2937;"><strong>${etiqueta}:</strong> ${valor}</td>
+      </tr>`;
+  };
 
+  const tarjeta = function (contenido, fondo, borde) {
+    return `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+        style="background:${fondo};border:1px solid ${borde};border-radius:12px;">
+        <tr><td style="padding:16px 18px;${fuente}">${contenido}</td></tr>
+      </table>`;
+  };
 
-  let localBlock = '';
+  // ── 1. Oficina de Selección
+  const paso1 = paso('1', 'Presentate en nuestra Oficina de Selección', 'para realizar tu Bienvenida e Ingreso.') +
+    tarjeta(`
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        ${dato('📍', 'Dirección', e(ONBOARDING_CONFIG.officeAddress))}
+        ${dato('📅', 'Fecha', e(data.onboardingDate))}
+        ${dato('🕘', 'Horario', e(data.onboardingTime))}
+      </table>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:14px;color:#1f2937;">
+        ⏰ <strong>Presentate 15 minutos antes del horario pactado.</strong>
+      </div>`, '#f8fafc', '#e2e8f0');
 
+  // ── 2. Código de Ética y documentación
+  const paso2 = paso('2', 'Código de Ética y documentación obligatoria', '') +
+    tarjeta(`
+      <div style="text-align:center;">
+        <div style="font-size:15px;font-weight:bold;color:#0f2a44;margin-bottom:12px;">Completá el Código de Ética 📋</div>
+        <a href="${e(ONBOARDING_CONFIG.codigoEticaUrl)}"
+          style="display:inline-block;background:#0f2a44;color:#ffffff;padding:13px 26px;border-radius:8px;
+            text-decoration:none;font-weight:bold;font-size:15px;${fuente}">Completar Código de Ética</a>
+        <div style="font-size:13px;color:#0f2a44;margin-top:12px;">
+          ⚠️ <strong>Importante:</strong> formulario obligatorio para poder avanzar con la propuesta.
+        </div>
+      </div>`, '#eef3f9', '#c9d6e6') +
+    `<div style="height:12px;line-height:12px;">&nbsp;</div>` +
+    tarjeta(`
+      <div style="font-size:15px;font-weight:bold;color:#1f2937;margin-bottom:6px;">📄 Traé la siguiente documentación (obligatoria):</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+        <tr><td valign="top" style="padding:3px 8px 3px 0;color:${color};font-weight:bold;">✓</td><td style="padding:3px 0;font-size:15px;color:#1f2937;${fuente}">DNI formato físico.</td></tr>
+        <tr><td valign="top" style="padding:3px 8px 3px 0;color:${color};font-weight:bold;">✓</td><td style="padding:3px 0;font-size:15px;color:#1f2937;${fuente}">Carnet o constancia del Curso de Manipulación de Alimentos.</td></tr>
+        <tr><td valign="top" style="padding:3px 8px 3px 0;color:${color};font-weight:bold;">✓</td><td style="padding:3px 0;font-size:15px;color:#1f2937;${fuente}">Certificado de Antecedentes Penales.</td></tr>
+      </table>`, '#ffffff', '#e2e8f0');
 
-  if (data.opening) {
+  // ── 3. Sede asignada (después de la Bienvenida)
+  const local = `
+      <div style="font-size:12px;font-weight:bold;letter-spacing:1px;color:#6b7280;text-transform:uppercase;">📍 Tu local asignado</div>
+      <div style="font-size:16px;font-weight:bold;color:#1f2937;margin-top:4px;">${e(data.brand)}: ${e(data.local)}</div>
+      ${!data.opening && data.localAddress ? `<div style="font-size:14px;color:#4b5563;margin-top:2px;">${e(data.localAddress)}</div>` : ''}`;
+  const entrenamiento = data.trainingLocal ? `
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid #e5e7eb;">
+        <div style="font-size:12px;font-weight:bold;letter-spacing:1px;color:#6b7280;text-transform:uppercase;">👨‍🍳 Tu entrenamiento será en</div>
+        <div style="font-size:16px;font-weight:bold;color:#1f2937;margin-top:4px;">${e(data.trainingLocal)}</div>
+        <div style="font-size:14px;color:#4b5563;margin-top:2px;">${e(data.trainingAddress)}</div>
+      </div>` : '';
+  const primerDia = `
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid #e5e7eb;">
+        <div style="font-size:12px;font-weight:bold;letter-spacing:1px;color:#6b7280;text-transform:uppercase;">🗓️ Comenzás tu primer día</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px;">
+          ${dato('📅', 'Fecha', e(data.firstDayDate))}
+          ${dato('🕘', 'Hora', e(data.firstDaySchedule))}
+        </table>
+      </div>`;
+  const paso3 = paso('3', 'Tu sede asignada', 'Luego de presentarte en ' + e(ONBOARDING_CONFIG.officeAddress) + ', esta es tu sede:') +
+    tarjeta(`
+      <div style="font-size:14px;color:#92400e;">
+        ⚠️ <strong>Recordá:</strong> primero tenés que presentarte en la Oficina de Selección (punto 1).
+        No vayas directo al local.
+      </div>`, '#fffbeb', '#fcd34d') +
+    `<div style="height:12px;line-height:12px;">&nbsp;</div>` +
+    tarjeta(local + entrenamiento + primerDia, '#ffffff', '#e2e8f0');
 
-    localBlock = `
-      <p style="margin-top:26px;">
+  // ── Confirmación de asistencia (el botón abre confirmar.html, que la registra en el portal)
+  const confirmar = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:30px 0 0 0;">
+      <tr><td style="padding:20px 18px;background:#eaf6ec;border:1px solid #b7dfc0;border-radius:12px;text-align:center;${fuente}">
+        <div style="font-size:16px;font-weight:bold;color:#1f2937;margin-bottom:14px;">Confirmá tu asistencia a la Bienvenida</div>
+        <a href="${e(data.confirmUrl)}"
+          style="display:inline-block;background:#1e8e3e;color:#ffffff;padding:14px 28px;border-radius:8px;
+            text-decoration:none;font-weight:bold;font-size:16px;${fuente}">✅ Confirmo asistencia</a>
+        <div style="font-size:13px;color:#1b5e20;margin-top:14px;">
+          ⚠️ <strong>Importante:</strong> confirmá tu asistencia únicamente presionando el botón.
+        </div>
+      </td></tr>
+    </table>`;
 
-        📍 <strong>Tu local asignado será:</strong>
+  const logo = data.logo ? `
+      <img src="${e(data.logo)}" width="56" height="56" alt="${e(data.signature)}"
+        style="display:block;margin:0 auto 12px auto;width:56px;height:56px;border-radius:28px;background:#ffffff;border:3px solid #ffffff;">` : '';
 
-        <br><br>
-
-        <strong>
-          ${escaparHtmlOnboarding_(data.brand)}:
-          ${escaparHtmlOnboarding_(data.local)}
-        </strong>
-
-      </p>
-    `;
-
-  } else {
-
-    localBlock = `
-      <p style="margin-top:26px;">
-
-        📍 <strong>Tu local asignado será:</strong>
-
-        <br><br>
-
-        <strong>
-          ${escaparHtmlOnboarding_(data.brand)}:
-          ${escaparHtmlOnboarding_(data.local)}
-        </strong>
-
-        <br>
-
-        Dir:
-        ${escaparHtmlOnboarding_(data.localAddress)}
-
-      </p>
-    `;
-  }
-
-
-  let trainingBlock = '';
-
-
-  if (data.trainingLocal) {
-
-    trainingBlock = `
-      <p style="margin-top:20px;">
-
-        👨‍🍳 <strong>
-          Tu entrenamiento será en:
-        </strong>
-
-        <br><br>
-
-        <strong>
-          ${escaparHtmlOnboarding_(data.trainingLocal)}
-        </strong>
-
-        <br>
-
-        Dir:
-        ${escaparHtmlOnboarding_(data.trainingAddress)}
-
-      </p>
-    `;
-  }
-
-
-  /*
-   * BLOQUE DE CONFIRMACIÓN DE ASISTENCIA
-   * El botón abre la Web App, que registra CONFIRMA ONB
-   * en la columna ALTAS RRHH de la persona.
-   */
-
-  const confirmBlock = `
-    <div style="
-      margin:26px 0;
-      padding:18px;
-      background:#eaf6ec;
-      border:1px solid #b7dfc0;
-      border-radius:8px;
-      text-align:center;
-    ">
-
-      <p style="margin:0 0 14px 0;">
-
-        <strong>
-          Confirmá tu asistencia a la Bienvenida
-        </strong>
-
-      </p>
-
-      <p style="margin:0 0 14px 0;">
-
-        <a
-          href="${escaparHtmlOnboarding_(data.confirmUrl)}"
-          style="
-            display:inline-block;
-            background:#1e8e3e;
-            color:#ffffff;
-            padding:14px 26px;
-            border-radius:6px;
-            text-decoration:none;
-            font-weight:bold;
-            font-size:16px;
-          "
-        >
-          ✅ Confirmo asistencia
-        </a>
-
-      </p>
-
-      <p style="
-        margin:0;
-        font-size:13px;
-        color:#1b5e20;
-      ">
-
-        ⚠️ <strong>Importante:</strong>
-        confirmá tu asistencia únicamente presionando el botón.
-
-      </p>
-
-    </div>
-  `;
-
+  // Texto que se ve en la bandeja de entrada, al lado del asunto
+  const vistaPrevia = 'Tu Bienvenida es el ' + e(data.onboardingDate) + ' a las ' + e(data.onboardingTime) + ' en ' + e(ONBOARDING_CONFIG.officeAddress) + '.';
 
   return `
-    <div style="
-      max-width:620px;
-      margin:0 auto;
-      font-family:Arial,Helvetica,sans-serif;
-      font-size:15px;
-      line-height:1.6;
-      color:#222222;
-    ">
-
-      <h2 style="
-        margin:0 0 10px 0;
-        font-size:22px;
-      ">
-        ${greeting}
-      </h2>
-
-
-      <p>
-        ¡Tenemos una buena noticia! 🙌
-        Fuiste seleccionado/a para sumarte a nuestro equipo.
-      </p>
-
-
-      <p style="margin-top:22px;">
-
-        👨‍🍳 <strong>PUESTO:</strong>
-        ${escaparHtmlOnboarding_(data.position)}
-
-        <br>
-
-        🕘 <strong>HORARIOS:</strong>
-        ${escaparHtmlOnboarding_(data.scheduleText)}
-
-      </p>
-
-
-      <h3 style="margin-top:28px;">
-        ✅ Próximos pasos
-      </h3>
-
-
-      <p>
-
-        <strong>
-          1️⃣ Completá el formulario de ingreso
-        </strong> 📝
-
-      </p>
-
-
-      <p>
-
-        <a
-          href="${ONBOARDING_CONFIG.formUrl}"
-          style="
-            display:inline-block;
-            background:#d71920;
-            color:#ffffff;
-            padding:12px 20px;
-            border-radius:6px;
-            text-decoration:none;
-            font-weight:bold;
-          "
-        >
-          Completar formulario de Bienvenida
-        </a>
-
-      </p>
-
-
-      <div style="
-        margin:18px 0 0 0;
-        padding:18px;
-        background:#eaf0f7;
-        border:1px solid #b9c9dc;
-        border-radius:8px;
-        text-align:center;
-      ">
-
-        <p style="margin:0 0 14px 0;">
-
-          <strong>
-            Completá el Código de Ética
-          </strong> 📋
-
-        </p>
-
-        <p style="margin:0 0 14px 0;">
-
-          <a
-            href="${escaparHtmlOnboarding_(ONBOARDING_CONFIG.codigoEticaUrl)}"
-            style="
-              display:inline-block;
-              background:#0f2a44;
-              color:#ffffff;
-              padding:14px 26px;
-              border-radius:6px;
-              text-decoration:none;
-              font-weight:bold;
-              font-size:16px;
-            "
-          >
-            Completar Código de Ética
-          </a>
-
-        </p>
-
-        <p style="
-          margin:0;
-          font-size:13px;
-          color:#0f2a44;
-        ">
-
-          ⚠️ <strong>Importante:</strong>
-          formulario obligatorio para poder avanzar con la propuesta.
-
-        </p>
-
-      </div>
-
-
-      <p style="margin-top:28px;">
-
-        <strong>
-          2️⃣ Presentate en nuestra Oficina de Selección
-        </strong>
-
-        para realizar tu Bienvenida e Ingreso.
-
-      </p>
-
-
-      <p>
-
-        📍 <strong>Dirección:</strong>
-        ${ONBOARDING_CONFIG.officeAddress}
-
-        <br>
-
-        📅 <strong>Fecha:</strong>
-        ${escaparHtmlOnboarding_(data.onboardingDate)}
-
-        <br>
-
-        🕘 <strong>Horario:</strong>
-        ${escaparHtmlOnboarding_(data.onboardingTime)}
-
-        <br><br>
-
-        <strong>
-          Presentate 15 minutos antes del horario pactado.
-        </strong>
-
-      </p>
-
-
-      ${confirmBlock}
-
-
-      <p style="margin-top:28px;">
-
-        <strong>
-          3️⃣ Traé la siguiente documentación
-        </strong>
-
-        (obligatoria):
-
-      </p>
-
-
-      <ul>
-
-        <li>
-          DNI formato físico.
-        </li>
-
-        <li>
-          Carnet o constancia del Curso
-          de Manipulación de Alimentos.
-        </li>
-
-        <li>
-          Certificado de Antecedentes Penales.
-        </li>
-
-      </ul>
-
-
-      ${localBlock}
-
-      ${trainingBlock}
-
-
-      <p style="margin-top:26px;">
-
-        🗓️ <strong>
-          Comenzás tu primer día
-        </strong>
-
-        <br><br>
-
-        📅 <strong>Fecha:</strong>
-        ${escaparHtmlOnboarding_(data.firstDayDate)}
-
-        <br>
-
-        🕘 <strong>Hora:</strong>
-        ${escaparHtmlOnboarding_(data.firstDaySchedule)}
-
-      </p>
-
-
-      <p style="margin-top:28px;">
-
-        🚀 <strong>¡Te esperamos!</strong>
-
-      </p>
-
-
-      <p>
-
-        Equipo de Selección
-
-        <br>
-
-        ${escaparHtmlOnboarding_(data.signature)}
-
-      </p>
-
-    </div>
-  `;
+  <div style="margin:0;padding:0;background:#f1f5f9;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${vistaPrevia}</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f1f5f9;">
+      <tr><td align="center" style="padding:24px 12px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+          style="max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
+          <tr><td style="background:${color};padding:28px 24px;text-align:center;${fuente}">
+            ${logo}
+            <div style="font-size:12px;font-weight:bold;letter-spacing:2px;color:#ffffff;opacity:.85;text-transform:uppercase;">Bienvenida e ingreso</div>
+            <div style="font-size:24px;font-weight:bold;color:#ffffff;margin-top:6px;">${e(data.signature)}</div>
+          </td></tr>
+          <tr><td style="padding:28px 24px 32px 24px;${fuente}color:#1f2937;">
+            <div style="font-size:22px;font-weight:bold;color:#1f2937;">🎉 ${saludo}</div>
+            <div style="font-size:15px;line-height:1.6;color:#374151;margin-top:8px;">
+              ¡Tenemos una buena noticia! 🙌 Fuiste seleccionado/a para sumarte a nuestro equipo.
+              Estos son tus próximos pasos:
+            </div>
+            ${paso1}
+            ${paso2}
+            ${paso3}
+            ${confirmar}
+            <div style="margin-top:30px;font-size:15px;color:#1f2937;line-height:1.6;">
+              🚀 <strong>¡Te esperamos!</strong><br>
+              Equipo de Selección<br>
+              <span style="color:${color};font-weight:bold;">${e(data.signature)}</span>
+            </div>
+          </td></tr>
+        </table>
+        <div style="max-width:600px;font-size:12px;color:#94a3b8;margin-top:14px;${fuente}">
+          Recibiste este mail porque fuiste seleccionado/a para ingresar a ${e(data.signature)}.
+        </div>
+      </td></tr>
+    </table>
+  </div>`;
 }
 
-function crearTextoPlanoOnboarding_(
-  data
-) {
-
-  let text = '';
-
-
-  if (data.name) {
-
-    text +=
-      '🎉 ¡Hola ' +
-      data.name +
-      '! ¿Cómo estás?\n\n';
-
-  } else {
-
-    text +=
-      '🎉 ¡Hola! ¿Cómo estás?\n\n';
-  }
-
+function crearTextoPlanoOnboarding_(data) {
+  let text = (data.name ? '🎉 ¡Hola ' + data.name + '! ¿Cómo estás?' : '🎉 ¡Hola! ¿Cómo estás?') + '\n\n';
 
   text +=
 `¡Tenemos una buena noticia! 🙌
-Fuiste seleccionado/a para sumarte a nuestro equipo.
+Fuiste seleccionado/a para sumarte a nuestro equipo. Estos son tus próximos pasos:
 
-👨‍🍳 PUESTO: ${data.position}
-🕘 HORARIOS: ${data.scheduleText}
-
-✅ Próximos pasos
-
-1️⃣ Completá el formulario de ingreso 📝
-
-${ONBOARDING_CONFIG.formUrl}
-
-Completá el Código de Ética 📋
-
-${ONBOARDING_CONFIG.codigoEticaUrl}
-
-⚠️ Importante: formulario obligatorio para poder avanzar con la propuesta.
-
-2️⃣ Presentate en nuestra Oficina de Selección para realizar tu Bienvenida e Ingreso.
+1️⃣ Presentate en nuestra Oficina de Selección para realizar tu Bienvenida e Ingreso.
 
 📍 Dirección: ${ONBOARDING_CONFIG.officeAddress}
 📅 Fecha: ${data.onboardingDate}
 🕘 Horario: ${data.onboardingTime}
 
-Presentate 15 minutos antes del horario pactado.
+⏰ Presentate 15 minutos antes del horario pactado.
 
-✅ Confirmá tu asistencia a la Bienvenida abriendo este enlace:
+2️⃣ Código de Ética y documentación obligatoria
 
-${data.confirmUrl}
+Completá el Código de Ética 📋
+${ONBOARDING_CONFIG.codigoEticaUrl}
+⚠️ Importante: formulario obligatorio para poder avanzar con la propuesta.
 
-⚠️ Importante: confirmá tu asistencia únicamente desde ese enlace.
-
-3️⃣ Traé la siguiente documentación (obligatoria):
-
+📄 Traé la siguiente documentación (obligatoria):
 • DNI formato físico.
 • Carnet o constancia del Curso de Manipulación de Alimentos.
 • Certificado de Antecedentes Penales.
 
-📍 Tu local asignado será:
+3️⃣ Tu sede asignada
+Luego de presentarte en ${ONBOARDING_CONFIG.officeAddress}, esta es tu sede:
 
-${data.brand}: ${data.local}`;
+⚠️ Recordá: primero tenés que presentarte en la Oficina de Selección (punto 1). No vayas directo al local.
 
+📍 Tu local asignado: ${data.brand}: ${data.local}`;
 
-  if (data.localAddress) {
-
-    text +=
-      '\nDir: ' +
-      data.localAddress;
-  }
-
+  if (!data.opening && data.localAddress) text += '\nDir: ' + data.localAddress;
 
   if (data.trainingLocal) {
-
     text +=
 `
 
-👨‍🍳 Tu entrenamiento será en:
-
-${data.trainingLocal}
+👨‍🍳 Tu entrenamiento será en: ${data.trainingLocal}
 Dir: ${data.trainingAddress}`;
   }
-
 
   text +=
 `
 
 🗓️ Comenzás tu primer día
-
 📅 Fecha: ${data.firstDayDate}
 🕘 Hora: ${data.firstDaySchedule}
+
+✅ Confirmá tu asistencia a la Bienvenida abriendo este enlace:
+${data.confirmUrl}
+⚠️ Importante: confirmá tu asistencia únicamente desde ese enlace.
 
 🚀 ¡Te esperamos!
 
 Equipo de Selección
 ${data.signature}`;
-
 
   return text;
 }
