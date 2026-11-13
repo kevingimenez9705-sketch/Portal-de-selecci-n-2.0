@@ -1,17 +1,22 @@
 // ══════════════════════════════════════════════
 //  MAPA DE EQUIPOS · vista "Mapa"
-//  Mapa real con calles (MapLibre + OpenFreeMap: gratis, sin clave). Cada local es una columna:
-//  color por regional / zonal / selector / nómina y altura por vacantes abiertas. Usa los mismos
-//  filtros que la lista (marca, regional, zonal, selector, búsqueda).
+//  Mapa real (MapLibre + OpenFreeMap: gratis, sin clave) teñido de azul, con paneles de vidrio.
+//  Agrupado (zonal / regional / selector): una burbuja con la foto de cada persona en el centro de sus
+//  locales, con la cantidad de vacantes abiertas; los locales quedan como puntos chicos. Las burbujas
+//  se acomodan solas para no pisarse (con una línea a su lugar real). Al elegir una se ve su zona,
+//  sus locales y su nómina. "Locales": cada local es una columna (color por regional / zonal /
+//  selector / nómina y altura por vacantes abiertas).
+//  Usa los mismos filtros que la lista (marca, regional, zonal, selector, búsqueda).
 //  Ubicación aproximada: el centro de la localidad del local; los de una misma localidad se reparten
-//  alrededor. Los que no están en la hoja de asignaciones se ven transparentes (próximas aperturas).
+//  alrededor. Los que no están en la hoja de asignaciones se ven huecos / transparentes (próximas aperturas).
 // ══════════════════════════════════════════════
 const MAPA_LIB = { js: 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js', css: 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css' };
-const MAPA_ESTILO = 'https://tiles.openfreemap.org/styles/liberty';
-const MAPA_INICIO = { center: [-58.56, -34.63], zoom: 9.7, pitch: 50, bearing: -15 };
+const MAPA_ESTILO = 'https://tiles.openfreemap.org/styles/positron';
+const MAPA_INICIO = { center: [-58.56, -34.63], zoom: 9.7, pitch: 30, bearing: -10 };
 
-let eqModoMapa = false, eqMapaColor = 'regional';
+let eqModoMapa = false, eqMapaColor = 'regional', eqMapaGrupo = 'zonal';
 let _eqMapa = null, _eqMapaListo = false, _eqMapaLib = null, _eqMapaDatos = { lista: [], fuera: () => false }, _eqMapaPuntos = [];
+let _eqMapaGrupos = [], _eqMapaSel = null, _eqMapaMarcas = new Map(), _eqMapaRaf = 0;
 
 // Centro aproximado de cada localidad [lng, lat]
 const MAPA_COORDS = (() => {
@@ -72,10 +77,15 @@ function coordsLocal(l) {
     return porZona ? { c: porZona, aprox: true } : null;
 }
 
+
 // ── Colores
 const MAPA_PALETA = ['#2563eb', '#f59e0b', '#db2777', '#059669', '#7c3aed', '#ea580c', '#65a30d', '#dc2626', '#0891b2', '#a16207', '#4f46e5', '#0d9488'];
-const MAPA_NOMINA = { 'DEBE COMPLETAR': ['#dc2626', 'Debe completar'], 'EXCEDIDO': ['#f59e0b', 'Excedido'], 'COMPLETO': ['#16a34a', 'Completo'], '': ['#94a3b8', 'Sin dato de nómina'] };
+const MAPA_NOMINA = { 'DEBE COMPLETAR': ['#dc2626', 'Debe completar'], 'EXCEDIDO': ['#d97706', 'Excedido'], 'COMPLETO': ['#16a34a', 'Completo'], '': ['#94a3b8', 'Sin dato de nómina'] };
+const MAPA_NOMINA_ORDEN = ['DEBE COMPLETAR', 'EXCEDIDO', 'COMPLETO', ''];
 const MAPA_MODOS = { regional: 'Regional', zonal: 'Zonal', selector: 'Selector', nomina: 'Nómina' };
+const MAPA_GRUPOS = { zonal: 'Zonal', regional: 'Regional', selector: 'Selector', locales: 'Locales' };
+const MAPA_GRUPOS_PL = { zonal: 'Zonales', regional: 'Regionales', selector: 'Selectores' };
+const MAPA_AZUL = '#2563eb', MAPA_RESALTE = '#ee60b9';
 const claveMapa = l => eqMapaColor === 'nomina' ? (l.estado_nomina || '') : (l[eqMapaColor] || '');
 function coloresMapa() {
     if (eqMapaColor === 'nomina') return k => MAPA_NOMINA[k]?.[0] || MAPA_NOMINA[''][0];
@@ -89,36 +99,186 @@ function coloresMapa() {
         return i < MAPA_PALETA.length && eqMapaColor === 'regional' ? MAPA_PALETA[i] : `hsl(${Math.round((i * 137.508) % 360)}, 65%, 48%)`;
     };
 }
+const tituloMapa = k => String(k || '').toLowerCase().replace(/(^|[\s(])\S/g, s => s.toUpperCase());
 const nombreMapa = k => eqMapaColor === 'nomina' ? (MAPA_NOMINA[k]?.[1] || MAPA_NOMINA[''][1])
-    : !k ? 'Sin asignar' : eqMapaColor === 'selector' ? k : k.toLowerCase().replace(/(^|\s)\S/g, s => s.toUpperCase());
+    : !k ? 'Sin asignar' : eqMapaColor === 'selector' ? k : tituloMapa(k);
+const nombreGrupo = k => k ? (eqMapaGrupo === 'selector' ? k : tituloMapa(k)) : `Sin ${MAPA_GRUPOS[eqMapaGrupo].toLowerCase()}`;
+const colorGrupo = k => eqMapaGrupo === 'selector' && k ? colorDe(k) : k ? MAPA_AZUL : '#94a3b8';
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
-// ── Columnas (hexágonos) y etiquetas
-function geojsonMapa(lista, fuera) {
+// ── Locales: vacantes abiertas y posición (los de una misma localidad, repartidos en círculo)
+function vacantesPorLocal() {
     const vac = new Map();
     busquedas.forEach(b => { if (!vacanteAbierta(b)) return; const l = localDe(b.local); if (l) vac.set(l.id, (vac.get(l.id) || 0) + 1); });
-    const color = coloresMapa();
+    return vac;
+}
+const metrosA = lat => ({ kx: 1 / (111320 * Math.cos(lat * Math.PI / 180)), ky: 1 / 111320 });
+function posicionesMapa(lista) {
     const conPos = lista.map(l => ({ l, p: coordsLocal(l) })).filter(x => x.p);
-    // Los de una misma localidad se reparten en círculo para que no se pisen
     const grupos = {};
     conPos.forEach(x => (grupos[x.p.c.join()] = grupos[x.p.c.join()] || []).push(x));
-    const columnas = [], puntos = [];
+    const pos = [];
     Object.values(grupos).forEach(arr => arr.forEach((x, i) => {
-        const [lng0, lat0] = x.p.c, kx = 1 / (111320 * Math.cos(lat0 * Math.PI / 180)), ky = 1 / 111320;
+        const [lng0, lat0] = x.p.c, { kx, ky } = metrosA(lat0);
         const r = arr.length > 1 ? 700 + arr.length * 70 : 0, a = i / arr.length * 2 * Math.PI;
-        const lng = lng0 + r * Math.cos(a) * kx, lat = lat0 + r * Math.sin(a) * ky;
-        const v = vac.get(x.l.id) || 0;
-        const props = {
-            id: x.l.id, local: x.l.local, localidad: x.l.localidad || '', regional: x.l.regional || '', zonal: x.l.zonal || '',
-            selector: x.l.selector || '', nomina: MAPA_NOMINA[x.l.estado_nomina || '']?.[1] || '', vacantes: v,
-            fuera: fuera(x.l), aprox: x.p.aprox, clave: claveMapa(x.l), color: color(claveMapa(x.l)), alto: 250 + v * 800
-        };
-        const hex = [];
-        for (let k = 0; k <= 6; k++) { const b = (k % 6) / 6 * 2 * Math.PI + Math.PI / 6; hex.push([lng + 420 * Math.cos(b) * kx, lat + 420 * Math.sin(b) * ky]); }
-        columnas.push({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [hex] } });
-        puntos.push({ type: 'Feature', properties: { ...props, corto: x.l.local.replace(/^(SABORES|EXTREMAS)\s+/, '') }, geometry: { type: 'Point', coordinates: [lng, lat] } });
+        pos.push({ l: x.l, aprox: x.p.aprox, lng: lng0 + r * Math.cos(a) * kx, lat: lat0 + r * Math.sin(a) * ky });
     }));
-    return { columnas: { type: 'FeatureCollection', features: columnas }, puntos: { type: 'FeatureCollection', features: puntos }, sinPos: lista.length - conPos.length };
+    return { pos, sinPos: lista.length - conPos.length };
 }
+const propsLocal = (x, vac, fuera) => ({
+    id: x.l.id, local: x.l.local, localidad: x.l.localidad || '', regional: x.l.regional || '', zonal: x.l.zonal || '',
+    selector: x.l.selector || '', nomina: MAPA_NOMINA[x.l.estado_nomina || '']?.[1] || MAPA_NOMINA[''][1], vacantes: vac.get(x.l.id) || 0,
+    fuera: fuera(x.l), aprox: x.aprox, corto: x.l.local.replace(/^(SABORES|EXTREMAS)\s+/, '')
+});
+const fc = features => ({ type: 'FeatureCollection', features });
+
+// ── Vista "Locales": columnas (hexágonos)
+function columnasMapa(pos, vac, fuera) {
+    const color = coloresMapa();
+    return fc(pos.map(x => {
+        const { kx, ky } = metrosA(x.lat), v = vac.get(x.l.id) || 0, hex = [];
+        for (let k = 0; k <= 6; k++) { const b = (k % 6) / 6 * 2 * Math.PI + Math.PI / 6; hex.push([x.lng + 420 * Math.cos(b) * kx, x.lat + 420 * Math.sin(b) * ky]); }
+        return { type: 'Feature', properties: { ...propsLocal(x, vac, fuera), clave: claveMapa(x.l), color: color(claveMapa(x.l)), alto: 250 + v * 800 },
+            geometry: { type: 'Polygon', coordinates: [hex] } };
+    }));
+}
+
+// ── Vista agrupada: una burbuja por zonal / regional / selector
+const mediana = a => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+function gruposMapa(lista, pos, vac) {
+    const porId = new Map(pos.map(x => [x.l.id, x])), g = new Map();
+    lista.forEach(l => {
+        const k = l[eqMapaGrupo] || '';
+        if (!g.has(k)) g.set(k, { clave: k, locales: [], puntos: [], aprox: [], vac: 0, nomina: { 'DEBE COMPLETAR': 0, EXCEDIDO: 0, COMPLETO: 0, '': 0 }, marcas: {} });
+        const e = g.get(k), x = porId.get(l.id);
+        e.locales.push(l);
+        e.vac += vac.get(l.id) || 0;
+        e.nomina[l.estado_nomina in e.nomina ? l.estado_nomina : '']++;
+        e.marcas[l.marca] = (e.marcas[l.marca] || 0) + 1;
+        if (x) (x.aprox ? e.aprox : e.puntos).push([x.lng, x.lat]);
+    });
+    return [...g.values()].map(e => {
+        const pts = e.puntos.length ? e.puntos : e.aprox;
+        if (!pts.length) return null;
+        e.centro = [mediana(pts.map(p => p[0])), mediana(pts.map(p => p[1]))];
+        e.marca = Object.entries(e.marcas).sort((a, b) => b[1] - a[1])[0][0];
+        e.nombre = nombreGrupo(e.clave);
+        return e;
+    }).filter(Boolean).sort((a, b) => b.vac - a.vac || b.locales.length - a.locales.length || a.nombre.localeCompare(b.nombre));
+}
+
+// Zona de un grupo: envolvente de círculos de ~1,2 km alrededor de sus locales (sin los que quedan a más de 40 km)
+function zonaGrupo(e) {
+    const { kx, ky } = metrosA(e.centro[1]);
+    const cerca = e.puntos.filter(([lng, lat]) => Math.hypot((lng - e.centro[0]) / kx, (lat - e.centro[1]) / ky) < 40000);
+    const pts = [];
+    (cerca.length ? cerca : [e.centro]).forEach(([lng, lat]) => {
+        for (let k = 0; k < 16; k++) { const a = k / 16 * 2 * Math.PI; pts.push([lng + 1200 * Math.cos(a) * kx, lat + 1200 * Math.sin(a) * ky]); }
+    });
+    // Envolvente convexa (cadena monótona)
+    pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cruz = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lado = arr => { const h = []; arr.forEach(p => { while (h.length >= 2 && cruz(h[h.length - 2], h[h.length - 1], p) <= 0) h.pop(); h.push(p); }); h.pop(); return h; };
+    const anillo = lado(pts).concat(lado([...pts].reverse()));
+    anillo.push(anillo[0]);
+    return { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [anillo] } };
+}
+
+function fotoGrupo(e) {
+    if (!e.clave) return '<span class="eq-foto eq-sin"><i class="fas fa-question"></i></span>';
+    return eqMapaGrupo === 'selector' ? avatarHtml(e.clave) : fotoPersonaHtml(e.clave, e.marca);
+}
+
+// ── Burbujas (marcadores HTML) que se acomodan para no pisarse
+let _ctxMedir = null;
+function anchoEtiqueta(e) {
+    _ctxMedir = _ctxMedir || document.createElement('canvas').getContext('2d');
+    _ctxMedir.font = '800 12px Inter, system-ui, sans-serif';
+    const a = _ctxMedir.measureText(e.nombre).width;
+    _ctxMedir.font = '600 11px Inter, system-ui, sans-serif';
+    return Math.ceil(Math.max(a, _ctxMedir.measureText(subEtiqueta(e)).width)) + 22;
+}
+const subEtiqueta = e => `${plural(e.locales.length, 'local', 'locales')} · ${plural(e.vac, 'vacante', 'vacantes')}`;
+
+function marcadoresMapa() {
+    _eqMapaMarcas.forEach(m => m.marker.remove());
+    _eqMapaMarcas.clear();
+    if (!_eqMapaListo || eqMapaGrupo === 'locales') return;
+    _eqMapaGrupos.forEach(e => {
+        const el = document.createElement('div');
+        el.className = 'mg';
+        el.style.setProperty('--c', colorGrupo(e.clave));
+        el.innerHTML = `<svg class="mg-linea" width="1" height="1" aria-hidden="true"><line x1="0" y1="0" x2="0" y2="0"/></svg><span class="mg-pin"></span>
+            <button class="mg-burbuja" type="button" aria-label="${esc(e.nombre)}: ${esc(subEtiqueta(e))}">${fotoGrupo(e)}${e.vac ? `<span class="mg-badge">${e.vac}</span>` : ''}</button>
+            <div class="mg-etq"><b>${esc(e.nombre)}</b><span>${esc(subEtiqueta(e))}</span></div>`;
+        el.querySelector('.mg-burbuja').addEventListener('click', ev => { ev.stopPropagation(); eqMapaElegir(e.clave); });
+        const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(e.centro).addTo(_eqMapa);
+        _eqMapaMarcas.set(e.clave, { marker, el, e, w: anchoEtiqueta(e) });
+    });
+    marcarSeleccion();
+    acomodarMarcadores();
+}
+function programarAcomodo() { if (!_eqMapaRaf) _eqMapaRaf = requestAnimationFrame(acomodarMarcadores); }
+
+function acomodarMarcadores() {
+    _eqMapaRaf = 0;
+    if (!_eqMapa || !_eqMapaMarcas.size) return;
+    const cv = _eqMapa.getCanvas(), W = cv.clientWidth, H = cv.clientHeight;
+    const R = 22, SEP = 14, SUBE = 30, ALTO = 36;   // SEP: lugar para el número de vacantes
+    const ns = [..._eqMapaMarcas.values()].map((m, i) => { const a = _eqMapa.project(m.e.centro); return { m, i, ax: a.x, ay: a.y, x: a.x, y: a.y - SUBE }; });
+    // Se empujan de a pares hasta que no se pisen; un resorte suave las vuelve a su lugar
+    for (let it = 0; it < 90; it++) {
+        let movio = false;
+        for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length; j++) {
+            const A = ns[i], B = ns[j];
+            let dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy);
+            if (d >= 2 * R + SEP) continue;
+            if (d < 0.01) { dx = Math.cos(B.i * 2.4); dy = Math.sin(B.i * 2.4); d = 1; }
+            const f = (2 * R + SEP - d) / 2 / d;
+            A.x -= dx * f; A.y -= dy * f; B.x += dx * f; B.y += dy * f;
+            movio = true;
+        }
+        ns.forEach(n => { n.x += (n.ax - n.x) * 0.03; n.y += (n.ay - SUBE - n.y) * 0.03; });
+        if (!movio && it > 4) break;
+    }
+    // Etiquetas: primero la elegida y las de más vacantes; a la derecha, izquierda o abajo, donde entre
+    const cajas = ns.map(n => [n.x - R, n.y - R, n.x + R, n.y + R]);
+    // Los paneles de vidrio tapan el mapa: ahí tampoco van etiquetas
+    const cvR = cv.getBoundingClientRect();
+    document.querySelectorAll('.mg-panel').forEach(pn => {
+        if (!pn.offsetParent || getComputedStyle(pn).position !== 'absolute') return;
+        const r = pn.getBoundingClientRect();
+        cajas.push([r.left - cvR.left - 6, r.top - cvR.top - 6, r.right - cvR.left + 6, r.bottom - cvR.top + 6]);
+    });
+    const choca = r => r[0] < 4 || r[1] < 4 || r[2] > W - 4 || r[3] > H - 4 || cajas.some(c => r[0] < c[2] && r[2] > c[0] && r[1] < c[3] && r[3] > c[1]);
+    const orden = [...ns].sort((a, b) => (b.m.e.clave === _eqMapaSel) - (a.m.e.clave === _eqMapaSel) || b.m.e.vac - a.m.e.vac || b.m.e.locales.length - a.m.e.locales.length);
+    orden.forEach(n => {
+        const w = n.m.w, h = ALTO;
+        const lugares = [[n.x + R + 5, n.y - h / 2], [n.x - R - 5 - w, n.y - h / 2], [n.x - w / 2, n.y + R + 5], [n.x - w / 2, n.y - R - 5 - h]]
+            .map(([x, y]) => [x, y, x + w, y + h]);
+        const ok = lugares.find(r => !choca(r));
+        n.etq = ok || lugares[0];
+        n.oculta = !ok;
+        if (ok) cajas.push(ok);
+    });
+    ns.forEach(n => {
+        const dx = Math.round(n.x - n.ax), dy = Math.round(n.y - n.ay), el = n.m.el;
+        el.querySelector('.mg-burbuja').style.transform = `translate(${dx}px, ${dy}px)`;
+        const ln = el.querySelector('line');
+        ln.setAttribute('x2', dx); ln.setAttribute('y2', dy);
+        const etq = el.querySelector('.mg-etq');
+        etq.style.transform = `translate(${Math.round(n.etq[0] - n.ax)}px, ${Math.round(n.etq[1] - n.ay)}px)`;
+        etq.classList.toggle('oculta', n.oculta);
+    });
+}
+
+function marcarSeleccion() {
+    _eqMapaMarcas.forEach(m => {
+        m.el.classList.toggle('sel', m.e.clave === _eqMapaSel);
+        m.el.classList.toggle('atenuada', _eqMapaSel !== null && m.e.clave !== _eqMapaSel);
+    });
+}
+function eqMapaResaltar(k, si) { _eqMapaMarcas.get(k)?.el.classList.toggle('hover', si); }
 
 // ── Carga de la librería (solo la primera vez que se abre el mapa)
 function cargarLibMapa() {
@@ -139,6 +299,32 @@ function eqVerMapa(si) {
     renderEquipos();
 }
 function eqColorMapa(modo) { eqMapaColor = modo; actualizarMapaEquipos(); }
+function eqMapaAgrupar(modo) { eqMapaGrupo = modo; _eqMapaSel = null; actualizarMapaEquipos(); eqMapaVista('amba'); }
+
+// Mapa base en azules (tipo "mapa digital"): se repinta el estilo Positron capa por capa
+function pintarMapaBase() {
+    const set = (id, prop, v) => { try { _eqMapa.setPaintProperty(id, prop, v); } catch (e) { /* capa sin esa propiedad */ } };
+    (_eqMapa.getStyle().layers || []).forEach(ly => {
+        const id = ly.id;
+        if (ly.type === 'background') set(id, 'background-color', '#e9f1fd');
+        else if (ly.type === 'fill') {
+            if (/water|ocean|sea|lake/.test(id)) set(id, 'fill-color', '#8cb8f0');
+            else if (/building/.test(id)) set(id, 'fill-color', '#dbe6f8');
+            else if (/park|wood|grass|forest|landcover|green/.test(id)) set(id, 'fill-color', '#dcebf9');
+            else set(id, 'fill-color', '#e2ecfb');
+        } else if (ly.type === 'line') {
+            if (/water|river|stream|canal/.test(id)) set(id, 'line-color', '#8cb8f0');
+            else if (/boundary|admin/.test(id)) set(id, 'line-color', '#9db5dc');
+            else if (/casing/.test(id)) set(id, 'line-color', '#cbdaf2');
+            else if (/rail/.test(id)) set(id, 'line-color', '#c2d3ee');
+            else set(id, 'line-color', '#ffffff');
+        } else if (ly.type === 'fill-extrusion') set(id, 'fill-extrusion-color', '#d6e3f7');
+        else if (ly.type === 'symbol' && ly.layout?.['text-field']) {
+            set(id, 'text-color', /water/.test(id) ? '#2b5ca6' : '#4a6290');
+            set(id, 'text-halo-color', 'rgba(255, 255, 255, 0.9)');
+        }
+    });
+}
 
 // Lo llama renderEquipos con la lista ya filtrada
 async function pintarMapaEquipos(lista, fuera) {
@@ -146,94 +332,248 @@ async function pintarMapaEquipos(lista, fuera) {
     const box = document.getElementById('equipos-mapa');
     if (!box.dataset.armado) {
         box.dataset.armado = '1';
+        const seg = (id, lbl, obj, fn, attr) => `<div class="mg-control" id="${id}"><span class="mg-control-lbl">${lbl}</span><div class="eq-mapa-modos" role="group" aria-label="${lbl}">${Object.entries(obj).map(([k, t]) =>
+            `<button class="eq-mapa-modo" data-${attr}="${k}" onclick="${fn}(this.dataset.${attr})">${t}</button>`).join('')}</div></div>`;
         box.innerHTML = `<div class="eq-mapa-barra">
-                <div class="eq-mapa-modos" role="group" aria-label="Color por">${Object.entries(MAPA_MODOS).map(([k, t]) =>
-                    `<button class="eq-mapa-modo" data-modo="${k}" onclick="eqColorMapa(this.dataset.modo)">${t}</button>`).join('')}</div>
+                ${seg('mg-agrupar', 'Agrupar por', MAPA_GRUPOS, 'eqMapaAgrupar', 'grupo')}
+                ${seg('mg-colorear', 'Color por', MAPA_MODOS, 'eqColorMapa', 'modo')}
+                <span class="mg-espacio"></span>
                 <button class="btn-sm" onclick="eqMapaVista('amba')"><i class="fas fa-crosshairs"></i> AMBA</button>
                 <button class="btn-sm" onclick="eqMapaVista('todo')"><i class="fas fa-expand"></i> Ver todos</button>
                 <button class="btn-sm" id="eq-mapa-3d" onclick="eqMapaVista('3d')">Vista plana</button>
             </div>
-            <div class="eq-mapa-cuerpo"><div id="eq-mapa-canvas"></div><div class="eq-mapa-leyenda" id="eq-mapa-leyenda"></div></div>
+            <div class="eq-mapa-cuerpo">
+                <div class="mg-lienzo"><div id="eq-mapa-canvas"></div></div>
+                <div class="mg-panel mg-resumen" id="mg-resumen"></div>
+                <div class="mg-panel mg-lista" id="mg-lista"></div>
+                <div class="mg-tip" id="mg-tip" hidden></div>
+            </div>
             <div class="eq-mapa-nota" id="eq-mapa-nota"></div>`;
+        const cuerpo = box.querySelector('.eq-mapa-cuerpo');
+        cuerpo.addEventListener('mousemove', tipMapa);
+        cuerpo.addEventListener('mouseleave', () => { document.getElementById('mg-tip').hidden = true; });
     }
     try { await cargarLibMapa(); }
-    catch (e) { document.getElementById('eq-mapa-nota').textContent = 'No se pudo cargar el mapa (revisá la conexión o un bloqueador) y volvé a abrirlo.'; return; }
+    catch (e) { document.getElementById('eq-mapa-nota').textContent = 'No se pudo cargar el mapa (revisá la conexión o un bloqueador) y volvé a abrirlo.'; actualizarMapaEquipos(); return; }
     if (!_eqMapa) {
         _eqMapa = new maplibregl.Map({ container: 'eq-mapa-canvas', style: MAPA_ESTILO, ...MAPA_INICIO, attributionControl: { compact: true } });
-        _eqMapa.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+        _eqMapa.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-left');
+        _eqMapa.setPadding(padCamara());
         _eqMapa.on('error', e => console.warn('Mapa:', e?.error?.message || e));
         _eqMapa.on('load', () => {
-            _eqMapa.addSource('eq-columnas', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-            _eqMapa.addSource('eq-puntos', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+            pintarMapaBase();
+            const vacio = fc([]);
+            ['eq-columnas', 'eq-puntos', 'eq-zona'].forEach(id => _eqMapa.addSource(id, { type: 'geojson', data: vacio }));
             const alto = ['get', 'alto'];
+            // Vista "Locales"
             _eqMapa.addLayer({ id: 'eq-col', type: 'fill-extrusion', source: 'eq-columnas', filter: ['!', ['get', 'fuera']],
                 paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': alto, 'fill-extrusion-opacity': 0.92 } });
             _eqMapa.addLayer({ id: 'eq-col-fuera', type: 'fill-extrusion', source: 'eq-columnas', filter: ['get', 'fuera'],
                 paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': alto, 'fill-extrusion-opacity': 0.35 } });
+            // Vista agrupada: zona del elegido y locales como puntos
+            _eqMapa.addLayer({ id: 'eq-zona', type: 'fill', source: 'eq-zona', paint: { 'fill-color': MAPA_RESALTE, 'fill-opacity': 0.12 } });
+            _eqMapa.addLayer({ id: 'eq-zona-borde', type: 'line', source: 'eq-zona', paint: { 'line-color': MAPA_RESALTE, 'line-width': 2, 'line-dasharray': [2, 1.5] } });
+            _eqMapa.addLayer({ id: 'eq-dots', type: 'circle', source: 'eq-puntos', paint: {
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, ['case', ['get', 'sel'], 4.5, 3], 13, ['case', ['get', 'sel'], 8, 6]],
+                'circle-color': ['case', ['get', 'fuera'], '#ffffff', ['get', 'color']],
+                'circle-stroke-color': ['case', ['get', 'fuera'], ['get', 'color'], '#ffffff'],
+                'circle-stroke-width': ['case', ['get', 'fuera'], 2, 1.5],
+                'circle-opacity': ['case', ['get', 'atenuado'], 0.35, 1], 'circle-stroke-opacity': ['case', ['get', 'atenuado'], 0.35, 1] } });
             _eqMapa.addLayer({ id: 'eq-nombres', type: 'symbol', source: 'eq-puntos', minzoom: 12,
-                layout: { 'text-field': ['get', 'corto'], 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, 1.2], 'text-anchor': 'top' },
+                layout: { 'text-field': ['get', 'corto'], 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, 1.1], 'text-anchor': 'top' },
                 paint: { 'text-color': '#172033', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 } });
-            ['eq-col', 'eq-col-fuera'].forEach(id => {
-                _eqMapa.on('click', id, ev => popupMapa(ev));
+            ['eq-col', 'eq-col-fuera', 'eq-dots'].forEach(id => {
+                _eqMapa.on('click', id, ev => popupMapa(ev.features[0].properties, ev.lngLat));
                 _eqMapa.on('mouseenter', id, () => { _eqMapa.getCanvas().style.cursor = 'pointer'; });
                 _eqMapa.on('mouseleave', id, () => { _eqMapa.getCanvas().style.cursor = ''; });
             });
+            _eqMapa.on('move', programarAcomodo);
+            _eqMapa.on('resize', () => { _eqMapa.setPadding(padCamara()); programarAcomodo(); });
             _eqMapaListo = true;
             actualizarMapaEquipos();
         });
     } else {
         _eqMapa.resize();
-        actualizarMapaEquipos();
     }
+    actualizarMapaEquipos();
 }
 
 function actualizarMapaEquipos() {
-    document.querySelectorAll('.eq-mapa-modo').forEach(b => b.classList.toggle('activa', b.dataset.modo === eqMapaColor));
+    const agrupado = eqMapaGrupo !== 'locales';
+    document.querySelectorAll('[data-grupo]').forEach(b => b.classList.toggle('activa', b.dataset.grupo === eqMapaGrupo));
+    document.querySelectorAll('[data-modo]').forEach(b => b.classList.toggle('activa', b.dataset.modo === eqMapaColor));
+    document.getElementById('mg-colorear')?.classList.toggle('hidden', agrupado);
+    const tip = document.getElementById('mg-tip');
+    if (tip) tip.hidden = true;
     const { lista, fuera } = _eqMapaDatos;
-    const g = geojsonMapa(lista, fuera);
+    const vac = vacantesPorLocal();
+    const { pos, sinPos } = posicionesMapa(lista);
+    _eqMapaGrupos = agrupado ? gruposMapa(lista, pos, vac) : [];
+    if (_eqMapaSel !== null && !_eqMapaGrupos.some(e => e.clave === _eqMapaSel)) _eqMapaSel = null;
+    const sel = _eqMapaGrupos.find(e => e.clave === _eqMapaSel);
+    _eqMapaPuntos = pos.map(x => [x.lng, x.lat]);
+
     if (_eqMapaListo) {
-        _eqMapa.getSource('eq-columnas').setData(g.columnas);
-        _eqMapa.getSource('eq-puntos').setData(g.puntos);
+        ['eq-col', 'eq-col-fuera'].forEach(id => _eqMapa.setLayoutProperty(id, 'visibility', agrupado ? 'none' : 'visible'));
+        ['eq-zona', 'eq-zona-borde', 'eq-dots'].forEach(id => _eqMapa.setLayoutProperty(id, 'visibility', agrupado ? 'visible' : 'none'));
+        _eqMapa.getSource('eq-columnas').setData(agrupado ? fc([]) : columnasMapa(pos, vac, fuera));
+        _eqMapa.getSource('eq-puntos').setData(fc(pos.map(x => {
+            const k = x.l[eqMapaGrupo] || '';
+            const enSel = agrupado && _eqMapaSel !== null && k === _eqMapaSel;
+            return { type: 'Feature', geometry: { type: 'Point', coordinates: [x.lng, x.lat] }, properties: { ...propsLocal(x, vac, fuera),
+                sel: enSel, atenuado: agrupado && _eqMapaSel !== null && !enSel, color: enSel ? MAPA_RESALTE : agrupado ? colorGrupo(k) : '#172033' } };
+        })));
+        _eqMapa.getSource('eq-zona').setData(sel ? fc([zonaGrupo(sel)]) : fc([]));
+        marcadoresMapa();
     }
-    // Leyenda: lo que se ve con el filtro actual
-    const color = coloresMapa(), grupos = new Map();
-    _eqMapaPuntos = g.puntos.features;
-    g.columnas.features.forEach(f => {
-        const k = f.properties.clave;
-        const e = grupos.get(k) || { n: 0, v: 0 }; e.n++; e.v += f.properties.vacantes; grupos.set(k, e);
-    });
-    const orden = [...grupos.keys()].sort((a, b) => eqMapaColor === 'nomina'
-        ? ['DEBE COMPLETAR', 'EXCEDIDO', 'COMPLETO', ''].indexOf(a) - ['DEBE COMPLETAR', 'EXCEDIDO', 'COMPLETO', ''].indexOf(b)
-        : grupos.get(b).n - grupos.get(a).n);
-    document.getElementById('eq-mapa-leyenda').innerHTML = `<div class="eq-mapa-ley-tit">${MAPA_MODOS[eqMapaColor]}</div>` +
-        orden.map(k => `<div class="eq-mapa-ley-fila"><i style="background:${color(k)}"></i><span>${esc(nombreMapa(k))}</span><b>${grupos.get(k).n}</b></div>`).join('');
-    const nFuera = g.columnas.features.filter(f => f.properties.fuera).length;
-    document.getElementById('eq-mapa-nota').innerHTML = `<b>Altura</b> = vacantes abiertas · ubicación aproximada por localidad`
-        + (nFuera ? ` · <b>${nFuera}</b> transparente${nFuera === 1 ? '' : 's'} = no está${nFuera === 1 ? '' : 'n'} en la hoja (posibles aperturas)` : '')
-        + (g.sinPos ? ` · ${g.sinPos} sin ubicación` : '');
+    document.getElementById('mg-resumen').innerHTML = resumenHtml(lista, vac);
+    document.getElementById('mg-lista').innerHTML = sel ? detalleGrupoHtml(sel, vac, fuera) : agrupado ? rankingHtml() : leyendaLocalesHtml(lista, vac);
+    const nFuera = lista.filter(fuera).length;
+    document.getElementById('eq-mapa-nota').innerHTML = (agrupado
+        ? `Cada burbuja es un ${MAPA_GRUPOS[eqMapaGrupo].toLowerCase()} en el centro de sus locales · <b>número</b> = vacantes abiertas · puntos = locales`
+        : `<b>Altura</b> = vacantes abiertas`)
+        + ` · ubicación aproximada por localidad`
+        + (nFuera ? ` · <b>${nFuera}</b> ${agrupado ? 'hueco' : 'transparente'}${nFuera === 1 ? '' : 's'} = no está${nFuera === 1 ? '' : 'n'} en la hoja (posibles aperturas)` : '')
+        + (sinPos ? ` · ${sinPos} sin ubicación` : '');
 }
 
-function popupMapa(ev) {
-    const p = ev.features[0].properties;
+// ── Paneles
+function resumenHtml(lista, vac) {
+    const c = { 'DEBE COMPLETAR': 0, EXCEDIDO: 0, COMPLETO: 0, '': 0 };
+    lista.forEach(l => c[l.estado_nomina in c ? l.estado_nomina : '']++);
+    const nVac = lista.reduce((s, l) => s + (vac.get(l.id) || 0), 0);
+    const tercero = eqMapaGrupo === 'locales' ? ['zonal', 'Zonales'] : [eqMapaGrupo, MAPA_GRUPOS_PL[eqMapaGrupo]];
+    const nGrupos = new Set(lista.map(l => l[tercero[0]]).filter(Boolean)).size;
+    const marca = eqMarca ? (eqMarca === 'Sabores Express' ? 'Sabores' : 'Extremas') : 'Sabores y Extremas';
+    return `<div class="mg-tit">Mapa de equipos</div>
+        <div class="mg-sub">${esc(marca)} · ${eqMapaGrupo === 'locales' ? 'por local' : 'por ' + MAPA_GRUPOS[eqMapaGrupo].toLowerCase()}</div>
+        <div class="mg-kpis">
+            <div><b>${lista.length}</b><span>Locales</span></div>
+            <div><b>${nVac}</b><span>Vacantes abiertas</span></div>
+            <div><b>${nGrupos}</b><span>${tercero[1]}</span></div>
+        </div>
+        <div class="mg-sec">Nómina de los locales</div>
+        ${lista.length ? `<div class="mg-dona-fila">${donaNomina(c, lista.length)}<div class="mg-dona-ley">${MAPA_NOMINA_ORDEN.map(k =>
+            `<div data-tip="${MAPA_NOMINA[k][1]}: ${plural(c[k], 'local', 'locales')} (${Math.round(c[k] / lista.length * 100)}%)"><i style="background:${MAPA_NOMINA[k][0]}"></i><span>${k ? MAPA_NOMINA[k][1] : 'Sin dato'}</span><b>${c[k]}</b></div>`).join('')}</div></div>`
+            : '<div class="tip">Ningún local con este filtro.</div>'}`;
+}
+
+// Dona de nómina: un segmento por estado, separados 2 px; en el centro, cuántos locales deben completar
+function donaNomina(c, total) {
+    const R = 34, C = 2 * Math.PI * R, partes = MAPA_NOMINA_ORDEN.filter(k => c[k]);
+    let acc = 0;
+    const segs = partes.map(k => {
+        const len = c[k] / total * C, gap = partes.length > 1 ? 2 : 0;
+        const s = `<circle cx="46" cy="46" r="${R}" fill="none" stroke="${MAPA_NOMINA[k][0]}" stroke-width="12" stroke-dasharray="${Math.max(len - gap, 0.5).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-acc).toFixed(2)}"
+            data-tip="${MAPA_NOMINA[k][1]}: ${plural(c[k], 'local', 'locales')} (${Math.round(c[k] / total * 100)}%)"></circle>`;
+        acc += len;
+        return s;
+    }).join('');
+    return `<svg class="mg-dona" viewBox="0 0 92 92" width="92" height="92" role="img" aria-label="Nómina: ${MAPA_NOMINA_ORDEN.map(k => `${MAPA_NOMINA[k][1]} ${c[k]}`).join(', ')}">
+        <g transform="rotate(-90 46 46)">${segs}</g>
+        <text x="46" y="45" text-anchor="middle" class="mg-dona-num">${c['DEBE COMPLETAR']}</text>
+        <text x="46" y="58" text-anchor="middle" class="mg-dona-lbl">a completar</text></svg>`;
+}
+
+function rankingHtml() {
+    if (!_eqMapaGrupos.length) return `<div class="mg-tit">${MAPA_GRUPOS_PL[eqMapaGrupo]}</div><div class="tip" style="margin-top:6px">Nada para mostrar con este filtro.</div>`;
+    const max = Math.max(1, ..._eqMapaGrupos.map(e => e.vac));
+    return `<div class="mg-tit">Vacantes abiertas por ${MAPA_GRUPOS[eqMapaGrupo].toLowerCase()}</div>
+        <div class="mg-sub">${plural(_eqMapaGrupos.filter(e => e.clave).length, MAPA_GRUPOS[eqMapaGrupo].toLowerCase(), MAPA_GRUPOS_PL[eqMapaGrupo].toLowerCase())} · tocá uno para ver su zona</div>
+        <div class="mg-filas">${_eqMapaGrupos.map(e => `<button class="mg-fila" data-k="${esc(e.clave)}" onclick="eqMapaElegir(this.dataset.k)"
+                onmouseenter="eqMapaResaltar(this.dataset.k, true)" onmouseleave="eqMapaResaltar(this.dataset.k, false)"
+                data-tip="${esc(e.nombre)}: ${esc(subEtiqueta(e))} · ${e.nomina['DEBE COMPLETAR']} a completar">
+            <span class="mg-fila-foto" style="--c:${colorGrupo(e.clave)}">${fotoGrupo(e)}</span>
+            <span class="mg-fila-nom">${esc(e.nombre)}<small>${plural(e.locales.length, 'local', 'locales')}</small></span>
+            <span class="mg-barra"><i style="width:${e.vac ? Math.max(4, e.vac / max * 100) : 0}%"></i></span>
+            <b>${e.vac}</b></button>`).join('')}</div>`;
+}
+
+function detalleGrupoHtml(e, vac, fuera) {
+    const ls = [...e.locales].sort((a, b) => (vac.get(b.id) || 0) - (vac.get(a.id) || 0) || a.local.localeCompare(b.local));
+    const otros = f => [...new Set(e.locales.map(l => l[f]).filter(Boolean))];
+    const rol = eqMapaGrupo === 'zonal' ? ['Zonal', ...otros('regional').map(r => 'Regional ' + tituloMapa(r)), ...otros('selector')]
+        : eqMapaGrupo === 'regional' ? ['Regional', plural(otros('zonal').length, 'zonal', 'zonales'), ...otros('selector')]
+        : ['Selector', plural(otros('zonal').length, 'zonal', 'zonales')];
+    return `<button class="mg-volver" onclick="eqMapaElegir(_eqMapaSel)"><i class="fas fa-arrow-left"></i> Todos</button>
+        <div class="mg-det-cab"><span class="mg-fila-foto mg-det-foto" style="--c:${MAPA_RESALTE}">${fotoGrupo(e)}</span>
+            <div><b>${esc(e.nombre)}</b><span>${esc(rol.join(' · '))}</span></div></div>
+        <div class="mg-kpis">
+            <div><b>${e.locales.length}</b><span>Locales</span></div>
+            <div><b>${e.vac}</b><span>Vacantes abiertas</span></div>
+            <div><b>${e.nomina['DEBE COMPLETAR']}</b><span>A completar</span></div>
+        </div>
+        <div class="mg-sec">Locales</div>
+        <div class="mg-filas">${ls.map(l => {
+            const [color, txt] = MAPA_NOMINA[l.estado_nomina || ''] || MAPA_NOMINA[''], v = vac.get(l.id) || 0;
+            return `<button class="mg-local" onclick="eqMapaIrLocal(${l.id})" data-tip="${esc(l.localidad || '')}${l.localidad ? ' · ' : ''}${txt}${fuera(l) ? ' · no está en la hoja' : ''}">
+                <span class="eq-punto" style="background:${color}"></span><span class="mg-local-nom">${esc(l.local)}</span>${v ? `<b>${plural(v, 'vac.', 'vac.')}</b>` : ''}</button>`;
+        }).join('')}</div>`;
+}
+
+function leyendaLocalesHtml(lista, vac) {
+    const color = coloresMapa(), grupos = new Map();
+    lista.forEach(l => { const k = claveMapa(l), e = grupos.get(k) || { n: 0, v: 0 }; e.n++; e.v += vac.get(l.id) || 0; grupos.set(k, e); });
+    const orden = [...grupos.keys()].sort((a, b) => eqMapaColor === 'nomina'
+        ? MAPA_NOMINA_ORDEN.indexOf(a) - MAPA_NOMINA_ORDEN.indexOf(b) : grupos.get(b).n - grupos.get(a).n);
+    return `<div class="mg-tit">Color por ${MAPA_MODOS[eqMapaColor].toLowerCase()}</div><div class="mg-sub">locales · vacantes abiertas</div>
+        <div class="mg-filas">${orden.map(k => `<div class="eq-mapa-ley-fila"><i style="background:${color(k)}"></i><span>${esc(nombreMapa(k))}</span><b>${grupos.get(k).n} · ${grupos.get(k).v}</b></div>`).join('')}</div>`;
+}
+
+function tipMapa(ev) {
+    const t = ev.target.closest?.('[data-tip]'), tip = document.getElementById('mg-tip');
+    if (!t) { tip.hidden = true; return; }
+    const box = ev.currentTarget.getBoundingClientRect();
+    tip.textContent = t.dataset.tip;
+    tip.hidden = false;
+    const x = ev.clientX - box.left + 14, y = ev.clientY - box.top + 14;
+    tip.style.left = Math.min(x, box.width - tip.offsetWidth - 8) + 'px';
+    tip.style.top = Math.min(y, box.height - tip.offsetHeight - 8) + 'px';
+}
+
+// ── Elegir un grupo / ir a un local
+// Con los paneles al costado (pantalla ancha), el centro del mapa es el espacio libre entre ellos
+const paneles = () => !window.matchMedia('(max-width: 900px)').matches;
+const padCamara = () => paneles() ? { top: 10, bottom: 10, left: 284, right: 304 } : { top: 0, bottom: 0, left: 0, right: 0 };
+const paddingMapa = () => 50;
+function eqMapaElegir(k) {
+    _eqMapaSel = _eqMapaSel === k ? null : k;
+    actualizarMapaEquipos();
+    const e = _eqMapaGrupos.find(x => x.clave === _eqMapaSel);
+    if (!_eqMapa) return;
+    if (!e) { eqMapaVista('amba'); return; }
+    const pts = e.puntos.length ? e.puntos : e.aprox, b = new maplibregl.LngLatBounds();
+    pts.forEach(p => b.extend(p));
+    _eqMapa.fitBounds(b, { padding: paddingMapa(), maxZoom: 12.5, pitch: _eqMapa.getPitch(), duration: 900 });
+}
+function eqMapaIrLocal(id) {
+    const x = posicionesMapa(_eqMapaDatos.lista).pos.find(p => p.l.id === id);
+    if (!x || !_eqMapa) return;
+    _eqMapa.flyTo({ center: [x.lng, x.lat], zoom: Math.max(_eqMapa.getZoom(), 13), duration: 800 });
+    popupMapa(propsLocal(x, vacantesPorLocal(), _eqMapaDatos.fuera), [x.lng, x.lat]);
+}
+
+let _eqMapaPopup = null;
+function popupMapa(p, lngLat) {
     const fila = (t, v) => v ? `<div><span>${t}</span> ${esc(v)}</div>` : '';
-    new maplibregl.Popup({ closeButton: true, maxWidth: '280px' }).setLngLat(ev.lngLat).setHTML(`<div class="eq-mapa-pop">
+    _eqMapaPopup?.remove();
+    _eqMapaPopup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', offset: 10 }).setLngLat(lngLat).setHTML(`<div class="eq-mapa-pop">
         <b>${esc(p.local)}</b>${p.fuera === true || p.fuera === 'true' ? ' <span class="eq-local-fuera">No está en la hoja</span>' : ''}
-        ${fila('Localidad', p.localidad)}${fila('Regional', p.regional)}${fila('Zonal', p.zonal)}${fila('Selector', p.selector)}
+        ${fila('Localidad', p.localidad)}${fila('Regional', tituloMapa(p.regional))}${fila('Zonal', tituloMapa(p.zonal))}${fila('Selector', p.selector)}
         ${fila('Nómina', p.nomina)}<div><span>Vacantes abiertas</span> ${p.vacantes}</div></div>`).addTo(_eqMapa);
 }
 
 function eqMapaVista(cual) {
     if (!_eqMapa) return;
-    if (cual === 'amba') { _eqMapa.flyTo({ ...MAPA_INICIO, pitch: _eqMapa.getPitch() }); return; }
+    if (cual === 'amba') { _eqMapa.flyTo({ ...MAPA_INICIO, pitch: _eqMapa.getPitch(), bearing: _eqMapa.getBearing() }); return; }
     if (cual === '3d') {
         const plano = _eqMapa.getPitch() > 5;
-        _eqMapa.easeTo({ pitch: plano ? 0 : 50, bearing: plano ? 0 : -15 });
+        _eqMapa.easeTo({ pitch: plano ? 0 : MAPA_INICIO.pitch, bearing: plano ? 0 : MAPA_INICIO.bearing });
         document.getElementById('eq-mapa-3d').textContent = plano ? 'Vista 3D' : 'Vista plana';
         return;
     }
-    const fs = _eqMapaPuntos;
-    if (!fs.length) return;
+    if (!_eqMapaPuntos.length) return;
     const b = new maplibregl.LngLatBounds();
-    fs.forEach(f => b.extend(f.geometry.coordinates));
-    _eqMapa.fitBounds(b, { padding: 60, pitch: _eqMapa.getPitch(), maxZoom: 13 });
+    _eqMapaPuntos.forEach(p => b.extend(p));
+    _eqMapa.fitBounds(b, { padding: paddingMapa(), pitch: _eqMapa.getPitch(), maxZoom: 13 });
 }
