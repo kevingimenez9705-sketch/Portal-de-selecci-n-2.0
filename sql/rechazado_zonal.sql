@@ -1,14 +1,20 @@
 -- ══════════════════════════════════════════════════════════════════════════
 --  Rechazado por el zonal → la persona queda BLOQUEADA y sale de BASE DE DATOS
 -- ──────────────────────────────────────────────────────────────────────────
---  Cuando una vacante pasa a RECHAZADO ZONAL (respuesta del zonal en su hoja,
---  cambio a mano en el portal o fila de Solicitudes), la persona de esa vacante:
+--  EXTREMAS: cuando una vacante pasa a RECHAZADO ZONAL (respuesta del zonal en
+--  su hoja, cambio a mano en el portal o fila de Solicitudes), la persona:
 --   - queda "Bloqueado" en la Base de postulantes del portal (no se puede
 --     volver a colocar ni vuelve a la base como disponible);
 --   - se suma a BLOQUEADOS con motivo "RECHAZADO ZONAL · <local>", así la
 --     página Elegí tu vacante no la deja volver a anotarse.
 --  El Apps Script SincronizarPortal copia ese bloqueo a la pestaña BLOQUEADOS
 --  y saca sus filas de la pestaña BASE DE DATOS (apps-script/SincronizarBase.gs).
+--
+--  SABORES: no se bloquea sola. Al poner RECHAZADO ZONAL el portal pregunta
+--  "¿Enviar a BLOQUEADOS?" y, si se confirma, llama a
+--  seleccion_rechazo_zonal_bloquear(id) (mismo bloqueo que Extremas). Si no,
+--  la persona sigue disponible en la Base. También se puede bloquear después
+--  desde el detalle de la vacante.
 --
 --  Para desbloquear a alguien: en BLOQUEADOS poner ACTIVO = NO y en el portal
 --  cambiarle el estado en la Base.
@@ -72,11 +78,12 @@ begin
 end;
 $$;
 
--- Cada vez que una vacante pasa a RECHAZADO ZONAL
+-- Cada vez que una vacante pasa a RECHAZADO ZONAL (Sabores no: lo decide el equipo desde el portal)
 create or replace function public.seleccion_busquedas_rechazo_zonal_() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-    if new.estado = 'RECHAZADO ZONAL' and (tg_op = 'INSERT' or old.estado is distinct from 'RECHAZADO ZONAL') then
+    if new.estado = 'RECHAZADO ZONAL' and new.marca is distinct from 'Sabores Express'
+       and (tg_op = 'INSERT' or old.estado is distinct from 'RECHAZADO ZONAL') then
         perform seleccion_bloquear_rechazado_zonal_(new);
     end if;
     return new;
@@ -86,13 +93,33 @@ $$;
 drop trigger if exists seleccion_busquedas_rechazo_zonal on public.seleccion_busquedas;
 create trigger seleccion_busquedas_rechazo_zonal
     after insert or update of estado on public.seleccion_busquedas
-    for each row when (new.estado = 'RECHAZADO ZONAL')
+    for each row when (new.estado = 'RECHAZADO ZONAL' and new.marca is distinct from 'Sabores Express')
     execute function public.seleccion_busquedas_rechazo_zonal_();
+
+-- Sabores: el equipo eligió "Enviar a BLOQUEADOS" en el portal.
+-- Devuelve { ok, motivo? }: ok = false si la vacante no está en RECHAZADO ZONAL o no tiene datos de la persona.
+create or replace function public.seleccion_rechazo_zonal_bloquear(p_id bigint) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare b seleccion_busquedas;
+begin
+    if not seleccion_codigo_ok() then
+        raise exception 'Código del equipo inválido' using errcode = '42501';
+    end if;
+    select * into b from seleccion_busquedas where id = p_id;
+    if not found then return jsonb_build_object('ok', false, 'motivo', 'no_existe'); end if;
+    if b.estado is distinct from 'RECHAZADO ZONAL' then return jsonb_build_object('ok', false, 'motivo', 'no_rechazada'); end if;
+    if not seleccion_bloquear_rechazado_zonal_(b) then return jsonb_build_object('ok', false, 'motivo', 'sin_datos'); end if;
+    return jsonb_build_object('ok', true);
+end;
+$$;
 
 revoke execute on function public.seleccion_bloquear_rechazado_zonal_(public.seleccion_busquedas, boolean) from public, anon, authenticated;
 revoke execute on function public.seleccion_busquedas_rechazo_zonal_() from public, anon, authenticated;
+revoke execute on function public.seleccion_rechazo_zonal_bloquear(bigint) from public;
+grant execute on function public.seleccion_rechazo_zonal_bloquear(bigint) to anon, authenticated;
 
--- Carga inicial: los que hoy están en RECHAZADO ZONAL
+-- Carga inicial: los de Extremas que hoy están en RECHAZADO ZONAL
 select count(*) filter (where public.seleccion_bloquear_rechazado_zonal_(b, true)) as bloqueados_ahora
   from public.seleccion_busquedas b
- where b.estado = 'RECHAZADO ZONAL';
+ where b.estado = 'RECHAZADO ZONAL'
+   and b.marca is distinct from 'Sabores Express';
