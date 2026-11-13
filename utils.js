@@ -291,7 +291,7 @@ document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', 
 // ── DIÁLOGOS PROPIOS (reemplazan confirm() / prompt()) ──
 // Embebida en Google Sites el navegador bloquea confirm()/prompt() y devuelven
 // "Cancelar" sin mostrar nada. Este diálogo es HTML de la página y funciona igual.
-function dialogo({ mensaje, okTexto = 'Aceptar', peligro = false, input = null }) {
+function dialogo({ mensaje, okTexto = 'Aceptar', noTexto = 'Cancelar', peligro = false, input = null }) {
     return new Promise(resolve => {
         const bg = document.createElement('div');
         bg.className = 'modal-bg';
@@ -301,7 +301,7 @@ function dialogo({ mensaje, okTexto = 'Aceptar', peligro = false, input = null }
                 <div style="font-size:14px;line-height:1.5;white-space:pre-line">${esc(mensaje)}</div>
                 ${input !== null ? `<input class="form-input" style="margin-top:12px" value="${esc(input)}">` : ''}
                 <div class="modal-footer">
-                    <button class="btn-cancel" data-r="no">Cancelar</button>
+                    <button class="btn-cancel" data-r="no">${esc(noTexto)}</button>
                     <button class="btn-primary${peligro ? ' btn-danger-solid' : ''}" data-r="si">${esc(okTexto)}</button>
                 </div>
             </div>`;
@@ -322,8 +322,8 @@ function dialogo({ mensaje, okTexto = 'Aceptar', peligro = false, input = null }
         (inp || bg.querySelector('[data-r="si"]')).focus();
     });
 }
-function confirmar(mensaje, okTexto = 'Confirmar') {
-    return dialogo({ mensaje, okTexto, peligro: /eliminar|borrar|quitar/i.test(mensaje) });
+function confirmar(mensaje, okTexto = 'Confirmar', noTexto = 'Cancelar') {
+    return dialogo({ mensaje, okTexto, noTexto, peligro: /eliminar|borrar|quitar/i.test(mensaje) });
 }
 function pedirTexto(mensaje, valorInicial = '') {
     return dialogo({ mensaje, input: valorInicial });

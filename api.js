@@ -331,15 +331,46 @@ async function cambiarEstado(b, estado) {
         else toast('Falta el REGIONAL de la vacante: completalo para que se copie a su hoja', true);
     } else toast('Estado: ' + (estado || 'sin estado') + ' ✓');
 
-    // Rechazado por el zonal: la persona queda Bloqueada (Supabase la pasa a BLOQUEADOS y la saca
-    // de BASE DE DATOS). Se trae su estado nuevo y se ofrece liberar la vacante para colocar a otro.
+    // Rechazado por el zonal. Extremas: la persona queda Bloqueada sola (Supabase la pasa a BLOQUEADOS
+    // y la saca de BASE DE DATOS). Sabores: se pregunta si se la manda a BLOQUEADOS.
+    // Después se trae su estado nuevo y se ofrece liberar la vacante para colocar a otro.
     if (estado === 'RECHAZADO ZONAL' && tienePersona(row)) {
+        const nombre = nombreCompleto(row) || 'La persona';
+        let bloqueado = !esSabores(row);
+        if (!bloqueado && await confirmar(`¿Enviar a ${nombre} a BLOQUEADOS? Queda bloqueado y sale de la base. Si no, sigue disponible para otra vacante.`, 'Enviar a BLOQUEADOS', 'No, sigue disponible')) {
+            bloqueado = await bloquearRechazoZonal(row.id, false);
+        }
         await recargarPostulantes();
         refreshView();
-        if (await confirmar(`${nombreCompleto(row)} queda bloqueado (pasa a BLOQUEADOS y sale de la base). ¿Liberar la vacante ${b.numero} para colocar a otra persona? Queda en el historial.`, 'Liberar')) {
+        const queda = bloqueado ? 'queda bloqueado (pasa a BLOQUEADOS y sale de la base)' : 'sigue disponible en la base';
+        if (await confirmar(`${nombre} ${queda}. ¿Liberar la vacante ${b.numero} para colocar a otra persona? Queda en el historial.`, 'Liberar')) {
             await liberarVacante(b.id, true);
         }
     }
+}
+
+const esSabores = b => b.marca === 'Sabores Express';
+// ¿La persona de la vacante figura Bloqueada en la Base? (null si no está vinculada a la Base)
+const personaBloqueada = b => b.postulante_id && postulantesById.has(b.postulante_id) ? postulantesById.get(b.postulante_id).estado === 'Bloqueado' : null;
+
+// Sabores en RECHAZADO ZONAL: manda a la persona a BLOQUEADOS (sql/rechazado_zonal.sql).
+// Desde el detalle (avisar = true) recarga la Base y avisa; true si quedó bloqueada.
+async function bloquearRechazoZonal(id, avisar = true) {
+    const b = busquedas.find(x => x.id === id);
+    if (avisar && !(await confirmar(`¿Enviar a ${nombreCompleto(b) || 'la persona'} a BLOQUEADOS? Queda bloqueado y sale de la base.`, 'Enviar a BLOQUEADOS'))) return false;
+    const { data, error } = await sb.rpc('seleccion_rechazo_zonal_bloquear', { p_id: id });
+    if (error) { toast('No se pudo bloquear: ' + msgError(error), true); return false; }
+    if (!data?.ok) {
+        toast({ no_rechazada: 'La vacante ya no está en RECHAZADO ZONAL', sin_datos: 'Faltan DNI, CUIL, mail o teléfono para bloquearla' }[data?.motivo] || 'No se pudo bloquear', true);
+        return false;
+    }
+    if (avisar) {
+        await recargarPostulantes();
+        refreshView();
+        if (!document.getElementById('modal-detalle').classList.contains('hidden')) renderDetalle(id);
+    }
+    toast('Enviado a BLOQUEADOS ✓');
+    return true;
 }
 
 async function addEstadoEntry(id) {
@@ -470,7 +501,7 @@ async function registrarSalida(b, motivo) {
 async function liberarVacante(id, sinPreguntar = false) {
     const b = busquedas.find(x => x.id === id);
     if (!b || !tienePersona(b)) return;
-    const vuelve = b.estado === 'RECHAZADO ZONAL' ? 'queda bloqueado por el rechazo del zonal' : 'vuelve a la base como disponible';
+    const vuelve = b.estado === 'RECHAZADO ZONAL' && (!esSabores(b) || personaBloqueada(b)) ? 'queda bloqueado por el rechazo del zonal' : 'vuelve a la base como disponible';
     if (!sinPreguntar && !(await confirmar(`¿Sacar a ${nombreCompleto(b) || 'la persona'} de la vacante ${b.numero}? Queda en el historial y ${vuelve}.`, 'Liberar'))) return;
     await registrarSalida(b, b.estado === 'RECHAZADO ZONAL' ? 'Rechazado por el zonal' : 'Liberado');
     const update = { postulante_id: null, estado: null, fecha_estado: null, fecha_citacion: null, hora_citacion: null };
