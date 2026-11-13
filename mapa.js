@@ -2,10 +2,12 @@
 //  MAPA DE EQUIPOS · vista "Mapa"
 //  Mapa real (MapLibre + OpenFreeMap: gratis, sin clave) teñido de azul, con paneles de vidrio.
 //  Agrupado (zonal / regional / selector): una burbuja con la foto de cada persona en el centro de sus
-//  locales, con la cantidad de vacantes abiertas; los locales quedan como puntos chicos. Las burbujas
+//  locales, con la cantidad de vacantes del tablero; los locales quedan como puntos chicos. Las burbujas
 //  se acomodan solas para no pisarse (con una línea a su lugar real). Al elegir una se ve su zona,
 //  sus locales y su nómina. "Locales": cada local es una columna (color por regional / zonal /
-//  selector / nómina y altura por vacantes abiertas).
+//  selector / nómina y altura por vacantes).
+//  Vacantes = las mismas que cuenta el tablero (sin archivadas, canceladas ni locales excedidos),
+//  abiertas o ya cubiertas, separadas por etapa.
 //  Usa los mismos filtros que la lista (marca, regional, zonal, selector, búsqueda).
 //  Ubicación aproximada: el centro de la localidad del local; los de una misma localidad se reparten
 //  alrededor. Los que no están en la hoja de asignaciones se ven huecos / transparentes (próximas aperturas).
@@ -82,10 +84,11 @@ function coordsLocal(l) {
 const MAPA_PALETA = ['#2563eb', '#f59e0b', '#db2777', '#059669', '#7c3aed', '#ea580c', '#65a30d', '#dc2626', '#0891b2', '#a16207', '#4f46e5', '#0d9488'];
 const MAPA_NOMINA = { 'DEBE COMPLETAR': ['#dc2626', 'Debe completar'], 'EXCEDIDO': ['#d97706', 'Excedido'], 'COMPLETO': ['#16a34a', 'Completo'], '': ['#94a3b8', 'Sin dato de nómina'] };
 const MAPA_NOMINA_ORDEN = ['DEBE COMPLETAR', 'EXCEDIDO', 'COMPLETO', ''];
-// Etapa de cada búsqueda abierta (paleta categórica validada, siempre en este orden)
+// Etapa de cada vacante (paleta categórica validada, siempre en este orden)
 const MAPA_ETAPAS = [['sin', 'Sin persona', '#2a78d6'], ['cargada', 'Persona cargada', '#eb6834'], ['zonal', 'En el zonal', '#1baf7a'],
-    ['aprobado', 'Aprobado / citado', '#eda100'], ['rechazado', 'Rechazado zonal', '#e87ba4']];
+    ['aprobado', 'Aprobado / citado', '#eda100'], ['rechazado', 'Rechazado zonal', '#e87ba4'], ['cubierta', 'Cubierta (ingresó)', '#008300']];
 function etapaBusqueda(b) {
+    if (cubierta(b)) return 'cubierta';
     if (b.estado === 'RECHAZADO ZONAL') return 'rechazado';
     if (!tienePersona(b)) return 'sin';
     if (!b.estado) return 'cargada';
@@ -117,17 +120,27 @@ const nombreGrupo = k => k ? (eqMapaGrupo === 'selector' ? k : tituloMapa(k)) : 
 const colorGrupo = k => eqMapaGrupo === 'selector' && k ? colorDe(k) : k ? MAPA_AZUL : '#94a3b8';
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
-// ── Locales: búsquedas abiertas y posición (los de una misma localidad, repartidos en círculo)
+// ── Locales: vacantes del tablero y posición (los de una misma localidad, repartidos en círculo)
 function busquedasPorLocal() {
     const bq = new Map();
     busquedas.forEach(b => {
-        if (!vacanteAbierta(b)) return;
+        if (!contable(b)) return;   // como el tablero: sin canceladas ni locales excedidos
         const l = localDe(b.local);
         if (l) { if (!bq.has(l.id)) bq.set(l.id, []); bq.get(l.id).push(b); }
     });
     return bq;
 }
 const contarVacantes = bq => new Map([...bq].map(([id, bs]) => [id, bs.length]));
+// Vacantes del tablero cuyo local no está en la lista de locales: no tienen lugar en el mapa, pero suman en
+// los totales (con los mismos filtros, usando la marca / regional / zonal / selector de la vacante)
+function vacantesSinUbicar() {
+    const val = id => normTxt(document.getElementById(id)?.value || '');
+    const reg = val('eq-regional'), zon = val('eq-zonal'), q = val('eq-buscar');
+    return busquedas.filter(b => contable(b) && !localDe(b.local) && (!eqMarca || b.marca === eqMarca)
+        && (!reg || normTxt(b.regional) === reg) && (!zon || normTxt(b.zonal) === zon)
+        && (eqSelector === null || (b.selector || '') === eqSelector)
+        && (!q || [b.local, b.zonal, b.regional, b.localidad].some(v => normTxt(v).includes(q))));
+}
 const vacantesPorLocal = () => contarVacantes(busquedasPorLocal());
 const metrosA = lat => ({ kx: 1 / (111320 * Math.cos(lat * Math.PI / 180)), ky: 1 / 111320 });
 function posicionesMapa(lista) {
@@ -162,17 +175,24 @@ function columnasMapa(pos, vac, fuera) {
 
 // ── Vista agrupada: una burbuja por zonal / regional / selector
 const mediana = a => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
-function gruposMapa(lista, pos, vac, bq) {
+function gruposMapa(lista, pos, vac, bq, sueltas) {
     const porId = new Map(pos.map(x => [x.l.id, x])), g = new Map();
     lista.forEach(l => {
         const k = l[eqMapaGrupo] || '';
-        if (!g.has(k)) g.set(k, { clave: k, locales: [], puntos: [], aprox: [], vac: 0, etapas: etapasVacias(), marcas: {} });
+        if (!g.has(k)) g.set(k, { clave: k, locales: [], puntos: [], aprox: [], vac: 0, sueltas: 0, etapas: etapasVacias(), marcas: {} });
         const e = g.get(k), x = porId.get(l.id);
         e.locales.push(l);
         e.vac += vac.get(l.id) || 0;
         (bq.get(l.id) || []).forEach(b => e.etapas[etapaBusqueda(b)]++);
         e.marcas[l.marca] = (e.marcas[l.marca] || 0) + 1;
         if (x) (x.aprox ? e.aprox : e.puntos).push([x.lng, x.lat]);
+    });
+    // Las que no tienen local en la lista van al grupo de su propio zonal / regional / selector (si está en el mapa)
+    const porNombre = new Map([...g.values()].map(e => [normTxt(e.clave), e]));
+    sueltas.forEach(b => {
+        const e = porNombre.get(normTxt(b[eqMapaGrupo]));
+        if (!e) return;
+        e.vac++; e.sueltas++; e.etapas[etapaBusqueda(b)]++;
     });
     return [...g.values()].map(e => {
         const pts = e.puntos.length ? e.puntos : e.aprox;
@@ -423,9 +443,9 @@ function actualizarMapaEquipos() {
     const tip = document.getElementById('mg-tip');
     if (tip) tip.hidden = true;
     const { lista, fuera } = _eqMapaDatos;
-    const bq = busquedasPorLocal(), vac = contarVacantes(bq);
+    const bq = busquedasPorLocal(), vac = contarVacantes(bq), sueltas = vacantesSinUbicar();
     const { pos, sinPos } = posicionesMapa(lista);
-    _eqMapaGrupos = agrupado ? gruposMapa(lista, pos, vac, bq) : [];
+    _eqMapaGrupos = agrupado ? gruposMapa(lista, pos, vac, bq, sueltas) : [];
     if (_eqMapaSel !== null && !_eqMapaGrupos.some(e => e.clave === _eqMapaSel)) _eqMapaSel = null;
     const sel = _eqMapaGrupos.find(e => e.clave === _eqMapaSel);
     _eqMapaPuntos = pos.map(x => [x.lng, x.lat]);
@@ -443,22 +463,24 @@ function actualizarMapaEquipos() {
         _eqMapa.getSource('eq-zona').setData(sel ? fc([zonaGrupo(sel)]) : fc([]));
         marcadoresMapa();
     }
-    document.getElementById('mg-resumen').innerHTML = resumenHtml(lista, vac, bq);
+    document.getElementById('mg-resumen').innerHTML = resumenHtml(lista, vac, bq, sueltas);
     document.getElementById('mg-lista').innerHTML = sel ? detalleGrupoHtml(sel, bq, fuera) : agrupado ? rankingHtml() : leyendaLocalesHtml(lista, vac);
     const nFuera = lista.filter(fuera).length;
     document.getElementById('eq-mapa-nota').innerHTML = (agrupado
-        ? `Cada burbuja es un ${MAPA_GRUPOS[eqMapaGrupo].toLowerCase()} en el centro de sus locales · <b>número</b> = vacantes abiertas · puntos = locales`
-        : `<b>Altura</b> = vacantes abiertas`)
+        ? `Cada burbuja es un ${MAPA_GRUPOS[eqMapaGrupo].toLowerCase()} en el centro de sus locales · <b>número</b> = vacantes del tablero · puntos = locales`
+        : `<b>Altura</b> = vacantes del tablero`)
         + ` · ubicación aproximada por localidad`
         + (nFuera ? ` · <b>${nFuera}</b> ${agrupado ? 'hueco' : 'transparente'}${nFuera === 1 ? '' : 's'} = no está${nFuera === 1 ? '' : 'n'} en la hoja (posibles aperturas)` : '')
-        + (sinPos ? ` · ${sinPos} sin ubicación` : '');
+        + (sinPos ? ` · ${sinPos} sin ubicación` : '')
+        + (sueltas.length ? ` · <b>${sueltas.length}</b> ${sueltas.length === 1 ? 'vacante suma' : 'vacantes suman'} en los totales pero no se ve${sueltas.length === 1 ? '' : 'n'} en el mapa: su local no está en la lista de locales` : '');
 }
 
 // ── Paneles
-function resumenHtml(lista, vac, bq) {
+function resumenHtml(lista, vac, bq, sueltas) {
     const et = etapasVacias();
     lista.forEach(l => (bq.get(l.id) || []).forEach(b => et[etapaBusqueda(b)]++));
-    const nVac = lista.reduce((s, l) => s + (vac.get(l.id) || 0), 0);
+    sueltas.forEach(b => et[etapaBusqueda(b)]++);
+    const nVac = lista.reduce((s, l) => s + (vac.get(l.id) || 0), 0) + sueltas.length;
     const tercero = eqMapaGrupo === 'locales' ? ['zonal', 'Zonales'] : [eqMapaGrupo, MAPA_GRUPOS_PL[eqMapaGrupo]];
     const nGrupos = new Set(lista.map(l => l[tercero[0]]).filter(Boolean)).size;
     const marca = eqMarca ? (eqMarca === 'Sabores Express' ? 'Sabores' : 'Extremas') : 'Sabores y Extremas';
@@ -467,16 +489,16 @@ function resumenHtml(lista, vac, bq) {
         <div class="mg-sub">${esc(marca)} · ${eqMapaGrupo === 'locales' ? 'por local' : 'por ' + MAPA_GRUPOS[eqMapaGrupo].toLowerCase()}</div>
         <div class="mg-kpis">
             <div><b>${lista.length}</b><span>Locales</span></div>
-            <div><b>${nVac}</b><span>Vacantes abiertas</span></div>
+            <div><b>${nVac}</b><span>Vacantes</span></div>
             <div><b>${nGrupos}</b><span>${tercero[1]}</span></div>
         </div>
-        <div class="mg-sec">Búsquedas abiertas</div>
+        <div class="mg-sec">Vacantes por etapa</div>
         ${nVac ? `<div class="mg-dona-fila">${donaEtapas(et, nVac)}<div class="mg-dona-ley">${MAPA_ETAPAS.map(([k, t, c]) =>
             `<div data-tip="${t}: ${plural(et[k], 'vacante', 'vacantes')} (${pct(et[k])}%)"><i style="background:${c}"></i><span>${t}</span><b>${et[k]}</b></div>`).join('')}</div></div>`
-            : '<div class="tip">No hay búsquedas abiertas con este filtro.</div>'}`;
+            : '<div class="tip">No hay vacantes con este filtro.</div>'}`;
 }
 
-// Dona de etapas: un segmento por etapa, separados 2 px; en el centro, las que no tienen a nadie
+// Dona de etapas: un segmento por etapa, separados 2 px; en el centro, las que todavía no tienen a nadie
 function donaEtapas(et, total) {
     const R = 34, C = 2 * Math.PI * R, partes = MAPA_ETAPAS.filter(([k]) => et[k]);
     let acc = 0;
@@ -487,7 +509,7 @@ function donaEtapas(et, total) {
         acc += len;
         return s;
     }).join('');
-    return `<svg class="mg-dona" viewBox="0 0 92 92" width="92" height="92" role="img" aria-label="Búsquedas abiertas: ${esc(textoEtapas(et))}">
+    return `<svg class="mg-dona" viewBox="0 0 92 92" width="92" height="92" role="img" aria-label="Vacantes: ${esc(textoEtapas(et))}">
         <g transform="rotate(-90 46 46)">${segs}</g>
         <text x="46" y="45" text-anchor="middle" class="mg-dona-num">${et.sin}</text>
         <text x="46" y="58" text-anchor="middle" class="mg-dona-lbl">sin persona</text></svg>`;
@@ -500,7 +522,7 @@ const barraEtapas = (et, escala) => MAPA_ETAPAS.filter(([k]) => et[k])
 function rankingHtml() {
     if (!_eqMapaGrupos.length) return `<div class="mg-tit">${MAPA_GRUPOS_PL[eqMapaGrupo]}</div><div class="tip" style="margin-top:6px">Nada para mostrar con este filtro.</div>`;
     const max = Math.max(1, ..._eqMapaGrupos.map(e => e.vac));
-    return `<div class="mg-tit">Vacantes abiertas por ${MAPA_GRUPOS[eqMapaGrupo].toLowerCase()}</div>
+    return `<div class="mg-tit">Vacantes por ${MAPA_GRUPOS[eqMapaGrupo].toLowerCase()}</div>
         <div class="mg-sub">${plural(_eqMapaGrupos.filter(e => e.clave).length, MAPA_GRUPOS[eqMapaGrupo].toLowerCase(), MAPA_GRUPOS_PL[eqMapaGrupo].toLowerCase())} · tocá uno para ver su zona</div>
         <div class="mg-filas">${_eqMapaGrupos.map(e => `<button class="mg-fila" data-k="${esc(e.clave)}" onclick="eqMapaElegir(this.dataset.k)"
                 onmouseenter="eqMapaResaltar(this.dataset.k, true)" onmouseleave="eqMapaResaltar(this.dataset.k, false)"
@@ -523,13 +545,14 @@ function detalleGrupoHtml(e, bq, fuera) {
             <div><b>${esc(e.nombre)}</b><span>${esc(rol.join(' · '))}</span></div></div>
         <div class="mg-kpis">
             <div><b>${e.locales.length}</b><span>Locales</span></div>
-            <div><b>${e.vac}</b><span>Vacantes abiertas</span></div>
+            <div><b>${e.vac}</b><span>Vacantes</span></div>
             <div><b>${e.etapas.sin}</b><span>Sin persona</span></div>
         </div>
-        ${e.vac ? `<div class="mg-sec">Búsquedas abiertas</div>
+        ${e.vac ? `<div class="mg-sec">Vacantes por etapa</div>
             <div class="mg-barra mg-barra-grande">${barraEtapas(e.etapas, e.vac)}</div>
             <div class="mg-etapas">${MAPA_ETAPAS.filter(([k]) => e.etapas[k]).map(([k, t, c]) => `<span><i style="background:${c}"></i>${t} <b>${e.etapas[k]}</b></span>`).join('')}</div>` : ''}
         <div class="mg-sec">Locales</div>
+        ${e.sueltas ? `<div class="tip" style="margin-bottom:4px">+ ${plural(e.sueltas, 'vacante', 'vacantes')} de locales que no están en la lista</div>` : ''}
         <div class="mg-filas">${ls.map(l => {
             const bs = bq.get(l.id) || [], et = etapasVacias();
             bs.forEach(b => et[etapaBusqueda(b)]++);
@@ -543,7 +566,7 @@ function leyendaLocalesHtml(lista, vac) {
     lista.forEach(l => { const k = claveMapa(l), e = grupos.get(k) || { n: 0, v: 0 }; e.n++; e.v += vac.get(l.id) || 0; grupos.set(k, e); });
     const orden = [...grupos.keys()].sort((a, b) => eqMapaColor === 'nomina'
         ? MAPA_NOMINA_ORDEN.indexOf(a) - MAPA_NOMINA_ORDEN.indexOf(b) : grupos.get(b).n - grupos.get(a).n);
-    return `<div class="mg-tit">Color por ${MAPA_MODOS[eqMapaColor].toLowerCase()}</div><div class="mg-sub">locales · vacantes abiertas</div>
+    return `<div class="mg-tit">Color por ${MAPA_MODOS[eqMapaColor].toLowerCase()}</div><div class="mg-sub">locales · vacantes</div>
         <div class="mg-filas">${orden.map(k => `<div class="eq-mapa-ley-fila"><i style="background:${color(k)}"></i><span>${esc(nombreMapa(k))}</span><b>${grupos.get(k).n} · ${grupos.get(k).v}</b></div>`).join('')}</div>`;
 }
 
@@ -587,7 +610,7 @@ function popupMapa(p, lngLat) {
     _eqMapaPopup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', offset: 10 }).setLngLat(lngLat).setHTML(`<div class="eq-mapa-pop">
         <b>${esc(p.local)}</b>${p.fuera === true || p.fuera === 'true' ? ' <span class="eq-local-fuera">No está en la hoja</span>' : ''}
         ${fila('Localidad', p.localidad)}${fila('Regional', tituloMapa(p.regional))}${fila('Zonal', tituloMapa(p.zonal))}${fila('Selector', p.selector)}
-        ${fila('Nómina', p.nomina)}<div><span>Vacantes abiertas</span> ${p.vacantes}</div></div>`).addTo(_eqMapa);
+        ${fila('Nómina', p.nomina)}<div><span>Vacantes</span> ${p.vacantes}</div></div>`).addTo(_eqMapa);
 }
 
 function eqMapaVista(cual) {
