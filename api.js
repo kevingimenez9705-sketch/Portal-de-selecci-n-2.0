@@ -106,17 +106,20 @@ function repartirBusquedas(bs) {
 }
 function todasLasBusquedas() { return busquedas.concat(busquedasArchivadas); }
 
-// "Limpiar semana": todas las vacantes del tablero pasan a archivadas (no se borra nada)
+// "Limpiar semana": salen del tablero solo las vacantes en COMUNICADO (ya ingresaron). Las demás siguen,
+// así no se corta el conteo de demora. Se baja el Excel con todo el tablero y no se borra nada: lo archivado
+// sigue contando en Estadísticas.
 async function limpiarSemana() {
     const n = busquedas.length;
     if (!n) { toast('El tablero ya está vacío'); return; }
-    const enProceso = busquedas.filter(b => vacanteAbierta(b) && tienePersona(b)).length;
-    if (!(await confirmar(`¿Limpiar el tablero? Se sacan las ${n} vacantes${enProceso ? ` (${enProceso} con una persona en proceso)` : ''} y se descarga una copia en Excel. No se borran: siguen contando en Estadísticas.`, 'Limpiar semana'))) return;
+    const salen = busquedas.filter(b => b.estado === 'COMUNICADO'), quedan = n - salen.length;
+    if (!salen.length) { toast(`No hay vacantes en COMUNICADO para sacar: las ${n} siguen en el tablero`); return; }
+    if (!(await confirmar(`¿Limpiar el tablero? Salen las ${salen.length} vacante${salen.length === 1 ? '' : 's'} en COMUNICADO y ${quedan === 1 ? 'queda 1' : `quedan ${quedan}`} (siguen con su conteo de demora). Se descarga una copia en Excel con todo el tablero. No se borra nada: siguen contando en Estadísticas.`, 'Limpiar semana'))) return;
     // Primero la copia en Excel: si no se puede bajar, no se limpia nada
     try { await descargarExcelSemana(busquedas.slice()); }
     catch (e) { toast('No se pudo generar el Excel: ' + (e.message || e) + '. No se limpió nada.', true); return; }
     // De a tandas: muchos ids juntos no entran en un solo pedido
-    const cuando = new Date().toISOString(), todosIds = busquedas.map(b => b.id), data = [];
+    const cuando = new Date().toISOString(), todosIds = salen.map(b => b.id), data = [];
     let error = null;
     for (let i = 0; i < todosIds.length && !error; i += 150) {
         const r = await sb.from('seleccion_busquedas').update({ archivada: cuando }).in('id', todosIds.slice(i, i + 150)).select('id, archivada');
@@ -127,7 +130,7 @@ async function limpiarSemana() {
     busquedas.filter(b => ids.has(b.id)).forEach(b => { b.archivada = data.find(r => r.id === b.id).archivada; busquedasArchivadas.push(b); });
     busquedas = busquedas.filter(b => !ids.has(b.id));
     refreshView();
-    toast(`Tablero limpio ✓ ${ids.size} vacante${ids.size === 1 ? '' : 's'} en el Excel descargado y en Estadísticas`);
+    toast(`Tablero limpio ✓ ${ids.size} en COMUNICADO archivada${ids.size === 1 ? '' : 's'} (siguen en Estadísticas) · ${busquedas.length} siguen en el tablero`);
 }
 
 // Después de guardar algo de UNA vacante (o sus comentarios) se vuelve a pedir solo esa, no todo.
