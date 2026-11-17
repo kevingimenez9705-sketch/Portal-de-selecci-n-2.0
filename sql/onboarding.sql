@@ -75,7 +75,7 @@ begin
         select jsonb_agg(jsonb_build_object(
                    'id', b.id, 'numero', b.numero, 'marca', b.marca, 'estado', b.estado,
                    'email', lower(trim(coalesce(b.email, ''))), 'nombre', b.nombre, 'apellido', b.apellido,
-                   'local', b.local, 'local_entrenamiento', b.local_entrenamiento, 'puesto', b.puesto,
+                   'local', b.local, 'local_entrenamiento', b.local_entrenamiento, 'puesto', b.puesto, 'jornada', b.jornada,
                    'fecha_onboarding', b.fecha_citacion, 'hora_onboarding', b.hora_citacion, 'primer_dia', b.ingreso,
                    'direccion_local', seleccion_onb_direccion_(b.marca, regexp_replace(b.local, '^\s*(APERTURA|APER)\.?\s+', '', 'i')),
                    'direccion_entrenamiento', case when coalesce(trim(b.local_entrenamiento), '') <> ''

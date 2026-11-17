@@ -886,7 +886,8 @@ var PortalSync = (function () {
     return {
       subject: marca.subject, name: String(v.nombre || '').trim(), brand: marca.brand, signature: marca.signature,
       color: marca.color, logo: marca.logo,
-      position: position, scheduleText: ONBOARDING_CONFIG.scheduleText, onboardingDate: onboardingDate, onboardingTime: onboardingTime,
+      position: position, shift: String(v.jornada || '').trim(),
+      scheduleText: ONBOARDING_CONFIG.scheduleText, onboardingDate: onboardingDate, onboardingTime: onboardingTime,
       firstDayDate: firstDayDate, local: local, localAddress: localAddress, trainingLocal: showTraining ? trainingLocal : '',
       trainingAddress: trainingAddress, opening: opening, firstDaySchedule: firstDaySchedule,
       confirmUrl: ONBOARDING_CONFIG.confirmarUrl + '?v=' + encodeURIComponent(v.id) + '&k=' + encodeURIComponent(v.token)
@@ -991,7 +992,14 @@ function crearEmailOnboarding_(data) {
         </div>
       </div>`, '#ffffff', '#e2e8f0');
 
-  // ── 3. Sede asignada (después de la Bienvenida)
+  // ── 3. Sede asignada (después de la Bienvenida): puesto y turno, local, entrenamiento y primer día
+  const puesto = `
+      <div style="font-size:12px;font-weight:bold;letter-spacing:1px;color:#6b7280;text-transform:uppercase;">💼 Tu puesto y turno</div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px;">
+        ${dato('👨‍🍳', 'Puesto', e(data.position))}
+        ${data.shift ? dato('🔄', 'Turno', e(data.shift)) : ''}
+      </table>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid #e5e7eb;"></div>`;
   const local = `
       <div style="font-size:12px;font-weight:bold;letter-spacing:1px;color:#6b7280;text-transform:uppercase;">📍 Tu local asignado</div>
       <div style="font-size:16px;font-weight:bold;color:#1f2937;margin-top:4px;">${e(data.brand)}: ${e(data.local)}</div>
@@ -1017,7 +1025,7 @@ function crearEmailOnboarding_(data) {
         No vayas directo al local.
       </div>`, '#fffbeb', '#fcd34d') +
     `<div style="height:12px;line-height:12px;">&nbsp;</div>` +
-    tarjeta(local + entrenamiento + primerDia, '#ffffff', '#e2e8f0');
+    tarjeta(puesto + local + entrenamiento + primerDia, '#ffffff', '#e2e8f0');
 
   // ── Confirmación de asistencia (el botón abre confirmar.html, que la registra en el portal)
   const confirmar = `
@@ -1110,6 +1118,8 @@ ${ONBOARDING_CONFIG.documentacionUrl}
 Luego de presentarte en ${ONBOARDING_CONFIG.officeAddress}, esta es tu sede:
 
 ⚠️ Recordá: primero tenés que presentarte en la Oficina de Selección (punto 1). No vayas directo al local.
+
+💼 Tu puesto: ${data.position}${data.shift ? '\n🔄 Turno: ' + data.shift : ''}
 
 📍 Tu local asignado: ${data.brand}: ${data.local}`;
 
