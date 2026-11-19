@@ -1028,3 +1028,11 @@ table.grilla thead .th-num { vertical-align: top; padding: 6px 8px; }
     .dojo-ratio { white-space: normal; display: inline-flex; flex-direction: column; line-height: 1.15; font-size: 11px; }
     .dojo-ratio b { font-size: 14px; }
 }
+/* Filtros del listado del informe (mismos que la grilla, en oscuro) */
+.dojo-tabla .th-col { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.dojo-tabla .btn-filtro { color: #c4b5fd; opacity: .6; }
+.dojo-tabla .btn-filtro:hover, .dojo-tabla .btn-filtro:focus-visible { opacity: 1; background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .3); }
+.dojo-tabla .btn-filtro.activo { opacity: 1; background: #ee60b9; border-color: #ee60b9; color: #fff; }
+.dojo-tabla th.th-filtrado { box-shadow: inset 0 -3px 0 #ee60b9; }
+.dojo-btn-rosa { border-color: rgba(244, 114, 182, .6); color: #fbcfe8; }
+.dojo-btn-rosa b { color: #fff; }

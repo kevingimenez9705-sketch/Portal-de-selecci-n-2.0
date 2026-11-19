@@ -87,7 +87,8 @@ function popFiltro() {
         document.addEventListener('mousedown', e => { if (_filtroPop && !pop.contains(e.target) && !e.target.closest('[data-filtro]')) cerrarFiltro(); });
         document.addEventListener('keydown', e => { if (e.key === 'Escape' && _filtroPop) cerrarFiltro(); });
         window.addEventListener('resize', cerrarFiltro);
-        document.querySelector('.grilla-wrap')?.addEventListener('scroll', () => { if (_filtroPop) ubicarFiltro(); }, { passive: true });
+        // Cualquier scroll (página, grilla o listado del informe): la ventanita acompaña al botón
+        window.addEventListener('scroll', () => { if (_filtroPop) ubicarFiltro(); }, { passive: true, capture: true });
     }
     return pop;
 }
@@ -149,20 +150,36 @@ function soloVisiblesFiltro() {
     document.querySelectorAll('#filtro-pop .fp-op input').forEach(i => { i.checked = !i.closest('.fp-op').classList.contains('hidden'); });
     aplicarFiltroColumna();
 }
+// Con "aplicar" (otros listados, p. ej. el del Informe de la base) el filtro lo guarda quien abrió la ventanita
 function aplicarFiltroColumna() {
     const f = _filtroPop?.f;
     if (!f) return;
     const inputs = [...document.querySelectorAll('#filtro-pop .fp-op input')];
     const elegidos = inputs.filter(i => i.checked).map(i => i.value);
-    if (elegidos.length === inputs.length) delete filtrosColumna[f];
-    else filtrosColumna[f] = new Set(elegidos);
+    const set = elegidos.length === inputs.length ? null : new Set(elegidos);
+    if (_filtroPop.aplicar) { _filtroPop.aplicar(set); return; }
+    if (set) filtrosColumna[f] = set; else delete filtrosColumna[f];
     applyFilters();
 }
 function borrarFiltroColumna() {
-    const f = _filtroPop?.f;
-    if (f) delete filtrosColumna[f];
+    const f = _filtroPop?.f, aplicar = _filtroPop?.aplicar;
     cerrarFiltro();
+    if (aplicar) { aplicar(null); return; }
+    if (f) delete filtrosColumna[f];
     applyFilters();
+}
+
+// Ventanita de valores genérica: [{ v, txt, n, html }] → tildar / destildar (usa las mismas funciones de arriba)
+function htmlFiltroValores(titulo, valores, elegido) {
+    return `
+        <div class="fp-tit">${esc(titulo)}</div>
+        <input class="fp-buscar" placeholder="Buscar… (Enter: dejar solo estos)" oninput="buscarEnFiltro(this.value)" onkeydown="if(event.key==='Enter')soloVisiblesFiltro()">
+        <div class="fp-acciones"><button type="button" onclick="marcarTodosFiltro(true)">Seleccionar todo</button><button type="button" onclick="marcarTodosFiltro(false)">Ninguno</button></div>
+        <div class="fp-lista">${valores.length ? valores.map(o => `<label class="fp-op" data-txt="${esc(normTxt(o.txt))}">
+            <input type="checkbox" value="${esc(o.v)}" ${elegido(o.v) ? 'checked' : ''} onchange="aplicarFiltroColumna()">
+            ${o.html || ''}<span class="fp-op-txt${o.v ? '' : ' fp-vacio'}">${esc(o.txt)}</span><b>${o.n}</b></label>`).join('')
+            : '<div class="tip">No hay valores con los demás filtros.</div>'}</div>
+        <div class="fp-pie"><button type="button" class="btn-sm" onclick="borrarFiltroColumna()">Borrar filtro</button><button type="button" class="btn-sm fp-listo" onclick="cerrarFiltro()">Listo</button></div>`;
 }
 
 // ── Encabezado N°: estado de la vacante, alertas y nómina del local

@@ -48,11 +48,7 @@ function renderInformeBase(todos) {
     const box = document.getElementById('base-informe');
     const activos = todos.filter(x => !fueraDeLaBase(x.p, x.disp));
     const disponibles = activos.filter(x => x.disp === 'Disponible' && puedeColocarse(x.p));
-    const listas = {
-        ingresaron: todos.filter(x => x.disp === 'Ingresó'),
-        bloqueados: todos.filter(x => x.disp !== 'Ingresó' && x.p.estado === 'Bloqueado'),
-        descartados: todos.filter(x => x.disp !== 'Ingresó' && x.p.estado === 'Descartado')
-    };
+    const listas = listasInforme(todos);
     const pills = [
         [todos.length, 'postulantes', ''], [disponibles.length, 'disponibles', 'azul'],
         [activos.filter(x => x.disp === 'En vacante').length, 'en una vacante', 'ambar'],
@@ -142,52 +138,120 @@ function tarjetaMotivos(bloqueados) {
     </section>`;
 }
 
-// ── Listado de los que salieron de la base activa
+// ── Listado de los que salieron de la base activa (con filtros en cada columna, como la grilla de vacantes)
 const INFORME_LISTAS = { ingresaron: 'Ingresaron', bloqueados: 'Bloqueados', descartados: 'Descartados' };
+let informeFiltros = { ingresaron: {}, bloqueados: {}, descartados: {} };
+
+const tituloTxt = s => String(s || '').trim().toLowerCase().replace(/(^|[\s(\/-])\S/g, c => c.toUpperCase());
+// Vacante en la que ingresó (la más reciente)
+const vacIngreso = p => vacantesDe(p.id).filter(v => v.estado === 'COMUNICADO' || cubierta(v))
+    .sort((a, x) => String(x.ingreso || '').localeCompare(String(a.ingreso || '')))[0] || null;
+const motivoTexto = p => motivoBloqueo(p)?.motivo || p.observaciones || (_motivosBloqueo ? 'Sin motivo cargado' : '');
+
+// Columnas de cada listado: [campo, título, valor para filtrar, tipo]
+const COL_PERSONA = [['nombre', 'Postulante', x => nombrePostulante(x.p)], ['zona', 'Zona', x => zonaDe(x.p.zona)],
+    ['localidad', 'Localidad', x => tituloTxt(x.p.localidad)]];
+const COLS_INFORME = {
+    ingresaron: [...COL_PERSONA, ['vacante', 'Vacante', x => vacIngreso(x.p)?.local || ''], ['ingreso', 'Primer día', x => vacIngreso(x.p)?.ingreso || '', 'fecha']],
+    bloqueados: [...COL_PERSONA, ['motivo', 'Motivo', x => motivoTexto(x.p)], ['desde', 'Desde', x => String(motivoBloqueo(x.p)?.fecha || '').slice(0, 10), 'fecha']],
+    descartados: [...COL_PERSONA, ['obs', 'Observaciones', x => x.p.observaciones || '']]
+};
+const valorInforme = (campo, x) => String(COLS_INFORME[informeLista].find(c => c[0] === campo)?.[2](x) ?? '').trim();
+
+function listasInforme(todos = postulantes.map(p => ({ p, disp: disponibilidad(p) }))) {
+    return {
+        ingresaron: todos.filter(x => x.disp === 'Ingresó'),
+        bloqueados: todos.filter(x => x.disp !== 'Ingresó' && x.p.estado === 'Bloqueado'),
+        descartados: todos.filter(x => x.disp !== 'Ingresó' && x.p.estado === 'Descartado')
+    };
+}
+// ¿Pasa el buscador y los filtros de columna? (excepto = columna que no se mira, para armar su lista de valores)
+function pasaInforme(x, excepto = '') {
+    const q = normTxt(document.getElementById('inf-buscar')?.value || '');
+    if (q && !normTxt([x.p.nombre, x.p.apellido, x.p.dni, x.p.localidad, x.p.zona].join(' ')).includes(q)) return false;
+    return Object.entries(informeFiltros[informeLista]).every(([c, set]) => c === excepto || set.has(valorInforme(c, x)));
+}
+
 function tarjetaListado(listas) {
     if (!listas[informeLista]?.length && informeLista !== 'ingresaron') informeLista = 'ingresaron';
-    const q = normTxt(document.getElementById('inf-buscar')?.value || '');
-    const filas = listas[informeLista]
-        .filter(x => !q || normTxt([x.p.nombre, x.p.apellido, x.p.dni, x.p.localidad, x.p.zona].join(' ')).includes(q))
-        .sort((a, b) => nombrePostulante(a.p).localeCompare(nombrePostulante(b.p)));
+    const filas = listas[informeLista].filter(x => pasaInforme(x)).sort((a, b) => nombrePostulante(a.p).localeCompare(nombrePostulante(b.p)));
     const visibles = filas.slice(0, informeVisibles);
-    const cols = informeLista === 'ingresaron' ? ['Postulante', 'Zona · Localidad', 'Vacante', 'Primer día', '']
-        : informeLista === 'bloqueados' ? ['Postulante', 'Zona · Localidad', 'Motivo', 'Desde', ''] : ['Postulante', 'Zona · Localidad', 'Observaciones', '', ''];
+    const nFiltros = Object.keys(informeFiltros[informeLista]).length;
+    const th = ([campo, titulo]) => {
+        const activo = !!informeFiltros[informeLista][campo];
+        return `<th class="${activo ? 'th-filtrado' : ''}"><div class="th-col"><span>${titulo}</span><button type="button" class="btn-filtro${activo ? ' activo' : ''}" data-filtro="inf:${campo}"
+            onclick="abrirFiltroInforme('${campo}', this)" title="Filtrar ${titulo}" aria-label="Filtrar ${titulo}"><i class="fas fa-filter"></i></button></div></th>`;
+    };
     return `<section class="dojo-card dojo-listado">
         <div class="dojo-listado-cab">
             <h3>Fuera de la base activa <span class="dojo-tip">no se ofrecen para las vacantes</span></h3>
             <div class="dojo-tabs" role="tablist">${Object.entries(INFORME_LISTAS).filter(([k]) => k !== 'descartados' || listas.descartados.length)
                 .map(([k, t]) => `<button type="button" role="tab" class="${k === informeLista ? 'activa' : ''}" aria-selected="${k === informeLista}" onclick="elegirListaInforme('${k}')">${t} <b>${listas[k].length}</b></button>`).join('')}</div>
             <input class="dojo-buscar" id="inf-buscar" placeholder="Buscar nombre, DNI, localidad…" value="${esc(document.getElementById('inf-buscar')?.value || '')}" oninput="buscarEnInforme()">
-            <button type="button" class="dojo-btn" onclick="descargarListaInforme()"><i class="fas fa-download"></i> CSV</button>
+            ${nFiltros ? `<button type="button" class="dojo-btn dojo-btn-rosa" onclick="limpiarFiltrosInforme()"><i class="fas fa-filter-circle-xmark"></i> Limpiar filtros <b>${nFiltros}</b></button>` : ''}
+            <button type="button" class="dojo-btn" onclick="descargarListaInforme()" title="Lo que se ve, con los filtros"><i class="fas fa-download"></i> CSV</button>
         </div>
         <div class="dojo-tabla-wrap"><table class="dojo-tabla dojo-tabla-lista">
-            <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+            <thead><tr>${COLS_INFORME[informeLista].map(th).join('')}<th></th></tr></thead>
             <tbody>${visibles.length ? visibles.map(x => filaListado(x.p)).join('')
-                : `<tr><td colspan="5" class="dojo-vacio">${q ? 'Nadie coincide con la búsqueda.' : 'No hay nadie en este listado.'}</td></tr>`}</tbody>
+                : `<tr><td colspan="${COLS_INFORME[informeLista].length + 1}" class="dojo-vacio">${nFiltros || document.getElementById('inf-buscar')?.value ? 'Nadie coincide con los filtros.' : 'No hay nadie en este listado.'}</td></tr>`}</tbody>
         </table></div>
         ${filas.length > visibles.length ? `<div class="dojo-mas">Mostrando ${visibles.length} de ${filas.length}
-            <button type="button" class="dojo-btn" onclick="informeVisibles = Infinity; renderBase()">Mostrar todos</button></div>` : ''}
+            <button type="button" class="dojo-btn" onclick="informeVisibles = Infinity; renderBase()">Mostrar todos</button></div>`
+            : filas.length !== listas[informeLista].length ? `<div class="dojo-mas">${filas.length} de ${listas[informeLista].length}</div>` : ''}
     </section>`;
 }
 
 function filaListado(p) {
     const persona = `<td><b>${esc(nombrePostulante(p))}</b><div class="dojo-meta">${p.dni ? 'DNI ' + esc(p.dni) : ''}${p.telefono ? ' · ' + esc(p.telefono) : ''}</div></td>
-        <td>${esc(p.zona || '—')}<div class="dojo-meta">${esc(p.localidad || '')}</div></td>`;
+        <td>${esc(p.zona || '—')}</td><td>${esc(p.localidad || '—')}</td>`;
     const ficha = `<td class="dojo-acc"><button type="button" class="dojo-btn" onclick="openPostulanteModal(${p.id})" title="Ver o cambiar el estado">Ver ficha</button></td>`;
     if (informeLista === 'ingresaron') {
-        const b = vacantesDe(p.id).filter(v => v.estado === 'COMUNICADO' || cubierta(v)).sort((a, x) => String(x.ingreso || '').localeCompare(String(a.ingreso || '')))[0];
+        const b = vacIngreso(p);
         return `<tr>${persona}<td>${b ? `<button type="button" class="dojo-link" data-num="${esc(b.numero)}" onclick="verEnPipeline(this.dataset.num)">${esc(b.numero)}</button> · ${esc(b.local)}<div class="dojo-meta">${esc(b.puesto || '')}</div>` : '—'}</td>
             <td>${b?.ingreso ? fmtFecha(b.ingreso) : '—'}</td>${ficha}</tr>`;
     }
     if (informeLista === 'bloqueados') {
         const m = motivoBloqueo(p);
-        return `<tr>${persona}<td>${esc(m?.motivo || p.observaciones || (_motivosBloqueo ? 'Sin motivo cargado' : '…'))}</td><td>${m?.fecha ? fmtFecha(String(m.fecha).slice(0, 10)) : '—'}</td>${ficha}</tr>`;
+        return `<tr>${persona}<td>${esc(motivoTexto(p) || '…')}</td><td>${m?.fecha ? fmtFecha(String(m.fecha).slice(0, 10)) : '—'}</td>${ficha}</tr>`;
     }
-    return `<tr>${persona}<td>${esc(p.observaciones || '—')}</td><td></td>${ficha}</tr>`;
+    return `<tr>${persona}<td>${esc(p.observaciones || '—')}</td>${ficha}</tr>`;
 }
 
-function elegirListaInforme(k) { informeLista = k; informeVisibles = 100; renderBase(); }
+// Filtro de una columna del listado (misma ventanita que la grilla de vacantes)
+function abrirFiltroInforme(campo, btn) {
+    const key = 'inf:' + campo;
+    if (_filtroPop?.f === key) { cerrarFiltro(); return; }
+    const col = COLS_INFORME[informeLista].find(c => c[0] === campo);
+    if (!col) return;
+    const cuenta = new Map();
+    listasInforme()[informeLista].filter(x => pasaInforme(x, campo)).forEach(x => { const v = valorInforme(campo, x); cuenta.set(v, (cuenta.get(v) || 0) + 1); });
+    (informeFiltros[informeLista][campo] || []).forEach(v => { if (!cuenta.has(v)) cuenta.set(v, 0); });
+    const fecha = col[3] === 'fecha';
+    const valores = [...cuenta.keys()].sort((a, b) => (!a) - (!b) || (fecha ? b.localeCompare(a) : a.localeCompare(b, 'es', { numeric: true })))
+        .map(v => ({ v, n: cuenta.get(v), txt: !v ? '(Vacío)' : fecha ? fmtFecha(v) : v }));
+    const set = informeFiltros[informeLista][campo];
+    mostrarPop(htmlFiltroValores(col[1], valores, v => !set || set.has(v)), {
+        tipo: 'col', f: key, btn,
+        aplicar: elegidos => {
+            if (elegidos) informeFiltros[informeLista][campo] = elegidos; else delete informeFiltros[informeLista][campo];
+            informeVisibles = 100;
+            renderBase();
+            // El listado se redibuja: la ventanita queda pegada al botón nuevo
+            if (_filtroPop?.f === key) _filtroPop.btn = document.querySelector(`.dojo-listado [data-filtro="${key}"]`) || _filtroPop.btn;
+        }
+    });
+}
+function limpiarFiltrosInforme() {
+    informeFiltros[informeLista] = {};
+    const s = document.getElementById('inf-buscar');
+    if (s) s.value = '';
+    cerrarFiltro();
+    informeVisibles = 100;
+    renderBase();
+}
+
+function elegirListaInforme(k) { cerrarFiltro(); informeLista = k; informeVisibles = 100; renderBase(); }
 let _infTimer = null;
 function buscarEnInforme() {
     clearTimeout(_infTimer);
@@ -200,20 +264,18 @@ function buscarEnInforme() {
     }, 200);
 }
 
-// CSV del listado elegido (con el motivo de bloqueo o la vacante en la que ingresó)
+// CSV de lo que se ve en el listado (con el buscador y los filtros de columna)
 function descargarListaInforme() {
-    const todos = postulantes.map(p => ({ p, disp: disponibilidad(p) }));
-    const lista = informeLista === 'ingresaron' ? todos.filter(x => x.disp === 'Ingresó')
-        : todos.filter(x => x.disp !== 'Ingresó' && x.p.estado === (informeLista === 'bloqueados' ? 'Bloqueado' : 'Descartado'));
+    const lista = listasInforme()[informeLista].filter(x => pasaInforme(x)).sort((a, b) => nombrePostulante(a.p).localeCompare(nombrePostulante(b.p)));
     const headers = ['Nombre', 'Apellido', 'DNI', 'Teléfono', 'Email', 'Zona', 'Localidad', 'Estado', 'Detalle', 'Fecha'];
     const rows = lista.map(({ p }) => {
         let detalle = p.observaciones || '', fecha = '';
         if (informeLista === 'ingresaron') {
-            const b = vacantesDe(p.id).find(v => v.estado === 'COMUNICADO' || cubierta(v));
+            const b = vacIngreso(p);
             if (b) { detalle = `${b.numero} · ${b.local} · ${b.puesto || ''}`; fecha = b.ingreso || ''; }
         } else if (informeLista === 'bloqueados') {
-            const m = motivoBloqueo(p);
-            if (m) { detalle = m.motivo; fecha = String(m.fecha || '').slice(0, 10); }
+            detalle = motivoTexto(p);
+            fecha = String(motivoBloqueo(p)?.fecha || '').slice(0, 10);
         }
         return [p.nombre, p.apellido, p.dni, p.telefono, p.email, p.zona, p.localidad, p.estado, detalle, fecha];
     });
