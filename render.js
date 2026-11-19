@@ -19,7 +19,7 @@ function prepararApp() {
     fill('n-puesto', PUESTOS);
     fill('n-jornada', JORNADAS, '— Jornada —');
     fill('fb-zona', ZONAS, 'Todas las zonas');
-    fill('fb-estado', ESTADOS_POSTULANTE, 'Todos los estados');
+    fill('fb-estado', ESTADOS_POSTULANTE.filter(e => e !== 'Bloqueado' && e !== 'Descartado'), 'Todos los estados');
     fill('fb-horario', HORARIOS, 'Cualquier horario');
     fill('p-zona', ZONAS, '— Zona —');
     fill('p-estado', ESTADOS_POSTULANTE);
@@ -491,13 +491,32 @@ function disponibilidad(p) {
 }
 function docCompleta(p) { return p.curso_manipulacion === 'Sí' && p.antecedentes === 'Sí'; }
 function puedeColocarse(p) { return p.estado === 'Aprobado' || p.estado === 'En espera'; }
+// Quien ya ingresó, quedó bloqueado o fue descartado sale de la base activa: no se ve para colocar en
+// vacantes y pasa al listado del "Informe de la base" (informe.js)
+const fueraDeLaBase = (p, disp = disponibilidad(p)) => disp === 'Ingresó' || p.estado === 'Bloqueado' || p.estado === 'Descartado';
+
+let baseTab = 'activa';
+function cambiarTabBase(tab) {
+    baseTab = tab;
+    document.querySelectorAll('#base-tabs [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    resetPaginado();
+    renderBase();
+}
 
 function renderBase() {
+    const informe = baseTab === 'informe';
+    document.getElementById('base-activa').classList.toggle('hidden', informe);
+    document.getElementById('base-informe').classList.toggle('hidden', !informe);
+    document.getElementById('filters-base').classList.toggle('hidden', informe);
     const v = id => document.getElementById(id).value;
     const zona = v('fb-zona'), estado = v('fb-estado'), disp = v('fb-disp'), doc = v('fb-doc'), horario = v('fb-horario');
     const search = v('fb-search').trim().toLowerCase();
 
-    const conDisp = postulantes.map(p => ({ p, disp: disponibilidad(p) }));
+    const todos = postulantes.map(p => ({ p, disp: disponibilidad(p) }));
+    const conDisp = todos.filter(x => !fueraDeLaBase(x.p, x.disp));
+    const nAct = document.getElementById('base-n-activa');
+    if (nAct) nAct.textContent = conDisp.length;
+    if (informe) { renderInformeBase(todos); return; }
     const list = conDisp.filter(({ p, disp: d }) => {
         if (zona && p.zona !== zona) return false;
         if (estado && p.estado !== estado) return false;
@@ -513,13 +532,13 @@ function renderBase() {
         return true;
     });
 
+    const fuera = todos.length - conDisp.length;
     document.getElementById('kpi-row-base').innerHTML =
-        kpiHtml(conDisp.length, 'En la base') +
+        kpiHtml(conDisp.length, 'En la base activa') +
         kpiHtml(conDisp.filter(x => x.disp === 'Disponible' && puedeColocarse(x.p)).length, 'Disponibles', 'azul') +
         kpiHtml(conDisp.filter(x => x.disp === 'En vacante').length, 'En una vacante', 'ambar') +
-        kpiHtml(conDisp.filter(x => x.disp === 'Ingresó').length, 'Ingresaron', 'verde') +
         kpiHtml(conDisp.filter(x => !docCompleta(x.p)).length, 'Doc. incompleta', 'gris') +
-        kpiHtml(conDisp.filter(x => x.p.estado === 'Bloqueado').length, 'Bloqueados', 'rosa');
+        `<button type="button" class="kpi-link" onclick="cambiarTabBase('informe')" title="Ingresaron, bloqueados y descartados: en el Informe de la base">${kpiHtml(fuera, 'Fuera de la base', 'rosa', 'ingresaron · bloqueados → ver informe')}</button>`;
 
     const libres = vacantesLibres();
     const visibles = list.slice(0, baseVisibles);
@@ -678,9 +697,12 @@ function renderColocarLista() {
     const search = document.getElementById('colocar-search').value.trim().toLowerCase();
     const ctx = contextoVacante(b);
     const soloLocalidad = document.getElementById('colocar-solo-zona').checked && ctx.localidad;
+    // Solo la base activa: los que ingresaron, están bloqueados o descartados no se ofrecen
     const lista = postulantes
-        .filter(p => p.estado !== 'Descartado' && p.id !== b.postulante_id)
-        .map(p => ({ p, disp: disponibilidad(p), cerca: cercania(p, b, ctx) }))
+        .filter(p => p.id !== b.postulante_id)
+        .map(p => ({ p, disp: disponibilidad(p) }))
+        .filter(({ p, disp }) => !fueraDeLaBase(p, disp))
+        .map(x => ({ ...x, cerca: cercania(x.p, b, ctx) }))
         .filter(({ p }) => !soloLocalidad || mismaLocalidad(p.localidad, ctx.localidad))
         .filter(({ p }) => !search || [p.nombre, p.apellido, p.dni, p.localidad, p.telefono].join(' ').toLowerCase().includes(search))
         .sort((x, y) => (x.disp === 'Disponible' ? 0 : 1) - (y.disp === 'Disponible' ? 0 : 1)

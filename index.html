@@ -97,7 +97,6 @@
                 <option value="">Disponibilidad: todos</option>
                 <option value="Disponible">Disponibles</option>
                 <option value="En vacante">En una vacante</option>
-                <option value="Ingresó">Ingresaron</option>
             </select>
             <select class="filter-select" id="fb-estado" onchange="applyFilters()"></select>
             <select class="filter-select" id="fb-doc" onchange="applyFilters()">
@@ -126,6 +125,12 @@
 
         <!-- BASE DE POSTULANTES -->
         <div id="view-base" class="hidden">
+            <div class="page-tabs" id="base-tabs" role="tablist">
+                <button class="page-tab active" data-tab="activa" onclick="cambiarTabBase('activa')">Base activa <span class="seg-n" id="base-n-activa"></span></button>
+                <button class="page-tab" data-tab="informe" onclick="cambiarTabBase('informe')"><i class="fas fa-chart-simple"></i> Informe de la base</button>
+            </div>
+            <div id="base-informe" class="hidden"></div>
+            <div id="base-activa">
             <div class="kpi-row" id="kpi-row-base"></div>
             <div class="table-wrap">
                 <table class="tabla-base">
@@ -140,6 +145,7 @@
                     </tr></thead>
                     <tbody id="base-body"></tbody>
                 </table>
+            </div>
             </div>
         </div>
 
@@ -387,6 +393,7 @@
 <script src="api.js"></script>
 <script src="render.js"></script>
 <script src="filtros.js"></script>
+<script src="informe.js"></script>
 <script src="stats.js"></script>
 <script src="importar.js"></script>
 <script src="procesos.js"></script>
