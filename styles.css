@@ -936,3 +936,95 @@ table.grilla thead .th-num { vertical-align: top; padding: 6px 8px; }
 .fp-op b { grid-column: 4; font-size: 11px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
 .fp-pie { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .fp-listo { background: var(--purple); color: #fff; border-color: var(--purple); }
+
+/* ── Informe de la base (informe.js): estética del Dojo ── */
+.kpi-link { display: block; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; font: inherit; border-radius: 16px; }
+.kpi-link:hover .kpi { box-shadow: 0 8px 20px rgba(225, 29, 72, .15); }
+.dojo-inf { background: var(--hero); color: #f5f3ff; border-radius: 22px; padding: 22px; box-shadow: 0 20px 50px rgba(18, 5, 47, .25); }
+.dojo-inf-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.dojo-inf-kicker { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--pink-light); }
+.dojo-inf h2 { font-size: 26px; font-weight: 800; letter-spacing: -.03em; margin-top: 4px; color: #fff; }
+.dojo-inf-sub { font-size: 12px; color: #c4b5fd; margin-top: 2px; }
+.dojo-inf-logo { width: 48px; height: 48px; opacity: .9; flex: none; }
+.dojo-pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.dojo-pill { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: rgba(255, 255, 255, .07);
+    border: 1px solid rgba(255, 255, 255, .12); font-size: 13px; color: #ddd6fe; }
+.dojo-pill b { font-size: 15px; color: #fff; font-variant-numeric: tabular-nums; }
+.dojo-pill::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #c4b5fd; display: none; }
+.dojo-pill-azul::before { display: block; background: #60a5fa; } .dojo-pill-ambar::before { display: block; background: #fbbf24; }
+.dojo-pill-verde::before { display: block; background: #34d399; } .dojo-pill-rosa::before { display: block; background: #fb7185; }
+.dojo-pill-gris::before { display: block; background: #94a3b8; }
+.dojo-inf-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; }
+.dojo-inf-col { display: grid; gap: 16px; align-content: start; }
+.dojo-card { background: rgba(255, 255, 255, .055); border: 1px solid rgba(255, 255, 255, .1); border-radius: 18px; padding: 18px 20px; min-width: 0; }
+.dojo-card h3 { font-size: 16px; font-weight: 800; color: #fff; letter-spacing: -.01em; margin-bottom: 12px; }
+.dojo-tabla { width: 100%; min-width: 0; border-collapse: collapse; font-size: 13px; }
+.dojo-tabla thead th { font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #a5a1c9; text-align: left; padding: 6px 8px 10px; border-bottom: 1px solid rgba(255, 255, 255, .08); background: transparent; white-space: normal; }
+.dojo-tabla tbody th, .dojo-tabla td { padding: 10px 8px; border-bottom: 1px solid rgba(255, 255, 255, .06); text-align: left; vertical-align: middle; color: #ede9fe; }
+.dojo-tabla tbody th { font-size: 15px; font-weight: 800; color: #fff; }
+.dojo-tabla .num { text-align: center; font-size: 15px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+.dojo-barra-fila { display: flex; align-items: center; gap: 12px; }
+.dojo-barra-fila b { min-width: 34px; text-align: right; font-size: 15px; color: #fff; font-variant-numeric: tabular-nums; }
+.dojo-barra { flex: 1; min-width: 60px; height: 12px; border-radius: 6px; background: rgba(255, 255, 255, .08); overflow: hidden; display: block; }
+.dojo-barra i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #7c3aed, #c084fc); }
+.dojo-barra-rosa i { background: linear-gradient(90deg, #be185d, #f472b6); }
+.dojo-ratio { font-size: 12px; white-space: nowrap; }
+.dojo-ratio b { font-size: 16px; margin-right: 4px; font-variant-numeric: tabular-nums; }
+.dojo-ajustada { color: #fbbf24; } .dojo-equilibrada { color: #a5b4fc; } .dojo-holgada { color: #6ee7b7; } .dojo-sin { color: #8b85b5; }
+.dojo-ley { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 12px; color: #c4b5fd; }
+.dojo-ley b { margin-right: 4px; }
+.dojo-doc-num { font-size: 13px; color: #c4b5fd; margin-bottom: 10px; }
+.dojo-doc-num b { font-size: 26px; color: #fff; margin-right: 4px; letter-spacing: -.03em; }
+.dojo-apilada { display: flex; gap: 2px; height: 14px; border-radius: 7px; overflow: hidden; background: rgba(255, 255, 255, .08); }
+.dojo-apilada i { display: block; height: 100%; }
+.dojo-doc-completa { background: #34d399; } .dojo-doc-tramite { background: #fbbf24; } .dojo-doc-falta { background: #fb7185; }
+.dojo-ley-doc span { display: inline-flex; align-items: center; gap: 6px; }
+.dojo-ley-doc i { width: 9px; height: 9px; border-radius: 3px; }
+.dojo-ley-doc b { color: #fff; }
+.dojo-motivos { display: grid; gap: 8px; }
+.dojo-motivo { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 30px; align-items: center; gap: 10px; font-size: 12.5px; color: #ede9fe; }
+.dojo-motivo > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dojo-motivo b { text-align: right; color: #fff; }
+.dojo-listado { margin-top: 16px; }
+.dojo-listado-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+.dojo-listado-cab h3 { margin: 0 auto 0 0; }
+.dojo-tip { font-size: 12px; font-weight: 500; color: #a5a1c9; margin-left: 6px; }
+.dojo-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 12px; background: rgba(0, 0, 0, .2); }
+.dojo-tabs button { border: 0; background: transparent; color: #c4b5fd; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 9px; cursor: pointer; }
+.dojo-tabs button b { margin-left: 4px; color: #fff; }
+.dojo-tabs button.activa { background: var(--pink); color: #fff; }
+.dojo-buscar { padding: 7px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .15); background: rgba(255, 255, 255, .06); color: #fff; font-size: 12.5px; min-width: 220px; }
+.dojo-buscar::placeholder { color: #a5a1c9; }
+.dojo-buscar:focus { outline: none; border-color: var(--pink-light); }
+.dojo-btn { border: 1px solid rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .06); color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 9px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.dojo-btn:hover { background: rgba(255, 255, 255, .14); }
+.dojo-tabla-wrap { max-height: 560px; overflow: auto; }
+.dojo-tabla-lista td { font-size: 12.5px; }
+.dojo-tabla-lista { min-width: 640px; }
+.dojo-tabla-lista thead th { position: sticky; top: 0; background: #22104f; white-space: nowrap; }
+.dojo-meta { font-size: 11.5px; color: #a5a1c9; margin-top: 2px; }
+.dojo-acc { text-align: right !important; }
+.dojo-link { border: 0; background: none; padding: 0; color: var(--pink-light); font-weight: 800; cursor: pointer; text-decoration: underline; font-size: inherit; }
+.dojo-vacio { color: #a5a1c9; font-size: 12.5px; padding: 14px 8px; }
+.dojo-mas { display: flex; align-items: center; justify-content: center; gap: 10px; padding-top: 12px; font-size: 12px; color: #c4b5fd; }
+@media (max-width: 900px) {
+    .dojo-inf { padding: 16px; border-radius: 18px; }
+    .dojo-inf-grid { grid-template-columns: 1fr; }
+    .dojo-buscar { min-width: 0; flex: 1; }
+    .dojo-tabla-lista thead { display: none; }
+    .dojo-tabla-lista tr { display: grid; grid-template-columns: 1fr auto; padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+    .dojo-tabla-lista td { border: 0; padding: 3px 4px; }
+}
+.dojo-tabla thead th.num { font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: #a5a1c9; }
+.dojo-tabla tbody tr:hover { background: rgba(255, 255, 255, .05); }
+@media (max-width: 600px) {
+    .dojo-card { padding: 14px; }
+    .dojo-card-zonas { overflow-x: auto; }
+    .dojo-card-zonas .dojo-tabla tbody th, .dojo-card-zonas .dojo-tabla td, .dojo-card-zonas .dojo-tabla thead th { padding: 8px 4px; }
+    .dojo-card-zonas .dojo-tabla tbody th { font-size: 13px; }
+    .dojo-barra-fila { gap: 6px; }
+    .dojo-barra-fila b { min-width: 26px; font-size: 13px; }
+    .dojo-barra { min-width: 30px; }
+    .dojo-ratio { white-space: normal; display: inline-flex; flex-direction: column; line-height: 1.15; font-size: 11px; }
+    .dojo-ratio b { font-size: 14px; }
+}
