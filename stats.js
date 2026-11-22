@@ -135,6 +135,15 @@ const planillaRespaldo = () => (typeof CUMPLIMIENTO_HISTORICO !== 'undefined' ? 
 const planilla = () => cumplPlanilla || planillaRespaldo();
 const sumaPlanilla = filas => filas.reduce((a, x) => [a[0] + x.enviados, a[1] + x.total], [0, 0]);
 
+// Tablas desplegables (por semana / por mes): se recuerda si quedaron abiertas en este navegador
+const _desplegado = { semanas: true, meses: false };
+try { Object.assign(_desplegado, JSON.parse(localStorage.getItem('stats-desplegables') || '{}')); } catch (e) { /* sin storage */ }
+function toggleDesplegable(clave, el) {
+    _desplegado[clave] = el.open;
+    try { localStorage.setItem('stats-desplegables', JSON.stringify(_desplegado)); } catch (e) { /* sin storage */ }
+}
+const resumenDesplegable = (hechas, total) => total ? `<span class="desp-res">${hechas}/${total} · <strong>${pctDe(hechas, total)}%</strong></span>` : '';
+
 // Cumplimiento de cada semana por marca, con la fila Total al final (+ las semanas de la planilla en el Total)
 const SEMANAS_EN_TABLA = 12;
 function celdaSemana(lista, extra = [0, 0]) {
@@ -147,10 +156,12 @@ function tablaSemanas(subset, semanas, marcas, elegida, plSem = []) {
     const fila = (clave, titulo, lista, extra) => `<tr class="${elegida === clave ? 'sem-fila-activa' : ''}" onclick="elegirSemanaStats('${clave}')">
         <td><strong>${titulo}</strong>${extra[1] ? ' <span class="tip">· + planilla</span>' : ''}</td>${marcas.length > 1 ? marcas.map(m => `<td>${celdaSemana(lista.filter(b => b.marca === m))}</td>`).join('') : ''}
         <td>${celdaSemana(lista, extra)}</td></tr>`;
-    return `<div class="sem-tabla"><div class="sem-tabla-tit">Cumplimiento por semana</div>
+    const rt = partesBateria(subset), et = sumaPlanilla(plSem);
+    return `<details class="sem-tabla desp" ${_desplegado.semanas ? 'open' : ''} ontoggle="toggleDesplegable('semanas', this)">
+        <summary class="sem-tabla-tit">Cumplimiento por semana ${resumenDesplegable(rt.completadas + et[0], rt.total + et[1])}</summary>
         <div class="table-wrap"><table class="tabla-informe"><thead><tr><th>Semana</th>${marcas.length > 1 ? marcas.map(m => `<th>${esc(m)}</th>`).join('') : ''}<th>${marcas.length > 1 ? 'Total' : 'Completadas'}</th></tr></thead>
         <tbody>${semanas.slice(0, SEMANAS_EN_TABLA).map(w => fila(w, etiquetaSemana(w), subset.filter(b => semanaDe(b) === w), sumaPlanilla(plSem.filter(x => x.semana === w)))).join('')}</tbody>
-        <tfoot>${fila('total', 'Total', subset, sumaPlanilla(plSem))}</tfoot></table></div></div>`;
+        <tfoot>${fila('total', 'Total', subset, sumaPlanilla(plSem))}</tfoot></table></div></details>`;
 }
 
 // Cumplimiento por mes: planilla (enviadas/total) + portal (completadas/total, por mes en que se cargó la vacante).
@@ -178,11 +189,13 @@ function tablaMeses(todas, pl) {
     const recientes = [...new Set(meses.slice(0, 4).flatMap(m => Object.keys(datos[m])))].sort();
     const semPlanilla = new Set(pl.filter(r => r.semana).map(r => r.mes));
     const ultimoHist = [...mesesPlanilla].sort().pop();
-    return `<div class="sem-tabla mes-tabla"><div class="sem-tabla-tit">Cumplimiento por mes</div>
+    const anual = meses.filter(m => m.startsWith(meses[0].slice(0, 4))).map(total).reduce((a, x) => [a[0] + x[0], a[1] + x[1]], [0, 0]);
+    return `<details class="sem-tabla mes-tabla desp" ${_desplegado.meses ? 'open' : ''} ontoggle="toggleDesplegable('meses', this)">
+        <summary class="sem-tabla-tit">Cumplimiento por mes <span class="desp-res">${meses[0].slice(0, 4)}: ${anual[0]}/${anual[1]} · <strong>${pctDe(anual[0], anual[1])}%</strong></span></summary>
         ${ultimoHist ? `<div class="tip" style="font-style:normal;margin-bottom:8px">Hasta ${etiquetaMes(ultimoHist)}: vacantes enviadas sobre el total (planilla de cumplimiento). Después: completadas (comunicado) sobre el total del portal, más las semanas cargadas en la planilla.</div>` : ''}
         <div class="table-wrap"><table class="tabla-informe"><thead><tr><th>Mes</th>${recientes.map(s => `<th>${esc(s)}</th>`).join('')}<th>Total</th></tr></thead>
         <tbody>${meses.map(m => `<tr><td><strong>${etiquetaMes(m)}</strong>${mesesPlanilla.has(m) ? '' : ` <span class="tip">· portal${semPlanilla.has(m) ? ' + planilla' : ''}</span>`}</td>
-            ${recientes.map(s => `<td>${celda(datos[m][s])}</td>`).join('')}<td>${celda(total(m))}</td></tr>`).join('')}</tbody></table></div></div>`;
+            ${recientes.map(s => `<td>${celda(datos[m][s])}</td>`).join('')}<td>${celda(total(m))}</td></tr>`).join('')}</tbody></table></div></details>`;
 }
 
 // La batería se llena y el número cuenta hasta su valor al entrar o al cambiar de marca o semana;
