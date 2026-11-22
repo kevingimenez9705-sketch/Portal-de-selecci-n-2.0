@@ -33,8 +33,14 @@ function agrupar(lista, key) {
     lista.forEach(b => { const k = (typeof key === 'function' ? key(b) : b[key]) || 'Sin dato'; (m[k] = m[k] || []).push(b); });
     return m;
 }
-function barrasCumplimiento(grupos, claseFill = '', conFoto = false) {
-    const filas = Object.entries(grupos).map(([k, l]) => ({ k, ...metricas(l) })).filter(f => f.total)
+// extra: { clave: [hechas, total] } que se suma a lo del portal (meses de la planilla de cumplimiento)
+function barrasCumplimiento(grupos, claseFill = '', conFoto = false, extra = {}) {
+    const claves = [...new Set([...Object.keys(grupos), ...Object.keys(extra)])];
+    const filas = claves.map(k => {
+        const m = metricas(grupos[k] || []), x = extra[k] || [0, 0];
+        const total = m.total + x[1], cubiertas = m.cubiertas + x[0];
+        return { k, total, cubiertas, pendientes: total - cubiertas, pct: total ? Math.round(cubiertas / total * 100) : 0 };
+    }).filter(f => f.total)
         .sort((a, b) => b.pendientes - a.pendientes || a.k.localeCompare(b.k));
     return filas.length ? filas.map(f => `
         <div class="bar-row"><div class="bar-row-top"><span>${conFoto && equipo.some(e => e.nombre === f.k) ? avatarHtml(f.k, 'avatar-barra') : ''}${esc(f.k)}</span>
@@ -106,39 +112,61 @@ function bateriaHtml(marca, lista) {
     </div>`;
 }
 
-// Cumplimiento de cada semana por marca, con la fila Total al final
-const SEMANAS_EN_TABLA = 12;
-function celdaSemana(lista) {
-    const r = partesBateria(lista);
-    return r.total ? `<div class="sem-celda"><span>${r.completadas}/${r.total} · <strong>${r.pct}%</strong></span>
-        <div class="bar-track"><div class="bar-fill" style="width:${r.pct}%"></div></div></div>` : '<span class="tip">—</span>';
+// ── Planilla de cumplimiento (tabla cumplimiento_planilla, la misma que lee el informe anual de Tortuguitas
+//    con rpc/cumplimiento_vivo). Filas sin semana = meses anteriores al portal (ene-oct 2026); filas con
+//    semana (lunes) = semanas cargadas en la planilla que se suman a lo del portal (p. ej. la del 23/11).
+//    No separa por marca ni tiene "en proceso": cuando entra en el cálculo se muestra una sola batería.
+let cumplPlanilla = null, _planillaCargando = false;
+async function cargarPlanilla() {
+    if (cumplPlanilla || _planillaCargando) return;
+    _planillaCargando = true;
+    try {
+        const filas = await fetchTodo('cumplimiento_planilla', 'id, mes, semana, semana_txt, selector, enviados, total');
+        cumplPlanilla = filas.map(x => ({ mes: x.mes, semana: x.semana || null, selector: x.selector, enviados: +x.enviados || 0, total: +x.total || 0 }));
+    } catch (e) {
+        console.warn('Planilla de cumplimiento:', msgError(e));
+        cumplPlanilla = planillaRespaldo();
+    }
+    _planillaCargando = false;
+    if (vistaActual === 'stats') renderStats(statsTab);
 }
-function tablaSemanas(subset, semanas, marcas, elegida) {
-    const fila = (clave, titulo, lista) => `<tr class="${elegida === clave ? 'sem-fila-activa' : ''}" onclick="elegirSemanaStats('${clave}')">
-        <td><strong>${titulo}</strong></td>${marcas.length > 1 ? marcas.map(m => `<td>${celdaSemana(lista.filter(b => b.marca === m))}</td>`).join('') : ''}
-        <td>${celdaSemana(lista)}</td></tr>`;
+// Mientras carga (o sin red): el respaldo de cumplimiento-historico.js
+const planillaRespaldo = () => (typeof CUMPLIMIENTO_HISTORICO !== 'undefined' ? CUMPLIMIENTO_HISTORICO : []).map(x => ({ ...x, semana: x.semana || null }));
+const planilla = () => cumplPlanilla || planillaRespaldo();
+const sumaPlanilla = filas => filas.reduce((a, x) => [a[0] + x.enviados, a[1] + x.total], [0, 0]);
+
+// Cumplimiento de cada semana por marca, con la fila Total al final (+ las semanas de la planilla en el Total)
+const SEMANAS_EN_TABLA = 12;
+function celdaSemana(lista, extra = [0, 0]) {
+    const r = partesBateria(lista);
+    const hechas = r.completadas + extra[0], total = r.total + extra[1], pct = pctDe(hechas, total);
+    return total ? `<div class="sem-celda"><span>${hechas}/${total} · <strong>${pct}%</strong></span>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div></div>` : '<span class="tip">—</span>';
+}
+function tablaSemanas(subset, semanas, marcas, elegida, plSem = []) {
+    const fila = (clave, titulo, lista, extra) => `<tr class="${elegida === clave ? 'sem-fila-activa' : ''}" onclick="elegirSemanaStats('${clave}')">
+        <td><strong>${titulo}</strong>${extra[1] ? ' <span class="tip">· + planilla</span>' : ''}</td>${marcas.length > 1 ? marcas.map(m => `<td>${celdaSemana(lista.filter(b => b.marca === m))}</td>`).join('') : ''}
+        <td>${celdaSemana(lista, extra)}</td></tr>`;
     return `<div class="sem-tabla"><div class="sem-tabla-tit">Cumplimiento por semana</div>
         <div class="table-wrap"><table class="tabla-informe"><thead><tr><th>Semana</th>${marcas.length > 1 ? marcas.map(m => `<th>${esc(m)}</th>`).join('') : ''}<th>${marcas.length > 1 ? 'Total' : 'Completadas'}</th></tr></thead>
-        <tbody>${semanas.slice(0, SEMANAS_EN_TABLA).map(w => fila(w, etiquetaSemana(w), subset.filter(b => semanaDe(b) === w))).join('')}</tbody>
-        <tfoot>${fila('total', 'Total', subset)}</tfoot></table></div></div>`;
+        <tbody>${semanas.slice(0, SEMANAS_EN_TABLA).map(w => fila(w, etiquetaSemana(w), subset.filter(b => semanaDe(b) === w), sumaPlanilla(plSem.filter(x => x.semana === w)))).join('')}</tbody>
+        <tfoot>${fila('total', 'Total', subset, sumaPlanilla(plSem))}</tfoot></table></div></div>`;
 }
 
-// Cumplimiento por mes: los meses anteriores al portal (CUMPLIMIENTO_HISTORICO, enviadas/total de la
-// planilla) y desde ahí lo del portal (completadas/total, por mes en que se cargó la vacante).
-// Solo en General: el histórico no está separado por marca.
+// Cumplimiento por mes: planilla (enviadas/total) + portal (completadas/total, por mes en que se cargó la vacante).
+// Los meses que la planilla tiene enteros (sin semana) no suman portal. Solo en General.
 const MESES_TXT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const etiquetaMes = m => `${MESES_TXT[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
 const nombreSelector = s => String(s || 'Sin dato').trim().toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
 const mesDe = b => String(b.creado ? fechaLocalISO(new Date(b.creado)) : b.inicio || '').slice(0, 7);
-function tablaMeses(todas) {
+function tablaMeses(todas, pl) {
     const datos = {};   // mes → selector → [hechas, total]
     const sumar = (mes, sel, h, t) => { const m = datos[mes] = datos[mes] || {}; const x = m[sel] = m[sel] || [0, 0]; x[0] += h; x[1] += t; };
-    const historico = typeof CUMPLIMIENTO_HISTORICO !== 'undefined' ? CUMPLIMIENTO_HISTORICO : [];
-    historico.forEach(r => sumar(r.mes, nombreSelector(r.selector), r.enviados, r.total));
-    const mesesHist = new Set(historico.map(r => r.mes));
+    pl.forEach(r => sumar(r.mes, nombreSelector(r.selector), r.enviados, r.total));
+    const mesesPlanilla = new Set(pl.filter(r => !r.semana).map(r => r.mes));
     todas.filter(b => b.status !== 'Cancelada' && cuentaComoActiva(b)).forEach(b => {
         const mes = mesDe(b);
-        if (!mes || mesesHist.has(mes)) return;
+        if (!mes || mesesPlanilla.has(mes)) return;
         sumar(mes, nombreSelector(b.selector), b.estado === 'COMUNICADO' || cubierta(b) ? 1 : 0, 1);
     });
     const meses = Object.keys(datos).sort().reverse();
@@ -148,11 +176,12 @@ function tablaMeses(todas) {
     const total = m => Object.values(datos[m]).reduce((a, x) => [a[0] + x[0], a[1] + x[1]], [0, 0]);
     // Columnas: selectores con datos en los últimos 4 meses; los que ya no están suman solo en el Total
     const recientes = [...new Set(meses.slice(0, 4).flatMap(m => Object.keys(datos[m])))].sort();
-    const ultimoHist = [...mesesHist].sort().pop();
+    const semPlanilla = new Set(pl.filter(r => r.semana).map(r => r.mes));
+    const ultimoHist = [...mesesPlanilla].sort().pop();
     return `<div class="sem-tabla mes-tabla"><div class="sem-tabla-tit">Cumplimiento por mes</div>
-        ${ultimoHist ? `<div class="tip" style="font-style:normal;margin-bottom:8px">Hasta ${etiquetaMes(ultimoHist)}: vacantes enviadas sobre el total (planilla de cumplimiento). Después: completadas (comunicado) sobre el total del portal.</div>` : ''}
+        ${ultimoHist ? `<div class="tip" style="font-style:normal;margin-bottom:8px">Hasta ${etiquetaMes(ultimoHist)}: vacantes enviadas sobre el total (planilla de cumplimiento). Después: completadas (comunicado) sobre el total del portal, más las semanas cargadas en la planilla.</div>` : ''}
         <div class="table-wrap"><table class="tabla-informe"><thead><tr><th>Mes</th>${recientes.map(s => `<th>${esc(s)}</th>`).join('')}<th>Total</th></tr></thead>
-        <tbody>${meses.map(m => `<tr><td><strong>${etiquetaMes(m)}</strong>${mesesHist.has(m) ? '' : ' <span class="tip">· portal</span>'}</td>
+        <tbody>${meses.map(m => `<tr><td><strong>${etiquetaMes(m)}</strong>${mesesPlanilla.has(m) ? '' : ` <span class="tip">· portal${semPlanilla.has(m) ? ' + planilla' : ''}</span>`}</td>
             ${recientes.map(s => `<td>${celda(datos[m][s])}</td>`).join('')}<td>${celda(total(m))}</td></tr>`).join('')}</tbody></table></div></div>`;
 }
 
@@ -186,37 +215,54 @@ function cargarBaterias(box, clave) {
 function renderStats(tab) {
     const csvSel = document.getElementById('stats-csv-selector');
     if (csvSel) csvSel.innerHTML = optionsHtml(selectores(), csvSel.value, 'CSV de todos los selectores');
+    cargarPlanilla();
     // Incluye lo que sacó "Limpiar semana": las estadísticas cuentan todo
     const todas = todasLasBusquedas();
     const subset = tab === 'general' ? todas : todas.filter(b => b.marca === tab);
     const marcas = tab === 'general' ? MARCAS : [tab];
-    // Batería: la semana elegida (por defecto, la última con vacantes) o el Total
-    const semanas = [...new Set(subset.filter(b => b.status !== 'Cancelada' && cuentaComoActiva(b)).map(semanaDe).filter(Boolean))].sort().reverse();
-    // Meses anteriores al portal (CUMPLIMIENTO_HISTORICO, sin marca): solo en General. "mes:AAAA-MM" o "anio:AAAA"
-    const hist = tab === 'general' && typeof CUMPLIMIENTO_HISTORICO !== 'undefined' ? CUMPLIMIENTO_HISTORICO : [];
-    const mesesHist = [...new Set(hist.map(x => x.mes))].sort().reverse();
-    const anios = [...new Set(mesesHist.map(m => m.slice(0, 4)))];
+    // Planilla (sin marca): solo en General. Selección: lunes de una semana, 'total', 'mes:AAAA-MM' o 'anio:AAAA'
+    const pl = tab === 'general' ? planilla() : [];
+    const plMes = pl.filter(x => !x.semana), plSem = pl.filter(x => x.semana);
+    const mesesHist = [...new Set(plMes.map(x => x.mes))].sort().reverse();
+    const anios = [...new Set(pl.map(x => x.mes.slice(0, 4)))].sort().reverse();
+    const semanas = [...new Set(subset.filter(b => b.status !== 'Cancelada' && cuentaComoActiva(b)).map(semanaDe).filter(Boolean)
+        .concat(plSem.map(x => x.semana)))].sort().reverse();
     const esHist = k => (k.startsWith('mes:') && mesesHist.includes(k.slice(4))) || (k.startsWith('anio:') && anios.includes(k.slice(5)));
     const sem = statsSemana === 'total' || semanas.includes(statsSemana) || esHist(statsSemana) ? statsSemana : (semanas[0] || 'total');
-    const historica = esHist(sem);
-    // Año: los meses de la planilla + lo del portal de ese año (meses que la planilla no tiene)
-    const periodo = sem === 'total' ? subset : historica
-        ? (sem.startsWith('anio:') ? subset.filter(b => mesDe(b).startsWith(sem.slice(5)) && !mesesHist.includes(mesDe(b))) : [])
+    const anio = sem.startsWith('anio:') ? sem.slice(5) : '', mesSel = sem.startsWith('mes:') ? sem.slice(4) : '';
+    // Lo del portal en el período elegido (Año: sin los meses que la planilla tiene enteros)
+    const periodo = sem === 'total' ? subset : mesSel ? []
+        : anio ? subset.filter(b => mesDe(b).startsWith(anio) && !mesesHist.includes(mesDe(b)))
         : subset.filter(b => semanaDe(b) === sem);
+    // Lo de la planilla en el período elegido
+    const extras = sem === 'total' ? plSem : mesSel ? plMes.filter(x => x.mes === mesSel)
+        : anio ? pl.filter(x => x.mes.startsWith(anio)) : plSem.filter(x => x.semana === sem);
+    const conPlanilla = extras.length > 0;
     let r = partesBateria(periodo);
-    if (historica) {
-        const filas = hist.filter(x => sem.startsWith('mes:') ? x.mes === sem.slice(4) : x.mes.startsWith(sem.slice(5)));
-        const env = filas.reduce((a, x) => a + x.enviados, 0), tot = filas.reduce((a, x) => a + x.total, 0);
+    if (conPlanilla) {
+        const [env, tot] = sumaPlanilla(extras);
         r = { total: r.total + tot, completadas: r.completadas + env, proceso: r.proceso, pendientes: r.pendientes + tot - env };
         r.pct = pctDe(r.completadas, r.total);
     }
-    const etiquetaSel = sem === 'total' ? 'Resumen total del portal' : sem.startsWith('mes:') ? 'Resumen mensual · ' + etiquetaMes(sem.slice(4))
-        : sem.startsWith('anio:') ? 'Resumen anual · ' + sem.slice(5) : 'Resumen semanal · ' + etiquetaSemana(sem);
+    const etiquetaSel = sem === 'total' ? 'Resumen total' : mesSel ? 'Resumen mensual · ' + etiquetaMes(mesSel)
+        : anio ? 'Resumen anual · ' + anio : 'Resumen semanal · ' + etiquetaSemana(sem);
+    const notaPlanilla = !conPlanilla ? '' : anio ? `${mesesHist.some(m => m.startsWith(anio)) ? `Ene a ${etiquetaMes(mesesHist.filter(m => m.startsWith(anio))[0]).split(' ')[0]}: planilla de cumplimiento (enviadas sobre el total); después, lo del portal más las semanas cargadas en la planilla.` : 'Portal más las semanas cargadas en la planilla.'}`
+        : mesSel ? 'Planilla de cumplimiento: vacantes enviadas sobre el total.'
+        : sem === 'total' ? 'Portal más las semanas cargadas en la planilla.' : periodo.length ? 'Portal más lo cargado en la planilla para esta semana.' : 'Semana cargada en la planilla de cumplimiento.';
     const ahora = new Date();
     const corte = `${String(ahora.getDate()).padStart(2, '0')}/${String(ahora.getMonth() + 1).padStart(2, '0')}/${ahora.getFullYear()} ${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
 
+    // Las tarjetas de abajo siguen la semana / mes / año elegido arriba. De la planilla solo hay selector:
+    // zona, regional, aperturas y locales muestran lo del portal de ese período.
+    const extraSel = {};
+    const nombres = Object.keys(agrupar(periodo, 'selector'));
+    extras.forEach(x => {
+        const k = nombres.find(n => normTxt(n) === normTxt(x.selector)) || nombreSelector(x.selector);
+        const v = extraSel[k] = extraSel[k] || [0, 0]; v[0] += x.enviados; v[1] += x.total;
+    });
+    const notaPortal = conPlanilla ? `<div class="tip" style="font-style:normal">${periodo.length ? 'Solo lo cargado en el portal (la planilla no tiene este dato)' : 'Sin datos: la planilla solo tiene selector'}</div>` : '';
     // Locales más críticos: más vacantes pendientes (como el Resumen de Tareas grupales)
-    const porLocal = Object.entries(agrupar(subset.filter(cuentaComoActiva), 'local')).map(([k, l]) => ({ k, marca: l[0].marca, ...metricas(l) }))
+    const porLocal = Object.entries(agrupar(periodo.filter(cuentaComoActiva), 'local')).map(([k, l]) => ({ k, marca: l[0].marca, ...metricas(l) }))
         .filter(x => x.pendientes > 0).sort((a, b) => b.pendientes - a.pendientes).slice(0, 8);
 
     const box = document.getElementById('stats-content');
@@ -228,23 +274,23 @@ function renderStats(tab) {
             <div class="cob-sub">Cada batería representa las vacantes de la marca cargadas en la semana elegida (sin locales excedidos). Total suma todas las semanas.</div>
             <div class="sem-chips" role="group" aria-label="Semana">
                 ${semanas.slice(0, SEMANAS_EN_TABLA).map(w => `<button class="sem-chip ${sem === w ? 'active' : ''}" onclick="elegirSemanaStats('${w}')">Semana ${etiquetaSemana(w)}</button>`).join('')}
-                <button class="sem-chip ${sem === 'total' ? 'active' : ''}" onclick="elegirSemanaStats('total')">Total portal</button>
+                <button class="sem-chip ${sem === 'total' ? 'active' : ''}" onclick="elegirSemanaStats('total')">Total</button>
             </div>
-            ${mesesHist.length ? `<div class="sem-chips" role="group" aria-label="Meses anteriores">
+            ${anios.length ? `<div class="sem-chips" role="group" aria-label="Año y meses anteriores">
                 ${anios.map(a => `<button class="sem-chip ${sem === 'anio:' + a ? 'active' : ''}" onclick="elegirSemanaStats('anio:${a}')">Año ${a}</button>`).join('')}
                 ${mesesHist.map(m => `<button class="sem-chip ${sem === 'mes:' + m ? 'active' : ''}" onclick="elegirSemanaStats('mes:${m}')">${etiquetaMes(m)}</button>`).join('')}
             </div>` : ''}
-            ${historica ? `<div class="tip" style="font-style:normal;margin:4px 0 10px">${sem.startsWith('anio:') ? `Ene a ${etiquetaMes(mesesHist.filter(m => m.startsWith(sem.slice(5)))[0]).split(' ')[0]}: planilla de cumplimiento (enviadas sobre el total); después, lo del portal.` : 'Planilla de cumplimiento: vacantes enviadas sobre el total.'} La planilla no separa por marca ni tiene "en proceso".</div>` : ''}
+            ${notaPlanilla ? `<div class="tip" style="font-style:normal;margin:4px 0 10px">${notaPlanilla} La planilla no separa por marca ni tiene "en proceso".</div>` : ''}
             <div class="cob-kpis">
-                ${kpiHtml(r.total, 'Total', 'violeta', historica ? 'Vacantes del período' : 'Vacantes activas')}
-                ${kpiHtml(r.completadas, 'Completadas', 'violeta', `${historica ? 'Enviadas / comunicado' : 'Comunicado'} · ${r.pct}% de cobertura`)}
+                ${kpiHtml(r.total, 'Total', 'violeta', conPlanilla ? 'Vacantes del período' : 'Vacantes activas')}
+                ${kpiHtml(r.completadas, 'Completadas', 'violeta', `${conPlanilla ? 'Enviadas / comunicado' : 'Comunicado'} · ${r.pct}% de cobertura`)}
                 ${kpiHtml(r.proceso, 'En proceso', 'violeta', 'Confirmaron onboarding')}
                 ${kpiHtml(r.pendientes, 'Pendientes', 'violeta', 'Sin avance')}
             </div>
-            <div class="bat-grid ${marcas.length === 1 || historica ? 'bat-grid-una' : ''}">${historica ? bateriaHtml('Sabores + Extremas', r)
+            <div class="bat-grid ${marcas.length === 1 || conPlanilla ? 'bat-grid-una' : ''}">${conPlanilla ? bateriaHtml('Sabores + Extremas', r)
                 : marcas.map(m => bateriaHtml(m, periodo.filter(b => b.marca === m))).join('')}</div>
-            ${semanas.length ? tablaSemanas(subset, semanas, marcas, sem) : ''}
-            ${tab === 'general' ? tablaMeses(todas) : ''}
+            ${semanas.length ? tablaSemanas(subset, semanas, marcas, sem, plSem) : ''}
+            ${tab === 'general' ? tablaMeses(todas, pl) : ''}
             <div class="cob-resumen">
                 <div><div class="cob-resumen-tag">${etiquetaSel} · ${marcas.length === 1 ? esc(marcas[0]) : 'Sabores + Extremas'}</div>
                     <div class="cob-resumen-tit">Estado consolidado del equipo</div>
@@ -253,10 +299,10 @@ function renderStats(tab) {
             </div>
         </div>
         <div class="stats-grid">
-            <div class="stat-card"><div class="stat-card-title">Cumplimiento por zona</div>${barrasCumplimiento(agrupar(subset, 'zona'))}</div>
-            <div class="stat-card"><div class="stat-card-title">Cumplimiento por selector</div>${barrasCumplimiento(agrupar(subset, 'selector'), '', true)}</div>
-            <div class="stat-card"><div class="stat-card-title">Cumplimiento por regional</div>${barrasCumplimiento(agrupar(subset, 'regional'))}</div>
-            <div class="stat-card"><div class="stat-card-title">Aperturas vs resto</div>${barrasCumplimiento(agrupar(subset, b => b.motivo === 'Apertura' ? 'Locales en apertura' : 'Locales sin apertura'))}</div>
+            <div class="stat-card"><div class="stat-card-title">Cumplimiento por zona</div>${notaPortal}${barrasCumplimiento(agrupar(periodo, 'zona'))}</div>
+            <div class="stat-card"><div class="stat-card-title">Cumplimiento por selector</div>${barrasCumplimiento(agrupar(periodo, 'selector'), '', true, extraSel)}</div>
+            <div class="stat-card"><div class="stat-card-title">Cumplimiento por regional</div>${notaPortal}${barrasCumplimiento(agrupar(periodo, 'regional'))}</div>
+            <div class="stat-card"><div class="stat-card-title">Aperturas vs resto</div>${notaPortal}${barrasCumplimiento(agrupar(periodo, b => b.motivo === 'Apertura' ? 'Locales en apertura' : 'Locales sin apertura'))}</div>
             <div class="stat-card"><div class="stat-card-title">Locales más críticos</div>
                 ${porLocal.length ? porLocal.map(x => `<div class="rank-row"><span class="rank-name">${esc(x.k)} <span style="font-size:11px;color:var(--muted)">· ${esc(x.marca)}</span></span><span class="rank-stat">${x.pendientes} pend.</span><span style="font-size:11px;color:var(--muted);margin-left:6px">${x.pct}%</span></div>`).join('') : '<span class="tip">Sin vacantes pendientes</span>'}
             </div>
