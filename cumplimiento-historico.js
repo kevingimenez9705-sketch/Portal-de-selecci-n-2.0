@@ -1,6 +1,7 @@
-// Cumplimiento de los meses anteriores al portal (hoja "cumplimiento" del informe_anual, ene a oct 2026).
-// Por mes y selector: vacantes enviadas sobre el total. Desde noviembre 2026 el cumplimiento sale del portal.
-// Para sumar un mes viejo, agregar sus filas acá.
+// RESPALDO de la tabla cumplimiento_planilla de Supabase (la que leen la batería y el informe anual de
+// Tortuguitas). Se usa solo si la tabla no responde. Para cargar o corregir datos, hacerlo en la tabla.
+// Sin semana: meses anteriores al portal (ene a oct 2026). Con semana (lunes): semanas de la planilla
+// que se suman a lo del portal.
 const CUMPLIMIENTO_HISTORICO = [
     { mes: '2026-01', selector: 'Agustin', enviados: 173, total: 272 },
     { mes: '2026-01', selector: 'Agustina', enviados: 102, total: 109 },
@@ -38,5 +39,9 @@ const CUMPLIMIENTO_HISTORICO = [
     { mes: '2026-10', selector: 'Agustina', enviados: 43, total: 46 },
     { mes: '2026-10', selector: 'Albana', enviados: 70, total: 81 },
     { mes: '2026-10', selector: 'Gustavo', enviados: 79, total: 85 },
-    { mes: '2026-10', selector: 'Rafael', enviados: 105, total: 112 }
+    { mes: '2026-10', selector: 'Rafael', enviados: 105, total: 112 },
+    { mes: '2026-11', semana: '2026-11-23', selector: 'Albana', enviados: 13, total: 13 },
+    { mes: '2026-11', semana: '2026-11-23', selector: 'Rafael', enviados: 14, total: 14 },
+    { mes: '2026-11', semana: '2026-11-23', selector: 'Agustina', enviados: 15, total: 15 },
+    { mes: '2026-11', semana: '2026-11-23', selector: 'Gustavo', enviados: 15, total: 15 }
 ];
