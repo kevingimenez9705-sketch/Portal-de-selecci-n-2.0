@@ -78,7 +78,7 @@ function estadoBateria(r) {
     return ['🔋 Cargando', 'bat-chip-carga'];
 }
 function bateriaHtml(marca, lista) {
-    const r = partesBateria(lista);
+    const r = Array.isArray(lista) ? partesBateria(lista) : lista;   // lista de vacantes o partes ya calculadas
     const p = k => pctDe(r[k], r.total);
     const [estado, claseEstado] = estadoBateria(r);
     const baja = r.total && r.pct < 20;
@@ -192,9 +192,26 @@ function renderStats(tab) {
     const marcas = tab === 'general' ? MARCAS : [tab];
     // Batería: la semana elegida (por defecto, la última con vacantes) o el Total
     const semanas = [...new Set(subset.filter(b => b.status !== 'Cancelada' && cuentaComoActiva(b)).map(semanaDe).filter(Boolean))].sort().reverse();
-    const sem = statsSemana === 'total' || semanas.includes(statsSemana) ? statsSemana : (semanas[0] || 'total');
-    const periodo = sem === 'total' ? subset : subset.filter(b => semanaDe(b) === sem);
-    const r = partesBateria(periodo);
+    // Meses anteriores al portal (CUMPLIMIENTO_HISTORICO, sin marca): solo en General. "mes:AAAA-MM" o "anio:AAAA"
+    const hist = tab === 'general' && typeof CUMPLIMIENTO_HISTORICO !== 'undefined' ? CUMPLIMIENTO_HISTORICO : [];
+    const mesesHist = [...new Set(hist.map(x => x.mes))].sort().reverse();
+    const anios = [...new Set(mesesHist.map(m => m.slice(0, 4)))];
+    const esHist = k => (k.startsWith('mes:') && mesesHist.includes(k.slice(4))) || (k.startsWith('anio:') && anios.includes(k.slice(5)));
+    const sem = statsSemana === 'total' || semanas.includes(statsSemana) || esHist(statsSemana) ? statsSemana : (semanas[0] || 'total');
+    const historica = esHist(sem);
+    // Año: los meses de la planilla + lo del portal de ese año (meses que la planilla no tiene)
+    const periodo = sem === 'total' ? subset : historica
+        ? (sem.startsWith('anio:') ? subset.filter(b => mesDe(b).startsWith(sem.slice(5)) && !mesesHist.includes(mesDe(b))) : [])
+        : subset.filter(b => semanaDe(b) === sem);
+    let r = partesBateria(periodo);
+    if (historica) {
+        const filas = hist.filter(x => sem.startsWith('mes:') ? x.mes === sem.slice(4) : x.mes.startsWith(sem.slice(5)));
+        const env = filas.reduce((a, x) => a + x.enviados, 0), tot = filas.reduce((a, x) => a + x.total, 0);
+        r = { total: r.total + tot, completadas: r.completadas + env, proceso: r.proceso, pendientes: r.pendientes + tot - env };
+        r.pct = pctDe(r.completadas, r.total);
+    }
+    const etiquetaSel = sem === 'total' ? 'Resumen total del portal' : sem.startsWith('mes:') ? 'Resumen mensual · ' + etiquetaMes(sem.slice(4))
+        : sem.startsWith('anio:') ? 'Resumen anual · ' + sem.slice(5) : 'Resumen semanal · ' + etiquetaSemana(sem);
     const ahora = new Date();
     const corte = `${String(ahora.getDate()).padStart(2, '0')}/${String(ahora.getMonth() + 1).padStart(2, '0')}/${ahora.getFullYear()} ${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
 
@@ -211,19 +228,25 @@ function renderStats(tab) {
             <div class="cob-sub">Cada batería representa las vacantes de la marca cargadas en la semana elegida (sin locales excedidos). Total suma todas las semanas.</div>
             <div class="sem-chips" role="group" aria-label="Semana">
                 ${semanas.slice(0, SEMANAS_EN_TABLA).map(w => `<button class="sem-chip ${sem === w ? 'active' : ''}" onclick="elegirSemanaStats('${w}')">Semana ${etiquetaSemana(w)}</button>`).join('')}
-                <button class="sem-chip ${sem === 'total' ? 'active' : ''}" onclick="elegirSemanaStats('total')">Total</button>
+                <button class="sem-chip ${sem === 'total' ? 'active' : ''}" onclick="elegirSemanaStats('total')">Total portal</button>
             </div>
+            ${mesesHist.length ? `<div class="sem-chips" role="group" aria-label="Meses anteriores">
+                ${anios.map(a => `<button class="sem-chip ${sem === 'anio:' + a ? 'active' : ''}" onclick="elegirSemanaStats('anio:${a}')">Año ${a}</button>`).join('')}
+                ${mesesHist.map(m => `<button class="sem-chip ${sem === 'mes:' + m ? 'active' : ''}" onclick="elegirSemanaStats('mes:${m}')">${etiquetaMes(m)}</button>`).join('')}
+            </div>` : ''}
+            ${historica ? `<div class="tip" style="font-style:normal;margin:4px 0 10px">${sem.startsWith('anio:') ? `Ene a ${etiquetaMes(mesesHist.filter(m => m.startsWith(sem.slice(5)))[0]).split(' ')[0]}: planilla de cumplimiento (enviadas sobre el total); después, lo del portal.` : 'Planilla de cumplimiento: vacantes enviadas sobre el total.'} La planilla no separa por marca ni tiene "en proceso".</div>` : ''}
             <div class="cob-kpis">
-                ${kpiHtml(r.total, 'Total', 'violeta', 'Vacantes activas')}
-                ${kpiHtml(r.completadas, 'Completadas', 'violeta', `Comunicado · ${r.pct}% de cobertura`)}
+                ${kpiHtml(r.total, 'Total', 'violeta', historica ? 'Vacantes del período' : 'Vacantes activas')}
+                ${kpiHtml(r.completadas, 'Completadas', 'violeta', `${historica ? 'Enviadas / comunicado' : 'Comunicado'} · ${r.pct}% de cobertura`)}
                 ${kpiHtml(r.proceso, 'En proceso', 'violeta', 'Confirmaron onboarding')}
                 ${kpiHtml(r.pendientes, 'Pendientes', 'violeta', 'Sin avance')}
             </div>
-            <div class="bat-grid ${marcas.length === 1 ? 'bat-grid-una' : ''}">${marcas.map(m => bateriaHtml(m, periodo.filter(b => b.marca === m))).join('')}</div>
+            <div class="bat-grid ${marcas.length === 1 || historica ? 'bat-grid-una' : ''}">${historica ? bateriaHtml('Sabores + Extremas', r)
+                : marcas.map(m => bateriaHtml(m, periodo.filter(b => b.marca === m))).join('')}</div>
             ${semanas.length ? tablaSemanas(subset, semanas, marcas, sem) : ''}
             ${tab === 'general' ? tablaMeses(todas) : ''}
             <div class="cob-resumen">
-                <div><div class="cob-resumen-tag">${sem === 'total' ? 'Resumen total' : 'Resumen semanal · ' + etiquetaSemana(sem)} · ${marcas.length === 1 ? esc(marcas[0]) : 'Sabores + Extremas'}</div>
+                <div><div class="cob-resumen-tag">${etiquetaSel} · ${marcas.length === 1 ? esc(marcas[0]) : 'Sabores + Extremas'}</div>
                     <div class="cob-resumen-tit">Estado consolidado del equipo</div>
                     <div class="tip" style="font-style:normal">Corte actualizado: ${corte}</div></div>
                 <div class="cob-resumen-num"><strong>${r.completadas} / ${r.total}</strong><span>${r.pct}% de cobertura</span></div>
