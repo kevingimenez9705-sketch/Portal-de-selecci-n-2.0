@@ -123,6 +123,39 @@ function tablaSemanas(subset, semanas, marcas, elegida) {
         <tfoot>${fila('total', 'Total', subset)}</tfoot></table></div></div>`;
 }
 
+// Cumplimiento por mes: los meses anteriores al portal (CUMPLIMIENTO_HISTORICO, enviadas/total de la
+// planilla) y desde ahí lo del portal (completadas/total, por mes en que se cargó la vacante).
+// Solo en General: el histórico no está separado por marca.
+const MESES_TXT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const etiquetaMes = m => `${MESES_TXT[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+const nombreSelector = s => String(s || 'Sin dato').trim().toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
+const mesDe = b => String(b.creado ? fechaLocalISO(new Date(b.creado)) : b.inicio || '').slice(0, 7);
+function tablaMeses(todas) {
+    const datos = {};   // mes → selector → [hechas, total]
+    const sumar = (mes, sel, h, t) => { const m = datos[mes] = datos[mes] || {}; const x = m[sel] = m[sel] || [0, 0]; x[0] += h; x[1] += t; };
+    const historico = typeof CUMPLIMIENTO_HISTORICO !== 'undefined' ? CUMPLIMIENTO_HISTORICO : [];
+    historico.forEach(r => sumar(r.mes, nombreSelector(r.selector), r.enviados, r.total));
+    const mesesHist = new Set(historico.map(r => r.mes));
+    todas.filter(b => b.status !== 'Cancelada' && cuentaComoActiva(b)).forEach(b => {
+        const mes = mesDe(b);
+        if (!mes || mesesHist.has(mes)) return;
+        sumar(mes, nombreSelector(b.selector), b.estado === 'COMUNICADO' || cubierta(b) ? 1 : 0, 1);
+    });
+    const meses = Object.keys(datos).sort().reverse();
+    if (!meses.length) return '';
+    const celda = x => x && x[1] ? `<div class="sem-celda"><span>${x[0]}/${x[1]} · <strong>${pctDe(x[0], x[1])}%</strong></span>
+        <div class="bar-track"><div class="bar-fill" style="width:${pctDe(x[0], x[1])}%"></div></div></div>` : '<span class="tip">—</span>';
+    const total = m => Object.values(datos[m]).reduce((a, x) => [a[0] + x[0], a[1] + x[1]], [0, 0]);
+    // Columnas: selectores con datos en los últimos 4 meses; los que ya no están suman solo en el Total
+    const recientes = [...new Set(meses.slice(0, 4).flatMap(m => Object.keys(datos[m])))].sort();
+    const ultimoHist = [...mesesHist].sort().pop();
+    return `<div class="sem-tabla mes-tabla"><div class="sem-tabla-tit">Cumplimiento por mes</div>
+        ${ultimoHist ? `<div class="tip" style="font-style:normal;margin-bottom:8px">Hasta ${etiquetaMes(ultimoHist)}: vacantes enviadas sobre el total (planilla de cumplimiento). Después: completadas (comunicado) sobre el total del portal.</div>` : ''}
+        <div class="table-wrap"><table class="tabla-informe"><thead><tr><th>Mes</th>${recientes.map(s => `<th>${esc(s)}</th>`).join('')}<th>Total</th></tr></thead>
+        <tbody>${meses.map(m => `<tr><td><strong>${etiquetaMes(m)}</strong>${mesesHist.has(m) ? '' : ' <span class="tip">· portal</span>'}</td>
+            ${recientes.map(s => `<td>${celda(datos[m][s])}</td>`).join('')}<td>${celda(total(m))}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+
 // La batería se llena y el número cuenta hasta su valor al entrar o al cambiar de marca o semana;
 // si solo se refrescaron los datos, queda directo en su lugar (sin volver a animar).
 let _ultimaBateria = '';
@@ -188,6 +221,7 @@ function renderStats(tab) {
             </div>
             <div class="bat-grid ${marcas.length === 1 ? 'bat-grid-una' : ''}">${marcas.map(m => bateriaHtml(m, periodo.filter(b => b.marca === m))).join('')}</div>
             ${semanas.length ? tablaSemanas(subset, semanas, marcas, sem) : ''}
+            ${tab === 'general' ? tablaMeses(todas) : ''}
             <div class="cob-resumen">
                 <div><div class="cob-resumen-tag">${sem === 'total' ? 'Resumen total' : 'Resumen semanal · ' + etiquetaSemana(sem)} · ${marcas.length === 1 ? esc(marcas[0]) : 'Sabores + Extremas'}</div>
                     <div class="cob-resumen-tit">Estado consolidado del equipo</div>
