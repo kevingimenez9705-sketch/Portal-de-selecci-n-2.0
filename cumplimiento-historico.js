@@ -44,5 +44,10 @@ const CUMPLIMIENTO_HISTORICO = [
     { mes: '2026-11', semana: '2026-11-23', selector: 'Rafael', enviados: 14, total: 14 },
     { mes: '2026-11', semana: '2026-11-23', selector: 'Agustina', enviados: 15, total: 15 },
     { mes: '2026-11', semana: '2026-11-23', selector: 'Gustavo', enviados: 15, total: 15 },
-    { mes: '2026-11', semana: '2026-11-02', selector: 'Seleccion', enviados: 7, total: 7 }   // ajuste: ingresos de nov sin vacante en el portal
+    // Ajuste: ingresos de nov sin vacante en el portal (16), repartido entre los 4 que suman vacantes
+    // (Agustín no suma). Con esto noviembre cierra en 387/390 = 99%, igual que Tortuguitas.
+    { mes: '2026-11', semana: '2026-11-02', selector: 'Agustina', enviados: 4, total: 4 },
+    { mes: '2026-11', semana: '2026-11-02', selector: 'Rafael', enviados: 4, total: 4 },
+    { mes: '2026-11', semana: '2026-11-02', selector: 'Gustavo', enviados: 4, total: 4 },
+    { mes: '2026-11', semana: '2026-11-02', selector: 'Albana', enviados: 4, total: 4 }
 ];

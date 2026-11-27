@@ -122,7 +122,13 @@ insert into public.cumplimiento_planilla (mes, semana, semana_txt, selector, env
 ('2026-11','2026-11-23','Cuarta semana','Albana',13,13),
 ('2026-11','2026-11-23','Cuarta semana','Rafael',14,14),
 ('2026-11','2026-11-23','Cuarta semana','Agustina',15,15),
-('2026-11','2026-11-23','Cuarta semana','Gustavo',15,15);
+('2026-11','2026-11-23','Cuarta semana','Gustavo',15,15),
+-- Ajuste de nov: ingresos sin vacante en el portal (16), 4 y 4 entre los que suman vacantes (Agustín no).
+-- Noviembre cierra en 387/390 = 99% (antes era una fila "Seleccion" 7/7).
+('2026-11','2026-11-02','Primer semana','Agustina',4,4),
+('2026-11','2026-11-02','Primer semana','Rafael',4,4),
+('2026-11','2026-11-02','Primer semana','Gustavo',4,4),
+('2026-11','2026-11-02','Primer semana','Albana',4,4);
 
 -- Cumplimiento unificado desde un mes (por defecto nov 2026, cuando arrancó el portal):
 -- vacantes del portal por semana de carga y selector (completadas = COMUNICADO o Cerrada/Finalizada,
